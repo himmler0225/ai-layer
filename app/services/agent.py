@@ -64,7 +64,7 @@ async def run_agent(
     tool_call_log: List[Dict] = []
     # Only force a tool call on the very first message (no history).
     # Follow-up questions already have context — forcing tool_choice="any" wastes iterations.
-    has_history = "\n[Câu hỏi hiện t ại]\n" in task
+    has_history = "\n[Câu hỏi hiện tại]\n" in task
 
     for iteration in range(1, max_iter + 1):
         logger.info("Agent iteration %d/%d", iteration, max_iter)
