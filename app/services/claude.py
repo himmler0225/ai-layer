@@ -4,7 +4,6 @@ from app.config.settings import ANTHROPIC_API_KEY, CLAUDE_MODEL, CLAUDE_MAX_TOKE
 
 _client = anthropic.AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
 
-
 async def complete(
     user_prompt: str,
     system_prompt: str,
@@ -25,13 +24,11 @@ async def complete(
     )
     return msg.content[0].text
 
-
 async def complete_json(
     user_prompt: str,
     system_prompt: str,
     max_tokens: int = CLAUDE_MAX_TOKENS,
     model: str = CLAUDE_MODEL,
 ) -> str:
-    """Same as complete() but instructs the model to return valid JSON only."""
     system_with_json = system_prompt + "\n\nRespond with valid JSON only. No markdown, no explanation."
     return await complete(user_prompt, system_with_json, max_tokens, model)

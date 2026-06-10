@@ -10,13 +10,11 @@ from app.schemas.response import ApiResponse
 
 router = APIRouter(prefix="/agent", dependencies=[Depends(verify_api_key)])
 
-
 class AgentRequest(BaseModel):
     task:     str                                  = Field(..., description="Natural language task")
     tools:    Literal["youtube", "tiktok", "all"] = Field("all")
     max_iter: int                                  = Field(5, ge=1, le=20)
     system:   Optional[str]                        = Field(None)
-
 
 @router.post("/run")
 @limiter.limit("10/minute")

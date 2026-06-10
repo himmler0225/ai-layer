@@ -5,7 +5,6 @@ from app.schemas.response import ApiResponse
 
 router = APIRouter(prefix="/youtube", dependencies=[Depends(verify_api_key)])
 
-
 @router.get("/videos/{video_id}/summary")
 async def summarize_video(video_id: str):
     try:
@@ -13,14 +12,12 @@ async def summarize_video(video_id: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.get("/videos/{video_id}/comments/analysis")
 async def analyze_comments(video_id: str):
     try:
         return ApiResponse.ok(await processor.analyze_comments(video_id))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @router.get("/trending/analysis")
 async def analyze_trends(limit: int = Query(20, ge=5, le=50)):

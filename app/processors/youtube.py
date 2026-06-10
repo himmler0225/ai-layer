@@ -9,14 +9,12 @@ logger = Logger.get(__name__)
 _SYSTEM = """You are an AI assistant analyzing YouTube content.
 Be concise. Always respond in the same language as the video content when possible."""
 
-
 def _parse_json(raw: str, context: str) -> Dict:
     try:
         return json.loads(raw)
     except (json.JSONDecodeError, TypeError) as e:
         logger.error("JSON parse error in %s: %s | raw=%s", context, e, raw[:200])
         raise ValueError(f"Claude returned invalid JSON in {context}: {e}") from e
-
 
 async def summarize_video(video_id: str) -> Dict:
     detail = await data_miner.get_video_detail(video_id)
@@ -35,7 +33,6 @@ Return JSON: {{"summary": "...", "key_points": ["..."], "tags": ["..."], "sentim
     result["video_id"] = video_id
     result["title"] = detail.get("title")
     return result
-
 
 async def analyze_comments(video_id: str) -> Dict:
     data = await data_miner.get_video_comments(video_id, max_comments=100)
@@ -63,7 +60,6 @@ Return JSON: {{
     result["video_id"] = video_id
     result["total_analyzed"] = len(comments)
     return result
-
 
 async def analyze_trends(limit: int = 20) -> Dict:
     data = await data_miner.get_trending(max_results=limit)

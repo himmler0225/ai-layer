@@ -10,5 +10,4 @@ def get_client_ip(request: Request) -> str:
 
     return request.client.host
 
-
 limiter = Limiter(key_func=get_client_ip)

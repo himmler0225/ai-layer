@@ -2,13 +2,11 @@ from typing import Dict, List
 from urllib.parse import quote
 from .review_summarizer import summarize_reviews
 
-
 def _youtube_url(video_id: str) -> str:
     return f"https://www.youtube.com/watch?v={video_id}"
 
 def _youtube_search_url(query: str) -> str:
     return f"https://www.youtube.com/results?search_query={quote(query)}"
-
 
 def _collect_all(tool_calls: List[Dict]):
     seen_urls:   set       = set()
@@ -72,7 +70,6 @@ def _collect_all(tool_calls: List[Dict]):
                 _add_source(f"YouTube comments: {vid}", url, "reviews")
 
     return all_reviews, all_videos, sources
-
 
 async def enrich_agent_result(result_text: str, tool_calls: List[Dict], iterations: int) -> Dict:
     all_reviews, all_videos, sources = _collect_all(tool_calls)

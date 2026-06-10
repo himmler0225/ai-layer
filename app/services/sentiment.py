@@ -1,7 +1,3 @@
-"""
-Rule-based sentiment classifier using normalization_dict.json.
-Handles Vietnamese teencode, vienglish, abbreviations before scoring.
-"""
 import json
 import re
 from pathlib import Path
@@ -21,13 +17,11 @@ _ASPECTS     = _D["aspects"]
 _NORM_MAP = {**_ABBREV, **_VIENGLISH, **_TEENCODE}
 _NORM_PAIRS = sorted(_NORM_MAP.items(), key=lambda x: -len(x[0]))
 
-
 def _normalize(text: str) -> str:
     t = text.lower().strip()
     for src, dst in _NORM_PAIRS:
         t = re.sub(r"(?<![a-zA-ZÀ-ỹ])" + re.escape(src) + r"(?![a-zA-ZÀ-ỹ])", dst, t)
     return t
-
 
 def classify_sentiment(text: str) -> str:
     t = _normalize(text)
@@ -42,11 +36,9 @@ def classify_sentiment(text: str) -> str:
         return "neutral"
     return "neutral"
 
-
 def detect_aspects(text: str) -> List[str]:
     t = _normalize(text)
     return [asp for asp, kws in _ASPECTS.items() if any(kw in t for kw in kws)]
-
 
 def analyze_reviews(reviews: List[Dict]) -> Dict:
     """

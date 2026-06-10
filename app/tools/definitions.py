@@ -1,5 +1,4 @@
 YOUTUBE_TOOLS = [
-    # ── Tìm kiếm & khám phá ──────────────────────────────────────────────────
 
     {
         "name": "youtube_search",
@@ -90,9 +89,6 @@ YOUTUBE_TOOLS = [
             "required": ["gl", "query"],
         },
     },
-
-    # ── Video detail & tương tác ──────────────────────────────────────────────
-
     {
         "name": "youtube_get_detail",
         "description": (
@@ -126,9 +122,6 @@ YOUTUBE_TOOLS = [
             "required": ["video_id"],
         },
     },
-
-    # ── Channel ───────────────────────────────────────────────────────────────
-
     {
         "name": "youtube_get_channel_info",
         "description": (
@@ -174,9 +167,6 @@ YOUTUBE_TOOLS = [
             "required": ["channel_id"],
         },
     },
-
-    # ── Playlist ──────────────────────────────────────────────────────────────
-
     {
         "name": "youtube_get_playlist_videos",
         "description": (

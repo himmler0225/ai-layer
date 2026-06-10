@@ -54,7 +54,6 @@ Reviews:
 {reviews}
 """
 
-
 def _format_reviews(reviews: List[Dict]) -> str:
     lines = []
     for i, r in enumerate(reviews[:150], 1):
@@ -63,7 +62,6 @@ def _format_reviews(reviews: List[Dict]) -> str:
         if text:
             lines.append(f"{i}. [{rating}★] {text[:300]}")
     return "\n".join(lines)
-
 
 async def summarize_reviews(
     reviews: List[Dict],
