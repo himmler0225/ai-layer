@@ -1,0 +1,3 @@
+{"timestamp": "2026-06-10T07:10:57.322522", "level": "INFO", "logger": "ai_layer.utilities.url_shortener", "message": "TinyURL: https://tuoitre.vn/ → https://tinyurl.com/y76ylhf4", "module": "url_shortener", "function": "_tinyurl", "line": 31}
+{"timestamp": "2026-06-10T07:11:19.782952", "level": "INFO", "logger": "ai_layer.utilities.qr_generator", "message": "QR generated for: https://tuoitre.vn/ (theme=default)", "module": "qr_generator", "function": "generate_qr", "line": 49}
+{"timestamp": "2026-06-10T07:13:29.320249", "level": "INFO", "logger": "ai_layer.utilities.qr_generator", "message": "QR generated for: https://tuoitre.vn/ (theme=default)", "module": "qr_generator", "function": "generate_qr", "line": 49}
