@@ -144,6 +144,40 @@ YOUTUBE_TOOLS = [
         },
     },
     {
+        "name": "youtube_get_transcript",
+        "description": (
+            "Lấy transcript (phụ đề/lời thoại) của một video YouTube. "
+            "DÙNG KHI: cần phân tích nội dung video (reviewer nói gì) thay vì chỉ comment. "
+            "Kết hợp với youtube_get_comments_batch để có cả nội dung lẫn phản ứng cộng đồng. "
+            "TRẢ VỀ: text transcript, language, available (False nếu video không có caption). "
+            "LƯU Ý: ~60-70% video có caption. Nếu available=False, bỏ qua và dùng comment."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "video_id": {"type": "string", "description": "YouTube video ID"},
+            },
+            "required": ["video_id"],
+        },
+    },
+    {
+        "name": "youtube_get_transcript_batch",
+        "description": (
+            "Lấy transcript của NHIỀU video YouTube song song — hiệu quả hơn gọi từng cái. "
+            "DÙNG KHI: muốn phân tích nội dung nhiều video cùng lúc (kết hợp comments + transcript). "
+            "TRẢ VỀ: dict {video_id: transcript_data}. Video không có caption → null. "
+            "Tối đa 8 video_ids."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "video_ids": {"type": "array", "items": {"type": "string"},
+                              "description": "3-5 video_id cần lấy transcript"},
+            },
+            "required": ["video_ids"],
+        },
+    },
+    {
         "name": "youtube_get_channel_info",
         "description": (
             "Lấy thông tin kênh YouTube: tên, subscriber, mô tả, avatar. "
@@ -294,6 +328,22 @@ TIKTOK_TOOLS = [
                 "handle": {"type": "string", "description": "TikTok handle (không cần @)"},
             },
             "required": ["handle"],
+        },
+    },
+    {
+        "name": "tiktok_transcript",
+        "description": (
+            "Lấy transcript (phụ đề/lời thoại) của một video TikTok qua TikHub. "
+            "DÙNG KHI: cần phân tích nội dung creator nói trong video, kết hợp với tiktok_comments. "
+            "YÊU CẦU: aweme_id (video ID số). "
+            "TRẢ VỀ: text, language, available (False nếu video không có caption)."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "aweme_id": {"type": "string", "description": "TikTok video ID (số)"},
+            },
+            "required": ["aweme_id"],
         },
     },
 ]

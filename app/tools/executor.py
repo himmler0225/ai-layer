@@ -48,6 +48,12 @@ async def _youtube_get_comments_batch(inp: Dict) -> Any:
         sort=inp.get("sort", "top"),
     )
 
+async def _youtube_get_transcript(inp: Dict) -> Any:
+    return await data_miner.get_video_transcript(inp["video_id"])
+
+async def _youtube_get_transcript_batch(inp: Dict) -> Any:
+    return await data_miner.get_video_transcript_batch(inp["video_ids"][:8])
+
 async def _youtube_get_channel_info(inp: Dict) -> Any:
     return await data_miner.get_channel_info(inp["channel_id"])
 
@@ -77,6 +83,9 @@ async def _tiktok_comments(inp: Dict) -> Any:
 async def _tiktok_profile(inp: Dict) -> Any:
     return await data_miner.tiktok_profile(inp["handle"])
 
+async def _tiktok_transcript(inp: Dict) -> Any:
+    return await data_miner.tiktok_transcript(aweme_id=inp["aweme_id"])
+
 async def _extract_id_from_url(inp: Dict) -> Any:
     return _url_extract(url=inp["url"])
 
@@ -89,6 +98,8 @@ _REGISTRY = {
     "youtube_get_detail":            _youtube_get_detail,
     "youtube_get_comments":          _youtube_get_comments,
     "youtube_get_comments_batch":    _youtube_get_comments_batch,
+    "youtube_get_transcript":        _youtube_get_transcript,
+    "youtube_get_transcript_batch":  _youtube_get_transcript_batch,
     "youtube_get_channel_info":      _youtube_get_channel_info,
     "youtube_get_channel_videos":    _youtube_get_channel_videos,
     "youtube_get_channel_playlists": _youtube_get_channel_playlists,
@@ -97,6 +108,7 @@ _REGISTRY = {
     "tiktok_video_info":             _tiktok_video_info,
     "tiktok_comments":               _tiktok_comments,
     "tiktok_profile":                _tiktok_profile,
+    "tiktok_transcript":             _tiktok_transcript,
     "extract_id_from_url":           _extract_id_from_url,
 }
 

@@ -69,6 +69,12 @@ async def get_video_comments_batch(video_ids: list, max_per_video: int = 20, sor
         "video_ids": ",".join(video_ids), "limit": max_per_video, "sort": sort,
     })
 
+async def get_video_transcript(video_id: str) -> Dict:
+    return await _get(f"/api/videos/{video_id}/transcript")
+
+async def get_video_transcript_batch(video_ids: list) -> Dict:
+    return await _get("/api/videos/transcript/batch", {"video_ids": ",".join(video_ids)})
+
 async def get_trending(max_results: int = 20) -> Dict:
     return await _get("/api/videos/trending", {"limit": max_results})
 
@@ -112,3 +118,6 @@ async def tiktok_comments(aweme_id: str, cursor: int = 0, count: int = 20) -> Di
 
 async def tiktok_profile(handle: str) -> Dict:
     return await _get(f"/api/tiktok/profiles/{handle}")
+
+async def tiktok_transcript(aweme_id: str) -> Dict:
+    return await _get("/api/tiktok/transcript", {"aweme_id": aweme_id})
