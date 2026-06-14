@@ -1,6 +1,6 @@
 import json
 from app.config.logger import Logger
-from typing import Any, Dict, List
+from typing import Any, AsyncGenerator, Dict, List
 
 import anthropic
 
@@ -65,7 +65,7 @@ async def run_agent(
         force_tool = iteration == 1 and not tool_call_log and not has_history
         tool_choice = {"type": "any"} if force_tool else {"type": "auto"}
 
-        response = await _client.messages.create(
+        response = await _client.messages.stream(
             model=CLAUDE_MODEL,
             max_tokens=CLAUDE_MAX_TOKENS,
             system=[{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
@@ -128,3 +128,72 @@ async def run_agent(
         break
 
     raise RuntimeError(f"Agent did not finish within {max_iter} iterations")
+
+
+async def run_agent_stream(
+    task: str,
+    tools: List[Dict],
+    max_iter: int = 10,
+    system: str = AGENT_SYSTEM,
+) -> AsyncGenerator[str, None]:
+    messages: List[Dict] = [{"role": "user", "content": task}]
+    tool_call_log: List[Dict] = []
+    has_history = "\n[Câu hỏi hiện tại]\n" in task
+
+    def _sse(data: Dict) -> str:
+        return f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+    for iteration in range(1, max_iter + 1):
+        force_tool = iteration == 1 and not tool_call_log and not has_history
+        tool_choice = {"type": "any"} if force_tool else {"type": "auto"}
+
+        collected_text = ""
+
+        async with _client.messages.stream(
+            model=CLAUDE_MODEL,
+            max_tokens=CLAUDE_MAX_TOKENS,
+            system=[{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
+            tools=tools,
+            tool_choice=tool_choice,
+            messages=messages,
+        ) as stream:
+            async for event in stream:
+                if event.type == "content_block_delta":
+                    delta = event.delta
+                    if delta.type == "text_delta" and delta.text:
+                        collected_text += delta.text
+                        yield _sse({"type": "text_delta", "delta": delta.text})
+
+            final = await stream.get_final_message()
+
+        if final.stop_reason == "end_turn":
+            enriched = await enrich_agent_result(collected_text, tool_call_log, iteration)
+            yield _sse({
+                "type":       "done",
+                "data":       enriched["data"],
+                "tool_calls": enriched["tool_calls"],
+            })
+            return
+
+        if final.stop_reason == "tool_use":
+            messages.append({"role": "assistant", "content": final.content})
+            tool_results = []
+            for block in final.content:
+                if block.type != "tool_use":
+                    continue
+                yield _sse({"type": "tool_start", "tool": block.name})
+                result = await execute_tool(block.name, block.input)
+                tool_call_log.append({"tool": block.name, "inputs": block.input, "result": result})
+                tool_results.append({
+                    "type": "tool_result",
+                    "tool_use_id": block.id,
+                    "content": _serialize_result(result),
+                })
+                yield _sse({"type": "tool_done", "tool": block.name})
+            messages.append({"role": "user", "content": tool_results})
+            continue
+
+        yield _sse({"type": "error", "message": f"Unexpected stop_reason: {final.stop_reason}"})
+        return
+
+    yield _sse({"type": "error", "message": f"Agent did not finish within {max_iter} iterations"})

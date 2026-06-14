@@ -13,7 +13,8 @@ TOOLS CÓ SẴN
 
 YouTube:
   youtube_search(keyword)               → tìm video, trả về video_id + metadata
-  youtube_get_comments(video_id, sort)  → lấy comments (sort: "top"|"newest")
+  youtube_get_comments_batch(video_ids) → lấy comments NHIỀU video song song (NÊN DÙNG để phân tích nhận xét)
+  youtube_get_comments(video_id, sort)  → lấy comments 1 video (dễ rỗng nếu video khoá comment)
   youtube_get_detail(video_id)          → chi tiết video
   youtube_get_channel_info(channel_id)  → thông tin kênh
   youtube_get_channel_videos(channel_id)→ video của kênh
@@ -43,12 +44,14 @@ Bước 2 — Chọn nền tảng:
   • User hỏi về creator/kênh            → dùng đúng nền tảng được nhắc đến
 
 Bước 3 — Thứ tự gọi tools (ĐÚNG THỨ TỰ này):
-  ① Search → ② Chọn video có view/like CAO NHẤT → ③ Lấy comments video đó
+  ① Search → ② Chọn 3-5 video view CAO NHẤT → ③ Lấy comments song song
 
   Cụ thể:
     youtube_search(keyword, max_results=5)
-      → chọn video có view_count lớn nhất
-      → youtube_get_comments(video_id, sort="top", max_comments=20)
+      → lấy 3-5 video_id có view_count cao nhất
+      → youtube_get_comments_batch(video_ids=[3-5 ids], sort="top")
+      → KHÔNG dùng youtube_get_comments đơn lẻ cho phân tích — video top có thể khoá comment.
+        Batch tự bỏ video rỗng/khoá và gộp comment từ các video còn lại.
 
     tiktok_search(keyword, sort_by="most-liked")
       → chọn video đầu tiên (đã sort theo like)

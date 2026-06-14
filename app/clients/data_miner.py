@@ -6,7 +6,7 @@ from typing import Any, Dict, Optional
 import httpx
 
 from app.config.logger import Logger
-from app.config.settings import DATA_MINER_URL, DATA_MINER_KEY
+from app.config.settings import DATA_MINER_URL, DATA_MINER_KEY, DATA_MINER_TIMEOUT
 
 logger = Logger.get(__name__)
 
@@ -20,7 +20,7 @@ def _get_client() -> httpx.AsyncClient:
     global _client
     if _client is None or _client.is_closed:
         _client = httpx.AsyncClient(
-            base_url=DATA_MINER_URL, headers=_HEADERS, timeout=30,
+            base_url=DATA_MINER_URL, headers=_HEADERS, timeout=DATA_MINER_TIMEOUT,
             limits=httpx.Limits(max_connections=20, max_keepalive_connections=10),
         )
     return _client
@@ -64,6 +64,11 @@ async def get_video_detail(video_id: str) -> Dict:
 async def get_video_comments(video_id: str, max_comments: int = 20, sort: str = "newest") -> Dict:
     return await _get(f"/api/videos/{video_id}/comments", {"limit": max_comments, "sort": sort})
 
+async def get_video_comments_batch(video_ids: list, max_per_video: int = 20, sort: str = "top") -> Dict:
+    return await _get("/api/videos/comments/batch", {
+        "video_ids": ",".join(video_ids), "limit": max_per_video, "sort": sort,
+    })
+
 async def get_trending(max_results: int = 20) -> Dict:
     return await _get("/api/videos/trending", {"limit": max_results})
 
@@ -99,14 +104,11 @@ async def tiktok_search(keyword: str, cursor: int = 0, sort_by: str = None,
     if region:      params["region"]      = region
     return await _get("/api/tiktok/search", params)
 
-async def tiktok_video_info(url: str, get_transcript: bool = False, region: str = None) -> Dict:
-    params: Dict = {"url": url}
-    if get_transcript: params["get_transcript"] = "true"
-    if region:         params["region"]         = region
-    return await _get("/api/tiktok/video-info", params)
+async def tiktok_video_info(url: str) -> Dict:
+    return await _get("/api/tiktok/video-info", {"url": url})
 
-async def tiktok_comments(url: str, cursor: int = 0) -> Dict:
-    return await _get("/api/tiktok/comments", {"url": url, "cursor": cursor})
+async def tiktok_comments(aweme_id: str, cursor: int = 0, count: int = 20) -> Dict:
+    return await _get("/api/tiktok/comments", {"aweme_id": aweme_id, "cursor": cursor, "count": count})
 
 async def tiktok_profile(handle: str) -> Dict:
     return await _get(f"/api/tiktok/profiles/{handle}")

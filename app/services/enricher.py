@@ -69,6 +69,18 @@ def _collect_all(tool_calls: List[Dict]):
             if url:
                 _add_source(f"YouTube comments: {vid}", url, "reviews")
 
+        elif tool == "youtube_get_comments_batch":
+            for vid_result in (result.get("results") or []):
+                vid = vid_result.get("video_id")
+                url = _youtube_url(vid) if vid else None
+                for c in (vid_result.get("comments") or []):
+                    all_reviews.append({
+                        "content":    c.get("content") or c.get("text") or "",
+                        "source_url": url,
+                    })
+                if url and vid_result.get("comments"):
+                    _add_source(f"YouTube comments: {vid}", url, "reviews")
+
     return all_reviews, all_videos, sources
 
 async def enrich_agent_result(result_text: str, tool_calls: List[Dict], iterations: int) -> Dict:

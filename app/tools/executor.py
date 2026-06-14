@@ -41,6 +41,13 @@ async def _youtube_get_comments(inp: Dict) -> Any:
         video_id=inp["video_id"], max_comments=min(inp.get("max_comments", 20), 20), sort=inp.get("sort", "newest"),
     )
 
+async def _youtube_get_comments_batch(inp: Dict) -> Any:
+    return await data_miner.get_video_comments_batch(
+        video_ids=inp["video_ids"][:8],
+        max_per_video=min(inp.get("max_per_video", 20), 30),
+        sort=inp.get("sort", "top"),
+    )
+
 async def _youtube_get_channel_info(inp: Dict) -> Any:
     return await data_miner.get_channel_info(inp["channel_id"])
 
@@ -60,12 +67,12 @@ async def _tiktok_search(inp: Dict) -> Any:
     )
 
 async def _tiktok_video_info(inp: Dict) -> Any:
-    return await data_miner.tiktok_video_info(
-        url=inp["url"], get_transcript=inp.get("get_transcript", False), region=inp.get("region"),
-    )
+    return await data_miner.tiktok_video_info(url=inp["url"])
 
 async def _tiktok_comments(inp: Dict) -> Any:
-    return await data_miner.tiktok_comments(url=inp["url"], cursor=inp.get("cursor", 0))
+    return await data_miner.tiktok_comments(
+        aweme_id=inp["aweme_id"], cursor=inp.get("cursor", 0), count=inp.get("count", 20),
+    )
 
 async def _tiktok_profile(inp: Dict) -> Any:
     return await data_miner.tiktok_profile(inp["handle"])
@@ -81,6 +88,7 @@ _REGISTRY = {
     "youtube_get_by_region":         _youtube_get_by_region,
     "youtube_get_detail":            _youtube_get_detail,
     "youtube_get_comments":          _youtube_get_comments,
+    "youtube_get_comments_batch":    _youtube_get_comments_batch,
     "youtube_get_channel_info":      _youtube_get_channel_info,
     "youtube_get_channel_videos":    _youtube_get_channel_videos,
     "youtube_get_channel_playlists": _youtube_get_channel_playlists,

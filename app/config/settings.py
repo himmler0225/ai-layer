@@ -10,8 +10,9 @@ ANTHROPIC_API_KEY: str = os.getenv("ANTHROPIC_API_KEY", "")
 CLAUDE_MODEL: str      = os.getenv("CLAUDE_MODEL", "claude-sonnet-4-6")
 CLAUDE_MAX_TOKENS: int = int(os.getenv("CLAUDE_MAX_TOKENS", "4096"))
 
-DATA_MINER_URL: str  = os.getenv("DATA_MINER_URL", "http://localhost:8000")
-DATA_MINER_KEY: str  = os.getenv("DATA_MINER_KEY", "")
+DATA_MINER_URL:     str = os.getenv("DATA_MINER_URL",     "http://localhost:8000")
+DATA_MINER_KEY:     str = os.getenv("DATA_MINER_KEY",     "")
+DATA_MINER_TIMEOUT: int = int(os.getenv("DATA_MINER_TIMEOUT", "60"))
 YOUTUBE_API_URL: str = os.getenv("YOUTUBE_API_URL", "http://localhost:3000")
 YOUTUBE_API_KEY: str = os.getenv("YOUTUBE_API_KEY", "")
 
