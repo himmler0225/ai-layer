@@ -17,15 +17,25 @@ from fastapi.responses import JSONResponse
 from app.api.youtube import router as youtube_router
 from app.api.agent import router as agent_router
 from app.api.utilities import router as utilities_router
+from app.api.history import router as history_router
 from app.middleware import limiter, rate_limit_exceeded_handler, RateLimitExceeded
 from app.schemas.response import ApiResponse
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    from app.config.remote import load_and_apply
+    from app.db.base import init_tables
+    from app.cache.client import get_redis
+    await load_and_apply()
+    await init_tables()
+    await get_redis()
     yield
-    # Graceful shutdown — close shared HTTP clients
     from app.clients.data_miner import close_client as close_dm
+    from app.db.base import close_pool
+    from app.cache.client import close_redis
     await close_dm()
+    await close_pool()
+    await close_redis()
 
 app = FastAPI(
     title="AI Layer",
@@ -63,6 +73,7 @@ async def add_process_time(request: Request, call_next):
 app.include_router(youtube_router,   prefix="/ai", tags=["YouTube AI"])
 app.include_router(agent_router,     prefix="/ai", tags=["Agent"])
 app.include_router(utilities_router, prefix="/ai", tags=["Utilities"])
+app.include_router(history_router,   prefix="/ai", tags=["History"])
 
 @app.get("/health", tags=["Health"])
 async def health():

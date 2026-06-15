@@ -129,7 +129,6 @@ async def run_agent(
 
     raise RuntimeError(f"Agent did not finish within {max_iter} iterations")
 
-
 async def run_agent_stream(
     task: str,
     tools: List[Dict],

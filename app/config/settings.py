@@ -20,7 +20,7 @@ API_KEYS: list[str] = [k.strip() for k in os.getenv("API_KEYS", "").split(",") i
 CORS_ORIGINS: list[str] = [o.strip() for o in os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",") if o.strip()]
 
 AGENT_MAX_RESULT_CHARS: int = int(os.getenv("AGENT_MAX_RESULT_CHARS", "8000"))
-AGENT_MAX_COMMENTS:     int = int(os.getenv("AGENT_MAX_COMMENTS",     "20"))
+AGENT_MAX_COMMENTS:     int = int(os.getenv("AGENT_MAX_COMMENTS",     "200"))
 AGENT_MAX_COMMENT_LEN:  int = int(os.getenv("AGENT_MAX_COMMENT_LEN",  "150"))
 AGENT_MAX_LIST_ITEMS:   int = int(os.getenv("AGENT_MAX_LIST_ITEMS",   "15"))
 
@@ -29,3 +29,22 @@ AGENT_MAX_LIST_ITEMS:   int = int(os.getenv("AGENT_MAX_LIST_ITEMS",   "15"))
 GEOIP_DB_PATH: str = os.getenv("GEOIP_DB_PATH", "")
 GEOIP_CACHE_TTL: int = int(os.getenv("GEOIP_CACHE_TTL", "3600"))  # seconds
 GEOIP_CACHE_MAX: int = int(os.getenv("GEOIP_CACHE_MAX", "500"))   # max cached IPs
+
+# PostgreSQL
+DATABASE_URL: str = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/youtube")
+
+# Redis
+REDIS_HOST: str = os.getenv("REDIS_HOST", "localhost")
+REDIS_PORT: int = int(os.getenv("REDIS_PORT", "6379"))
+REDIS_DB:   int = int(os.getenv("REDIS_DB",   "1"))
+
+# Supabase — JWT verification + remote config
+SUPABASE_URL:         str = os.getenv("SUPABASE_URL", "")
+SUPABASE_ANON_KEY:    str = os.getenv("SUPABASE_ANON_KEY", "")
+SUPABASE_SERVICE_KEY: str = os.getenv("SUPABASE_SERVICE_KEY", "")
+
+# Cache TTLs (seconds)
+SUPABASE_TOKEN_TTL:   int = 3600   # JWT auth cache (1 h)
+HISTORY_SESSIONS_TTL: int = 300    # sessions list cache (5 min)
+HISTORY_MESSAGES_TTL: int = 600    # messages cache (10 min)
+REMOTE_CONFIG_TTL:    int = 5      # timeout for fetching remote config

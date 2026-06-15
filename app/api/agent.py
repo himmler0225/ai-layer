@@ -11,13 +11,11 @@ from app.schemas.response import ApiResponse
 
 router = APIRouter(prefix="/agent", dependencies=[Depends(verify_api_key)])
 
-
 class AgentRequest(BaseModel):
     task:     str                                  = Field(..., description="Natural language task")
     tools:    Literal["youtube", "tiktok", "all"] = Field("all")
     max_iter: int                                  = Field(10, ge=1, le=20)
     system:   Optional[str]                        = Field(None)
-
 
 @router.post("/run")
 @limiter.limit("10/minute")
@@ -32,7 +30,6 @@ async def run(request: Request, body: AgentRequest):
         raise HTTPException(status_code=502, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @router.post("/run/stream")
 @limiter.limit("10/minute")
