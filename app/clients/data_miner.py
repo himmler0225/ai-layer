@@ -6,21 +6,23 @@ from typing import Any, Dict, Optional
 import httpx
 
 from app.config.logger import Logger
-from app.config.settings import DATA_MINER_URL, DATA_MINER_KEY, DATA_MINER_TIMEOUT
+import app.config.settings as _s
 
 logger = Logger.get(__name__)
 
-_HEADERS         = {"X-API-Key": DATA_MINER_KEY}
 _MAX_ATTEMPTS    = 3
 _RETRY_ON_STATUS = {502, 503, 504}
 
 _client: Optional[httpx.AsyncClient] = None
 
+def _get_headers() -> dict:
+    return {"X-API-Key": _s.DATA_MINER_KEY}
+
 def _get_client() -> httpx.AsyncClient:
     global _client
     if _client is None or _client.is_closed:
         _client = httpx.AsyncClient(
-            base_url=DATA_MINER_URL, headers=_HEADERS, timeout=DATA_MINER_TIMEOUT,
+            base_url=_s.DATA_MINER_URL, headers=_get_headers(), timeout=_s.DATA_MINER_TIMEOUT,
             limits=httpx.Limits(max_connections=20, max_keepalive_connections=10),
         )
     return _client
@@ -35,7 +37,7 @@ async def _get(path: str, params: Dict = None) -> Any:
     last_exc: Exception = RuntimeError("Unknown error")
     for attempt in range(1, _MAX_ATTEMPTS + 1):
         try:
-            r = await _get_client().get(path, params=params or {})
+            r = await _get_client().get(path, params=params or {}, headers=_get_headers())
             if r.status_code in _RETRY_ON_STATUS:
                 raise httpx.HTTPStatusError(f"{r.status_code} from data-miner", request=r.request, response=r)
             r.raise_for_status()

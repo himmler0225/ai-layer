@@ -24,8 +24,6 @@ AGENT_MAX_COMMENTS:     int = int(os.getenv("AGENT_MAX_COMMENTS",     "200"))
 AGENT_MAX_COMMENT_LEN:  int = int(os.getenv("AGENT_MAX_COMMENT_LEN",  "150"))
 AGENT_MAX_LIST_ITEMS:   int = int(os.getenv("AGENT_MAX_LIST_ITEMS",   "15"))
 
-# Path to GeoLite2-City.mmdb (optional — falls back to ip-api.com if not set)
-# Download free: https://dev.maxmind.com/geoip/geolite2-free-geolocation-data
 GEOIP_DB_PATH: str = os.getenv("GEOIP_DB_PATH", "")
 GEOIP_CACHE_TTL: int = int(os.getenv("GEOIP_CACHE_TTL", "3600"))  # seconds
 GEOIP_CACHE_MAX: int = int(os.getenv("GEOIP_CACHE_MAX", "500"))   # max cached IPs
@@ -48,3 +46,6 @@ SUPABASE_TOKEN_TTL:   int = 3600   # JWT auth cache (1 h)
 HISTORY_SESSIONS_TTL: int = 300    # sessions list cache (5 min)
 HISTORY_MESSAGES_TTL: int = 600    # messages cache (10 min)
 REMOTE_CONFIG_TTL:    int = 5      # timeout for fetching remote config
+
+# MongoDB
+MONGODB_URL: str = os.getenv("MONGODB_URL", "")

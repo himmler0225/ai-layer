@@ -44,6 +44,7 @@ Format output (giữ đúng format, thêm emoji phù hợp):
 
 Quy tắc bắt buộc:
 - CHỈ trích dẫn nguyên văn trong dấu ngoặc kép
+- BỎ QUA các bình luận chỉ có mỗi icon
 - KHÔNG thêm nhận xét như "tốt", "xấu", "hài lòng", "thất vọng"
 - Với những câu có tổn tại những từ như "vc", "vl" thì không xếp nó vào tích cực hay tiêu cực
 - Giữ nguyên ngôn ngữ gốc kể cả teencode, Vienglish

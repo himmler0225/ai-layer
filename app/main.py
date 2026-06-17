@@ -33,9 +33,11 @@ async def lifespan(_app: FastAPI):
     from app.clients.data_miner import close_client as close_dm
     from app.db.base import close_pool
     from app.cache.client import close_redis
+    from app.db.mongo import close_mongo
     await close_dm()
     await close_pool()
     await close_redis()
+    await close_mongo()
 
 app = FastAPI(
     title="AI Layer",

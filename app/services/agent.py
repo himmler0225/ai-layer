@@ -4,38 +4,40 @@ from typing import Any, AsyncGenerator, Dict, List
 
 import anthropic
 
-from app.config.settings import (
-    ANTHROPIC_API_KEY, CLAUDE_MODEL, CLAUDE_MAX_TOKENS,
-    AGENT_MAX_RESULT_CHARS as _MAX_RESULT_CHARS,
-    AGENT_MAX_COMMENTS     as _MAX_COMMENTS,
-    AGENT_MAX_COMMENT_LEN  as _MAX_COMMENT_LEN,
-    AGENT_MAX_LIST_ITEMS   as _MAX_LIST_ITEMS,
-)
+import uuid
+import app.config.settings as _cfg
+import app.services.prompts as _prompts
 from app.tools.executor import execute_tool
 from app.services.enricher import enrich_agent_result
-from app.services.prompts import AGENT_SYSTEM
+from app.db.mongo import log_tool_call, log_agent_run
 
 logger = Logger.get(__name__)
 
-_client = anthropic.AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
+def _client() -> anthropic.AsyncAnthropic:
+    return anthropic.AsyncAnthropic(api_key=_cfg.ANTHROPIC_API_KEY)
+
+def _max_result_chars() -> int: return _cfg.AGENT_MAX_RESULT_CHARS
+def _max_comments()     -> int: return _cfg.AGENT_MAX_COMMENTS
+def _max_comment_len()  -> int: return _cfg.AGENT_MAX_COMMENT_LEN
+def _max_list_items()   -> int: return _cfg.AGENT_MAX_LIST_ITEMS
 
 def _serialize_result(result: Dict) -> str:
     if not isinstance(result, dict):
-        return json.dumps(result, ensure_ascii=False, default=str)[:_MAX_RESULT_CHARS]
+        return json.dumps(result, ensure_ascii=False, default=str)[:_max_result_chars()]
 
     data = dict(result)
 
     if "comments" in data and isinstance(data["comments"], list):
         data["comments"] = [
-            {**c, "content": (c.get("content") or c.get("text") or "")[:_MAX_COMMENT_LEN]}
-            for c in data["comments"][:_MAX_COMMENTS]
+            {**c, "content": (c.get("content") or c.get("text") or "")[:_max_comment_len()]}
+            for c in data["comments"][:_max_comments()]
         ]
 
     # Video / product lists: cap count + trim descriptions
     for list_key in ("videos", "products", "results", "items"):
         if list_key in data and isinstance(data[list_key], list):
             trimmed = []
-            for item in data[list_key][:_MAX_LIST_ITEMS]:
+            for item in data[list_key][:_max_list_items()]:
                 if isinstance(item, dict) and "description" in item:
                     item = {**item, "description": (item["description"] or "")[:200]}
                 trimmed.append(item)
@@ -43,8 +45,8 @@ def _serialize_result(result: Dict) -> str:
 
     serialized = json.dumps(data, ensure_ascii=False, default=str)
 
-    if len(serialized) > _MAX_RESULT_CHARS:
-        serialized = serialized[:_MAX_RESULT_CHARS] + '... [truncated]"}'
+    if len(serialized) > _max_result_chars():
+        serialized = serialized[:_max_result_chars()] + '... [truncated]"}'
 
     return serialized
 
@@ -52,8 +54,11 @@ async def run_agent(
     task: str,
     tools: List[Dict],
     max_iter: int = 10,
-    system: str = AGENT_SYSTEM,
+    system: str = None,
 ) -> Dict[str, Any]:
+    if system is None:
+        system = _prompts.AGENT_SYSTEM
+    session_id = str(uuid.uuid4())
     messages: List[Dict] = [{"role": "user", "content": task}]
     tool_call_log: List[Dict] = []
 
@@ -65,9 +70,9 @@ async def run_agent(
         force_tool = iteration == 1 and not tool_call_log and not has_history
         tool_choice = {"type": "any"} if force_tool else {"type": "auto"}
 
-        response = await _client.messages.stream(
-            model=CLAUDE_MODEL,
-            max_tokens=CLAUDE_MAX_TOKENS,
+        response = await _client().messages.stream(
+            model=_cfg.CLAUDE_MODEL,
+            max_tokens=_cfg.CLAUDE_MAX_TOKENS,
             system=[{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
             tools=tools,
             tool_choice=tool_choice,
@@ -80,7 +85,9 @@ async def run_agent(
             final_text = "".join(
                 getattr(b, "text", "") for b in response.content
             )
-            return await enrich_agent_result(final_text, tool_call_log, iteration)
+            enriched1 = await enrich_agent_result(final_text, tool_call_log, iteration)
+            await log_agent_run(session_id, task, iteration, tool_call_log, final_text, enriched1["data"].get("sources",[]), enriched1["data"].get("videos",[]), enriched1["data"].get("reviews_analyzed",0))
+            return enriched1
 
         if response.stop_reason == "tool_use":
             messages.append({"role": "assistant", "content": response.content})
@@ -98,6 +105,7 @@ async def run_agent(
                     "inputs": block.input,
                     "result": result,
                 })
+                await log_tool_call(session_id, task, block.name, dict(block.input), result, iteration)
 
                 tool_results.append({
                     "type":        "tool_result",
@@ -133,8 +141,11 @@ async def run_agent_stream(
     task: str,
     tools: List[Dict],
     max_iter: int = 10,
-    system: str = AGENT_SYSTEM,
+    system: str = None,
 ) -> AsyncGenerator[str, None]:
+    if system is None:
+        system = _prompts.AGENT_SYSTEM
+    session_id = str(uuid.uuid4())
     messages: List[Dict] = [{"role": "user", "content": task}]
     tool_call_log: List[Dict] = []
     has_history = "\n[Câu hỏi hiện tại]\n" in task
@@ -148,9 +159,9 @@ async def run_agent_stream(
 
         collected_text = ""
 
-        async with _client.messages.stream(
-            model=CLAUDE_MODEL,
-            max_tokens=CLAUDE_MAX_TOKENS,
+        async with _client().messages.stream(
+            model=_cfg.CLAUDE_MODEL,
+            max_tokens=_cfg.CLAUDE_MAX_TOKENS,
             system=[{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
             tools=tools,
             tool_choice=tool_choice,
@@ -167,6 +178,13 @@ async def run_agent_stream(
 
         if final.stop_reason == "end_turn":
             enriched = await enrich_agent_result(collected_text, tool_call_log, iteration)
+            await log_agent_run(
+                session_id, task, iteration, tool_call_log,
+                collected_text,
+                enriched["data"].get("sources", []),
+                enriched["data"].get("videos", []),
+                enriched["data"].get("reviews_analyzed", 0),
+            )
             yield _sse({
                 "type":       "done",
                 "data":       enriched["data"],
@@ -183,6 +201,7 @@ async def run_agent_stream(
                 yield _sse({"type": "tool_start", "tool": block.name})
                 result = await execute_tool(block.name, block.input)
                 tool_call_log.append({"tool": block.name, "inputs": block.input, "result": result})
+                await log_tool_call(session_id, task, block.name, dict(block.input), result, iteration)
                 tool_results.append({
                     "type": "tool_result",
                     "tool_use_id": block.id,
