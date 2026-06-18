@@ -17,8 +17,8 @@ def _db():
         return None
     if _client is None:
         _client = motor.motor_asyncio.AsyncIOMotorClient(_cfg.MONGODB_URL)
-        logger.info("MongoDB client created → db: %s", _cfg.MONGODB_URL)
-    return _client[_cfg.MONGODB_URL]
+        logger.info("MongoDB client created → db: %s", _cfg.MONGODB_NAME)
+    return _client[_cfg.MONGODB_NAME]
 
 
 async def close_mongo() -> None:

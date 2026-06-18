@@ -49,3 +49,4 @@ REMOTE_CONFIG_TTL:    int = 5      # timeout for fetching remote config
 
 # MongoDB
 MONGODB_URL: str = os.getenv("MONGODB_URL", "")
+MONGODB_NAME: str = os.getenv("MONGODB_NAME", "")
