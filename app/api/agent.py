@@ -8,22 +8,24 @@ from app.middleware.rate_limit import limiter
 from app.services.agent import run_agent, run_agent_stream
 from app.tools.definitions import TOOL_SETS
 from app.schemas.response import ApiResponse
+import app.config.settings as _cfg
 
 router = APIRouter(prefix="/agent", dependencies=[Depends(verify_api_key)])
 
 class AgentRequest(BaseModel):
     task:     str                                  = Field(..., description="Natural language task")
     tools:    Literal["youtube", "tiktok", "all"] = Field("all")
-    max_iter: int                                  = Field(10, ge=1, le=20)
+    max_iter: Optional[int]                        = Field(None, ge=1, le=20, description="Defaults to AGENT_MAX_ITER from remote config")
     system:   Optional[str]                        = Field(None)
 
 @router.post("/run")
 @limiter.limit("10/minute")
 async def run(request: Request, body: AgentRequest):
-    tools  = TOOL_SETS.get(body.tools, TOOL_SETS["all"])
-    kwargs = {"system": body.system} if body.system else {}
+    tools    = TOOL_SETS.get(body.tools, TOOL_SETS["all"])
+    max_iter = body.max_iter or _cfg.AGENT_MAX_ITER
+    kwargs   = {"system": body.system} if body.system else {}
     try:
-        return ApiResponse.ok(await run_agent(body.task, tools, max_iter=body.max_iter, **kwargs))
+        return ApiResponse.ok(await run_agent(body.task, tools, max_iter=max_iter, **kwargs))
     except RuntimeError as e:
         raise HTTPException(status_code=504, detail=str(e))
     except ValueError as e:
@@ -34,12 +36,13 @@ async def run(request: Request, body: AgentRequest):
 @router.post("/run/stream")
 @limiter.limit("10/minute")
 async def run_stream(request: Request, body: AgentRequest):  # noqa: ARG001
-    tools  = TOOL_SETS.get(body.tools, TOOL_SETS["all"])
-    kwargs = {"system": body.system} if body.system else {}
+    tools    = TOOL_SETS.get(body.tools, TOOL_SETS["all"])
+    max_iter = body.max_iter or _cfg.AGENT_MAX_ITER
+    kwargs   = {"system": body.system} if body.system else {}
 
     async def generate():
         try:
-            async for chunk in run_agent_stream(body.task, tools, max_iter=body.max_iter, **kwargs):
+            async for chunk in run_agent_stream(body.task, tools, max_iter=max_iter, **kwargs):
                 yield chunk
         except Exception as e:
             import json

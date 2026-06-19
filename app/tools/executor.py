@@ -5,7 +5,7 @@ from typing import Any, Dict
 import jsonschema
 
 from app.clients import data_miner
-from app.config.settings import AGENT_MAX_COMMENTS
+import app.config.settings as _cfg
 from app.services.url_extractor import extract_id_from_url as _url_extract
 from app.tools.definitions import YOUTUBE_TOOLS, TIKTOK_TOOLS, UTIL_TOOLS
 
@@ -40,14 +40,14 @@ async def _youtube_get_detail(inp: Dict) -> Any:
 async def _youtube_get_comments(inp: Dict) -> Any:
     return await data_miner.get_video_comments(
         video_id=inp["video_id"],
-        max_comments=inp.get("max_comments", AGENT_MAX_COMMENTS),
+        max_comments=inp.get("max_comments", _cfg.AGENT_MAX_COMMENTS),
         sort=inp.get("sort", "top"),
     )
 
 async def _youtube_get_comments_batch(inp: Dict) -> Any:
     return await data_miner.get_video_comments_batch(
         video_ids=inp["video_ids"][:8],
-        max_per_video=inp.get("max_per_video", AGENT_MAX_COMMENTS),
+        max_per_video=inp.get("max_per_video", _cfg.AGENT_MAX_COMMENTS),
         sort=inp.get("sort", "top"),
     )
 
