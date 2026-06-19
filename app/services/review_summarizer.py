@@ -8,9 +8,16 @@ Users interpret meaning themselves — no model bias.
 import anthropic
 from typing import Dict, List, Optional
 
-from app.config.settings import ANTHROPIC_API_KEY, CLAUDE_MODEL
+import app.config.settings as _cfg
 
-_client = anthropic.AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
+_client: Optional[anthropic.AsyncAnthropic] = None
+
+def _get_client() -> anthropic.AsyncAnthropic:
+    # Lazily built so the Supabase-loaded ANTHROPIC_API_KEY is in effect.
+    global _client
+    if _client is None:
+        _client = anthropic.AsyncAnthropic(api_key=_cfg.ANTHROPIC_API_KEY)
+    return _client
 
 _SYSTEM = (
     "Bạn là công cụ tổng hợp reviews thương mại điện tử. "
@@ -79,9 +86,9 @@ async def summarize_reviews(
         reviews=_format_reviews(reviews),
     )
 
-    msg = await _client.messages.create(
-        model=CLAUDE_MODEL,
-        max_tokens=2048,
+    msg = await _get_client().messages.create(
+        model=_cfg.CLAUDE_MODEL,
+        max_tokens=_cfg.CLAUDE_MAX_TOKENS,
         system=[{"type": "text", "text": _SYSTEM, "cache_control": {"type": "ephemeral"}}],
         messages=[{"role": "user", "content": prompt}],
     )
