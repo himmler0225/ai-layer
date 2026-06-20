@@ -4,6 +4,7 @@ import httpx
 from fastapi import HTTPException
 from app.config.settings import SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_TOKEN_TTL
 from app.cache.client import get_redis
+from app.constants import SUPABASE_AUTH_TIMEOUT
 
 async def get_user_id(token: str) -> str:
     cache_key = f"auth:{hashlib.sha256(token.encode()).hexdigest()[:32]}"
@@ -14,7 +15,7 @@ async def get_user_id(token: str) -> str:
         if cached:
             return cached
 
-    async with httpx.AsyncClient(timeout=5) as client:
+    async with httpx.AsyncClient(timeout=SUPABASE_AUTH_TIMEOUT) as client:
         r = await client.get(
             f"{SUPABASE_URL}/auth/v1/user",
             headers={"Authorization": f"Bearer {token}", "apikey": SUPABASE_ANON_KEY},

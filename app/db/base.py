@@ -1,25 +1,35 @@
 from __future__ import annotations
 import json
 import asyncpg
-from app.config.settings import DATABASE_URL
+import app.config.settings as _s
+from app.config.logger import Logger
+
+logger = Logger.get(__name__)
 
 _pool: asyncpg.Pool | None = None
+
 
 async def _init_conn(conn: asyncpg.Connection) -> None:
     await conn.set_type_codec("jsonb", encoder=json.dumps, decoder=json.loads, schema="pg_catalog")
     await conn.set_type_codec("json",  encoder=json.dumps, decoder=json.loads, schema="pg_catalog")
 
+
 async def get_pool() -> asyncpg.Pool:
     global _pool
     if _pool is None:
-        _pool = await asyncpg.create_pool(DATABASE_URL, init=_init_conn, min_size=2, max_size=10)
+        url = _s.DATABASE_URL
+        if not url:
+            raise RuntimeError("DATABASE_URL is not configured")
+        _pool = await asyncpg.create_pool(url, init=_init_conn, min_size=2, max_size=10)
     return _pool
+
 
 async def close_pool() -> None:
     global _pool
     if _pool:
         await _pool.close()
         _pool = None
+
 
 async def init_tables() -> None:
     pool = await get_pool()

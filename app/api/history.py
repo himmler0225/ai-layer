@@ -12,6 +12,9 @@ from app.config.settings import HISTORY_SESSIONS_TTL, HISTORY_MESSAGES_TTL
 from app.db.base import get_pool
 from app.middleware.auth import verify_api_key
 from app.schemas.response import ApiResponse
+from app.config.logger import Logger
+
+logger = Logger.get(__name__)
 
 router = APIRouter(dependencies=[Depends(verify_api_key)])
 
@@ -42,9 +45,19 @@ async def _bust_messages(redis, session_id: str) -> None:
 def _parse_token(authorization: str) -> str:
     return authorization.removeprefix("Bearer ").strip()
 
+def _parse_dt(s: str) -> datetime:
+    """Parse ISO datetime — handles both 'Z' (JS) and '+00:00' (Python) suffixes."""
+    return datetime.fromisoformat(s.replace("Z", "+00:00"))
+
 @router.get("/history/sessions")
 async def list_sessions(authorization: str = Header(...)):
-    user_id = await get_user_id(_parse_token(authorization))
+    try:
+        user_id = await get_user_id(_parse_token(authorization))
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("list_sessions auth failed: %s", e, exc_info=True)
+        raise HTTPException(500, str(e))
     redis = await get_redis()
     key = f"history:sessions:{user_id}"
 
@@ -53,13 +66,17 @@ async def list_sessions(authorization: str = Header(...)):
         if cached:
             return ApiResponse.ok(json.loads(cached))
 
-    pool = await get_pool()
-    async with pool.acquire() as conn:
-        rows = await conn.fetch(
-            "SELECT id, title, created_at, updated_at FROM chat_sessions "
-            "WHERE user_id = $1 ORDER BY updated_at DESC",
-            user_id,
-        )
+    try:
+        pool = await get_pool()
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT id, title, created_at, updated_at FROM chat_sessions "
+                "WHERE user_id = $1 ORDER BY updated_at DESC",
+                user_id,
+            )
+    except Exception as e:
+        logger.error("list_sessions db failed: %s", e, exc_info=True)
+        raise HTTPException(500, str(e))
 
     data = [
         {
@@ -92,8 +109,8 @@ async def upsert_session(body: SessionUpsert, authorization: str = Header(...)):
             body.id,
             user_id,
             body.title,
-            datetime.fromisoformat(body.created_at).replace(tzinfo=timezone.utc),
-            datetime.fromisoformat(body.updated_at).replace(tzinfo=timezone.utc),
+            _parse_dt(body.created_at),
+            _parse_dt(body.updated_at),
         )
 
     await _bust_sessions(await get_redis(), user_id)
@@ -198,7 +215,7 @@ async def save_messages(session_id: str, body: list[MessageSave], authorization:
                 msg.role,
                 msg.content,
                 msg.metadata,  # passed as dict, encoded by pool init codec
-                datetime.fromisoformat(msg.created_at).replace(tzinfo=timezone.utc),
+                _parse_dt(msg.created_at),
             )
 
         await conn.execute(

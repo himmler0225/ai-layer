@@ -1,4 +1,5 @@
 from __future__ import annotations
+from app.constants import URL_SHORTENER_TIMEOUT
 
 from typing import Optional
 
@@ -15,7 +16,7 @@ _http: Optional[httpx.AsyncClient] = None
 def _get_http() -> httpx.AsyncClient:
     global _http
     if _http is None or _http.is_closed:
-        _http = httpx.AsyncClient(timeout=10)
+        _http = httpx.AsyncClient(timeout=URL_SHORTENER_TIMEOUT)
     return _http
 
 async def _call_provider(url: str, api_url: str, params: dict, provider: str) -> dict:

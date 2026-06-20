@@ -1,4 +1,5 @@
 from __future__ import annotations
+from app.constants import GEOIP_LOOKUP_TIMEOUT
 
 import importlib
 import re
@@ -51,7 +52,7 @@ _http: Optional[httpx.AsyncClient] = None
 def _get_http() -> httpx.AsyncClient:
     global _http
     if _http is None or _http.is_closed:
-        _http = httpx.AsyncClient(timeout=5)
+        _http = httpx.AsyncClient(timeout=GEOIP_LOOKUP_TIMEOUT)
     return _http
 
 def get_client_ip(request: Request) -> str:

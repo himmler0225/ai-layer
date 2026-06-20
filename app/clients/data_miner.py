@@ -7,11 +7,12 @@ import httpx
 
 from app.config.logger import Logger
 import app.config.settings as _s
+from app.constants import DATA_MINER_MAX_CONN, DATA_MINER_MAX_KEEPALIVE, HTTP_MAX_ATTEMPTS, HTTP_RETRY_STATUSES
 
 logger = Logger.get(__name__)
 
-_MAX_ATTEMPTS    = 3
-_RETRY_ON_STATUS = {502, 503, 504}
+_MAX_ATTEMPTS    = HTTP_MAX_ATTEMPTS
+_RETRY_ON_STATUS = HTTP_RETRY_STATUSES
 
 _client: Optional[httpx.AsyncClient] = None
 
@@ -23,7 +24,7 @@ def _get_client() -> httpx.AsyncClient:
     if _client is None or _client.is_closed:
         _client = httpx.AsyncClient(
             base_url=_s.DATA_MINER_URL, headers=_get_headers(), timeout=_s.DATA_MINER_TIMEOUT,
-            limits=httpx.Limits(max_connections=20, max_keepalive_connections=10),
+            limits=httpx.Limits(max_connections=DATA_MINER_MAX_CONN, max_keepalive_connections=DATA_MINER_MAX_KEEPALIVE),
         )
     return _client
 

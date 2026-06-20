@@ -2,20 +2,20 @@ from __future__ import annotations
 import os
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(override=True)
 
 LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
 
 # Claude — sourced from Supabase remote config (config/remote.py), not from env.
 ANTHROPIC_API_KEY: str = ""
-CLAUDE_MODEL:      str = "claude-sonnet-4-6"
-CLAUDE_MAX_TOKENS: int = 4096
+CLAUDE_MODEL:           str = ""   # required — set via Supabase remote config
+CLAUDE_TOOL_MODEL:      str = ""   # optional — Haiku for tool calls
+CLAUDE_MAX_TOKENS:      int = 4096 # Opus synthesis output budget
+CLAUDE_TOOL_MAX_TOKENS: int = 2048 # Haiku tool-call output budget
 
 DATA_MINER_URL:     str = os.getenv("DATA_MINER_URL",     "http://localhost:8000")
 DATA_MINER_KEY:     str = ""  # Supabase remote config
 DATA_MINER_TIMEOUT: int = int(os.getenv("DATA_MINER_TIMEOUT", "60"))
-YOUTUBE_API_URL: str = os.getenv("YOUTUBE_API_URL", "http://localhost:3000")
-YOUTUBE_API_KEY: str = os.getenv("YOUTUBE_API_KEY", "")
 
 API_KEYS: list[str] = [k.strip() for k in os.getenv("API_KEYS", "").split(",") if k.strip()]
 CORS_ORIGINS: list[str] = [o.strip() for o in os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",") if o.strip()]

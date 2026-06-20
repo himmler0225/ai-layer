@@ -27,7 +27,11 @@ async def lifespan(_app: FastAPI):
     from app.db.base import init_tables
     from app.cache.client import get_redis
     await load_and_apply()
-    await init_tables()
+    try:
+        await init_tables()
+    except Exception as e:
+        import logging
+        logging.getLogger("app.main").warning("PostgreSQL init failed (app will still start): %s", e)
     await get_redis()
     yield
     from app.clients.data_miner import close_client as close_dm

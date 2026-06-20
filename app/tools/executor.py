@@ -45,17 +45,30 @@ async def _youtube_get_comments(inp: Dict) -> Any:
     )
 
 async def _youtube_get_comments_batch(inp: Dict) -> Any:
+    raw = inp.get("video_ids", [])
+    if isinstance(raw, str):
+        ids = [v.strip() for v in raw.split(",") if v.strip()]
+    else:
+        ids = [str(v).strip() for v in raw if str(v).strip()]
+    sort = inp.get("sort", "top")
+    if sort not in ("top", "newest"):
+        sort = "top"
     return await data_miner.get_video_comments_batch(
-        video_ids=inp["video_ids"][:8],
+        video_ids=ids[:8],
         max_per_video=inp.get("max_per_video", _cfg.AGENT_MAX_COMMENTS),
-        sort=inp.get("sort", "top"),
+        sort=sort,
     )
 
 async def _youtube_get_transcript(inp: Dict) -> Any:
     return await data_miner.get_video_transcript(inp["video_id"])
 
 async def _youtube_get_transcript_batch(inp: Dict) -> Any:
-    return await data_miner.get_video_transcript_batch(inp["video_ids"][:8])
+    raw = inp.get("video_ids", [])
+    if isinstance(raw, str):
+        ids = [v.strip() for v in raw.split(",") if v.strip()]
+    else:
+        ids = [str(v).strip() for v in raw if str(v).strip()]
+    return await data_miner.get_video_transcript_batch(ids[:8])
 
 async def _youtube_get_channel_info(inp: Dict) -> Any:
     return await data_miner.get_channel_info(inp["channel_id"])
