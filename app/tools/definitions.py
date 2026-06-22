@@ -1,6 +1,7 @@
 YOUTUBE_TOOLS = [
 
     {
+        "type": "function",
         "name": "youtube_search",
         "description": (
             "Tìm kiếm video YouTube theo từ khóa. "
@@ -9,7 +10,7 @@ YOUTUBE_TOOLS = [
             "TIẾP THEO: chọn video view_count cao nhất rồi gọi youtube_get_comments. "
             "KHÔNG DÙNG khi user đã paste link YouTube — gọi extract_id_from_url trước."
         ),
-        "input_schema": {
+        "parameters": {
             "type": "object",
             "properties": {
                 "keyword":     {"type": "string", "description": "Từ khóa tìm kiếm"},
@@ -25,13 +26,14 @@ YOUTUBE_TOOLS = [
     },
 
     {
+        "type": "function",
         "name": "youtube_get_by_topic",
         "description": (
             "Lấy video theo chủ đề từ kênh YouTube chính thức. "
             "DÙNG KHI: user muốn xem video theo thể loại cụ thể. "
             "CHỦ ĐỀ HỖ TRỢ: music, gaming, news, sports, tech, beauty, food, travel."
         ),
-        "input_schema": {
+        "parameters": {
             "type": "object",
             "properties": {
                 "topic":       {"type": "string", "enum": ["music", "gaming", "news", "sports", "tech", "beauty", "food", "travel"]},
@@ -42,12 +44,13 @@ YOUTUBE_TOOLS = [
     },
 
     {
+        "type": "function",
         "name": "youtube_get_shorts",
         "description": (
             "Lấy danh sách YouTube Shorts đang thịnh hành. "
             "DÙNG KHI: user hỏi về Shorts hoặc video ngắn."
         ),
-        "input_schema": {
+        "parameters": {
             "type": "object",
             "properties": {
                 "max_results": {"type": "integer", "default": 20, "maximum": 50},
@@ -56,13 +59,14 @@ YOUTUBE_TOOLS = [
     },
 
     {
+        "type": "function",
         "name": "youtube_get_live",
         "description": (
             "Lấy danh sách video đang live stream trên YouTube. "
             "DÙNG KHI: user hỏi về livestream đang diễn ra. "
             "Có thể lọc theo từ khóa tùy chọn."
         ),
-        "input_schema": {
+        "parameters": {
             "type": "object",
             "properties": {
                 "query":       {"type": "string", "description": "Từ khóa lọc (tùy chọn)", "default": ""},
@@ -72,13 +76,14 @@ YOUTUBE_TOOLS = [
     },
 
     {
+        "type": "function",
         "name": "youtube_get_by_region",
         "description": (
             "Lấy video phổ biến theo khu vực địa lý cụ thể. "
             "DÙNG KHI: user muốn xem nội dung từ một quốc gia cụ thể. "
             "VÍ DỤ: gl=VN hl=vi query=Hà Nội để lấy video về Hà Nội."
         ),
-        "input_schema": {
+        "parameters": {
             "type": "object",
             "properties": {
                 "gl":          {"type": "string", "description": "Mã quốc gia (VN, JP, US...)"},
@@ -90,12 +95,13 @@ YOUTUBE_TOOLS = [
         },
     },
     {
+        "type": "function",
         "name": "youtube_get_detail",
         "description": (
             "Lấy thông tin chi tiết video: title, channel, views, description, thời lượng. "
             "YÊU CẦU: phải có video_id trước — gọi youtube_search nếu chưa có."
         ),
-        "input_schema": {
+        "parameters": {
             "type": "object",
             "properties": {
                 "video_id": {"type": "string", "description": "YouTube video ID (vd: dQw4w9WgXcQ)"},
@@ -105,6 +111,7 @@ YOUTUBE_TOOLS = [
     },
 
     {
+        "type": "function",
         "name": "youtube_get_comments",
         "description": (
             "Lấy bình luận cho MỘT video YouTube. "
@@ -112,7 +119,7 @@ YOUTUBE_TOOLS = [
             "ƯU TIÊN dùng youtube_get_comments_batch khi muốn phân tích nhận xét — "
             "tool đơn lẻ này dễ bị rỗng nếu video đó khoá comment."
         ),
-        "input_schema": {
+        "parameters": {
             "type": "object",
             "properties": {
                 "video_id":     {"type": "string"},
@@ -123,6 +130,7 @@ YOUTUBE_TOOLS = [
         },
     },
     {
+        "type": "function",
         "name": "youtube_get_comments_batch",
         "description": (
             "Lấy bình luận của NHIỀU video YouTube song song và gộp lại — CÁCH NÊN DÙNG để phân tích nhận xét cộng đồng. "
@@ -132,7 +140,7 @@ YOUTUBE_TOOLS = [
             "TRẢ VỀ: videos_with_comments, videos_skipped, total_comments, results[]. "
             "Chỉ cần gọi 1 lần với 3-5 id."
         ),
-        "input_schema": {
+        "parameters": {
             "type": "object",
             "properties": {
                 "video_ids":     {"type": "array", "items": {"type": "string"},
@@ -144,6 +152,7 @@ YOUTUBE_TOOLS = [
         },
     },
     {
+        "type": "function",
         "name": "youtube_get_transcript",
         "description": (
             "Lấy transcript (phụ đề/lời thoại) của một video YouTube. "
@@ -152,7 +161,7 @@ YOUTUBE_TOOLS = [
             "TRẢ VỀ: text transcript, language, available (False nếu video không có caption). "
             "LƯU Ý: ~60-70% video có caption. Nếu available=False, bỏ qua và dùng comment."
         ),
-        "input_schema": {
+        "parameters": {
             "type": "object",
             "properties": {
                 "video_id": {"type": "string", "description": "YouTube video ID"},
@@ -161,6 +170,7 @@ YOUTUBE_TOOLS = [
         },
     },
     {
+        "type": "function",
         "name": "youtube_get_transcript_batch",
         "description": (
             "Lấy transcript của NHIỀU video YouTube song song — hiệu quả hơn gọi từng cái. "
@@ -168,7 +178,7 @@ YOUTUBE_TOOLS = [
             "TRẢ VỀ: dict {video_id: transcript_data}. Video không có caption → null. "
             "Tối đa 8 video_ids."
         ),
-        "input_schema": {
+        "parameters": {
             "type": "object",
             "properties": {
                 "video_ids": {"type": "array", "items": {"type": "string"},
@@ -178,12 +188,13 @@ YOUTUBE_TOOLS = [
         },
     },
     {
+        "type": "function",
         "name": "youtube_get_channel_info",
         "description": (
             "Lấy thông tin kênh YouTube: tên, subscriber, mô tả, avatar. "
             "YÊU CẦU: phải có channel_id (dạng UC...) hoặc @handle."
         ),
-        "input_schema": {
+        "parameters": {
             "type": "object",
             "properties": {
                 "channel_id": {"type": "string", "description": "Channel ID (UCxxxx) hoặc @handle"},
@@ -193,12 +204,13 @@ YOUTUBE_TOOLS = [
     },
 
     {
+        "type": "function",
         "name": "youtube_get_channel_videos",
         "description": (
             "Lấy danh sách video mới nhất của một kênh YouTube. "
             "YÊU CẦU: phải có channel_id."
         ),
-        "input_schema": {
+        "parameters": {
             "type": "object",
             "properties": {
                 "channel_id":  {"type": "string"},
@@ -209,12 +221,13 @@ YOUTUBE_TOOLS = [
     },
 
     {
+        "type": "function",
         "name": "youtube_get_channel_playlists",
         "description": (
             "Lấy danh sách playlist của một kênh YouTube. "
             "YÊU CẦU: phải có channel_id."
         ),
-        "input_schema": {
+        "parameters": {
             "type": "object",
             "properties": {
                 "channel_id": {"type": "string"},
@@ -223,13 +236,14 @@ YOUTUBE_TOOLS = [
         },
     },
     {
+        "type": "function",
         "name": "youtube_get_playlist_videos",
         "description": (
             "Lấy danh sách video trong một playlist YouTube. "
             "YÊU CẦU: phải có playlist_id (dạng PL...). "
             "Có thể lấy từ youtube_get_channel_playlists."
         ),
-        "input_schema": {
+        "parameters": {
             "type": "object",
             "properties": {
                 "playlist_id": {"type": "string", "description": "Playlist ID (PLxxxx)"},
@@ -242,6 +256,7 @@ YOUTUBE_TOOLS = [
 
 UTIL_TOOLS = [
     {
+        "type": "function",
         "name": "extract_id_from_url",
         "description": (
             "Trích xuất video_id / URL từ link YouTube hoặc TikTok. Không cần gọi network. "
@@ -250,7 +265,7 @@ UTIL_TOOLS = [
             "TikTok: trả về url gốc — dùng trực tiếp cho tiktok_video_info, tiktok_comments. "
             "HỖ TRỢ: youtube.com/watch?v=ID, youtu.be/ID, /shorts/ID, tiktok.com/@user/video/ID"
         ),
-        "input_schema": {
+        "parameters": {
             "type": "object",
             "properties": {
                 "url": {"type": "string"},
@@ -262,6 +277,7 @@ UTIL_TOOLS = [
 
 TIKTOK_TOOLS = [
     {
+        "type": "function",
         "name": "tiktok_search",
         "description": (
             "Tìm kiếm video TikTok theo từ khóa. "
@@ -269,7 +285,7 @@ TIKTOK_TOOLS = [
             "TRẢ VỀ: danh sách video kèm thông tin tác giả, stats, description. "
             "KHÔNG DÙNG khi user đã paste link TikTok — gọi tiktok_video_info trực tiếp."
         ),
-        "input_schema": {
+        "parameters": {
             "type": "object",
             "properties": {
                 "keyword":     {"type": "string", "description": "Từ khóa tìm kiếm"},
@@ -283,12 +299,13 @@ TIKTOK_TOOLS = [
     },
 
     {
+        "type": "function",
         "name": "tiktok_video_info",
         "description": (
             "Lấy thông tin chi tiết của một video TikTok: views, likes, comments, description, tác giả. "
             "YÊU CẦU: phải có URL đầy đủ của video TikTok."
         ),
-        "input_schema": {
+        "parameters": {
             "type": "object",
             "properties": {
                 "url": {"type": "string", "description": "TikTok video URL đầy đủ"},
@@ -298,13 +315,14 @@ TIKTOK_TOOLS = [
     },
 
     {
+        "type": "function",
         "name": "tiktok_comments",
         "description": (
             "Lấy bình luận của người xem cho một video TikTok. "
             "YÊU CẦU: aweme_id (video ID số, lấy từ tiktok_search hoặc tiktok_video_info). "
             "DÙNG KHI: cần ý kiến thực tế từ người dùng về sản phẩm/chủ đề trong video."
         ),
-        "input_schema": {
+        "parameters": {
             "type": "object",
             "properties": {
                 "aweme_id": {"type": "string", "description": "TikTok video ID (số)"},
@@ -316,13 +334,14 @@ TIKTOK_TOOLS = [
     },
 
     {
+        "type": "function",
         "name": "tiktok_profile",
         "description": (
             "Lấy thông tin profile TikTok: follower count, following, bio, số video. "
             "DÙNG KHI: user muốn nghiên cứu một creator/influencer cụ thể. "
             "YÊU CẦU: handle (không cần @)."
         ),
-        "input_schema": {
+        "parameters": {
             "type": "object",
             "properties": {
                 "handle": {"type": "string", "description": "TikTok handle (không cần @)"},
@@ -331,6 +350,7 @@ TIKTOK_TOOLS = [
         },
     },
     {
+        "type": "function",
         "name": "tiktok_transcript",
         "description": (
             "Lấy transcript (phụ đề/lời thoại) của một video TikTok qua TikHub. "
@@ -338,7 +358,7 @@ TIKTOK_TOOLS = [
             "YÊU CẦU: aweme_id (video ID số). "
             "TRẢ VỀ: text, language, available (False nếu video không có caption)."
         ),
-        "input_schema": {
+        "parameters": {
             "type": "object",
             "properties": {
                 "aweme_id": {"type": "string", "description": "TikTok video ID (số)"},

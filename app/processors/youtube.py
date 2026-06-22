@@ -2,7 +2,7 @@ import json
 from app.config.logger import Logger
 from typing import Dict, List
 from app.clients import data_miner
-from app.services.claude import complete_json
+from app.services.chatgpt import complete_json
 
 logger = Logger.get(__name__)
 
@@ -14,7 +14,7 @@ def _parse_json(raw: str, context: str) -> Dict:
         return json.loads(raw)
     except (json.JSONDecodeError, TypeError) as e:
         logger.error("JSON parse error in %s: %s | raw=%s", context, e, raw[:200])
-        raise ValueError(f"Claude returned invalid JSON in {context}: {e}") from e
+        raise ValueError(f"ChatGPT returned invalid JSON in {context}: {e}") from e
 
 async def summarize_video(video_id: str) -> Dict:
     detail = await data_miner.get_video_detail(video_id)

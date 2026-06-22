@@ -1,23 +1,8 @@
-"""
-Quote-based review clustering via Claude.
+from app.utils.openai_client import get_openai_client
 
-Instead of classifying positive/negative (which loses context),
-Claude groups comments by TOPIC and quotes them verbatim.
-Users interpret meaning themselves — no model bias.
-"""
-import anthropic
 from typing import Dict, List, Optional
 
 import app.config.settings as _cfg
-
-_client: Optional[anthropic.AsyncAnthropic] = None
-
-def _get_client() -> anthropic.AsyncAnthropic:
-    # Lazily built so the Supabase-loaded ANTHROPIC_API_KEY is in effect.
-    global _client
-    if _client is None:
-        _client = anthropic.AsyncAnthropic(api_key=_cfg.ANTHROPIC_API_KEY)
-    return _client
 
 _SYSTEM = (
     "Bạn là công cụ tổng hợp reviews thương mại điện tử. "
@@ -56,6 +41,8 @@ Quy tắc bắt buộc:
 - Với những câu có tổn tại những từ như "vc", "vl" thì không xếp nó vào tích cực hay tiêu cực
 - Giữ nguyên ngôn ngữ gốc kể cả teencode, Vienglish
 - Không bỏ sót comments quan trọng dù khó phân loại
+- Nếu một số ít comments dùng ngôn ngữ KHÁC HẲN với phần lớn comments còn lại (ví dụ lẫn tiếng Indonesia, Malay, Thái... trong tập chủ yếu tiếng Việt/Anh) → BỎ QUA HOÀN TOÀN các comment đó, không trích dẫn, không tính vào số lượng đề cập của bất kỳ chủ đề nào
+- Mỗi dòng input có thể có tiền tố "[X★]" nếu nguồn gốc là review có rating sao thật — đây KHÔNG phải một phần nội dung comment, chỉ dùng nó để biết mức độ hài lòng nếu cần, KHÔNG bao giờ chép tiền tố "[X★]" này vào câu trích dẫn
 - Kết thúc bằng dòng: 📊 Tổng hợp: {n} reviews từ {source}
 
 Reviews:
@@ -65,10 +52,15 @@ Reviews:
 def _format_reviews(reviews: List[Dict]) -> str:
     lines = []
     for i, r in enumerate(reviews[:150], 1):
-        text    = r.get("content") or r.get("comment") or r.get("text") or ""
-        rating  = r.get("rating") or r.get("stars") or "?"
-        if text:
-            lines.append(f"{i}. [{rating}★] {text[:300]}")
+        text   = r.get("content") or r.get("comment") or r.get("text") or ""
+        rating = r.get("rating") or r.get("stars")
+        if not text:
+            continue
+        # Comment YouTube/TikTok không có rating sao — chỉ thêm tiền tố
+        # "[X★]" khi thực sự có rating (review e-commerce), tránh in literal
+        # "[?★]" mà model có thể chép thẳng vào câu trích dẫn.
+        prefix = f"[{rating}★] " if rating else ""
+        lines.append(f"{i}. {prefix}{text[:300]}")
     return "\n".join(lines)
 
 async def summarize_reviews(
@@ -86,11 +78,12 @@ async def summarize_reviews(
         reviews=_format_reviews(reviews),
     )
 
-    msg = await _get_client().messages.create(
-        model=_cfg.CLAUDE_MODEL,
-        max_tokens=_cfg.CLAUDE_MAX_TOKENS,
-        system=[{"type": "text", "text": _SYSTEM, "cache_control": {"type": "ephemeral"}}],
-        messages=[{"role": "user", "content": prompt}],
+    client = get_openai_client()
+    msg = await client.responses.create(
+        model=_cfg.OPENAI_MODEL,
+        instructions=_SYSTEM,
+        input=prompt,
+        max_output_tokens=_cfg.OPENAI_MAX_TOKENS,
     )
 
-    return msg.content[0].text
+    return msg.output_text
