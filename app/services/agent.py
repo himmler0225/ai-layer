@@ -222,7 +222,7 @@ async def run_agent(
         if err:
             raise RuntimeError(err)
 
-        if _is_incomplete_for("max_output_tokens", response):
+        if is_incomplete_for("max_output_tokens", response):
             if _dual_mode() and tool_call_log:
                 logger.warning(
                     "[agent] max_output_tokens iteration=%d mode=dual_synthesis",
@@ -330,7 +330,7 @@ async def run_agent_stream(
             yield _sse({"type": "error", "message": err})
             return
 
-        if _is_incomplete_for("max_output_tokens", final):
+        if is_incomplete_for("max_output_tokens", final):
             if _dual_mode() and tool_call_log:
                 logger.warning(
                     "[agent] max_output_tokens iteration=%d mode=dual_synthesis_stream",
