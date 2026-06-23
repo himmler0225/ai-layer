@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from typing import Optional
 
@@ -123,3 +123,50 @@ async def save_messages(
             .values(updated_at=func.now())
         )
         await session.commit()
+
+
+async def session_stats(days: int = 7) -> dict:
+    """Aggregate chat_sessions counts per day (UTC) for admin dashboards."""
+    days = max(1, min(int(days), 30))
+    now = datetime.now(timezone.utc)
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    range_start = today_start - timedelta(days=days - 1)
+
+    factory = await get_session_factory()
+    async with factory() as session:
+        sessions_today = await session.scalar(
+            select(func.count())
+            .select_from(ChatSession)
+            .where(ChatSession.created_at >= today_start)
+        )
+        total_sessions = await session.scalar(
+            select(func.count()).select_from(ChatSession)
+        )
+
+        day_col = func.date_trunc("day", ChatSession.created_at).label("day")
+        rows = await session.execute(
+            select(day_col, func.count().label("cnt"))
+            .where(ChatSession.created_at >= range_start)
+            .group_by(day_col)
+            .order_by(day_col)
+        )
+        by_day: dict[date, int] = {
+            row.day.date(): int(row.cnt) for row in rows if row.day is not None
+        }
+
+    daily: list[dict] = []
+    for offset in range(days):
+        d = (range_start + timedelta(days=offset)).date()
+        daily.append(
+            {
+                "date": d.isoformat(),
+                "label": d.strftime("%d/%m"),
+                "count": by_day.get(d, 0),
+            }
+        )
+
+    return {
+        "sessionsToday": int(sessions_today or 0),
+        "totalSessions": int(total_sessions or 0),
+        "daily": daily,
+    }

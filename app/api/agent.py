@@ -5,6 +5,7 @@ from typing import Literal, Optional
 
 from app.middleware.auth import verify_api_key
 from app.middleware.rate_limit import limiter
+from app.config.rate_limits import agent_rate_limit
 from app.services.agent import run_agent, run_agent_stream
 from app.tools.definitions import TOOL_SETS
 from app.schemas.response import ApiResponse
@@ -19,7 +20,7 @@ class AgentRequest(BaseModel):
     system:   Optional[str]                        = Field(None)
 
 @router.post("/run")
-@limiter.limit("10/minute")
+@limiter.limit(agent_rate_limit)
 async def run(request: Request, body: AgentRequest):
     tools    = TOOL_SETS.get(body.tools, TOOL_SETS["all"])
     max_iter = body.max_iter or _cfg.AGENT_MAX_ITER
@@ -34,7 +35,7 @@ async def run(request: Request, body: AgentRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/run/stream")
-@limiter.limit("10/minute")
+@limiter.limit(agent_rate_limit)
 async def run_stream(request: Request, body: AgentRequest):  # noqa: ARG001
     tools    = TOOL_SETS.get(body.tools, TOOL_SETS["all"])
     max_iter = body.max_iter or _cfg.AGENT_MAX_ITER

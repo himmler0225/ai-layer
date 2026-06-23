@@ -49,6 +49,17 @@ def _parse_dt(s: str) -> datetime:
     """Parse ISO datetime — handles both 'Z' (JS) and '+00:00' (Python) suffixes."""
     return datetime.fromisoformat(s.replace("Z", "+00:00"))
 
+@router.get("/history/admin/stats")
+async def admin_session_stats(days: int = 7):
+    """BFF admin only — API key auth, no user JWT."""
+    try:
+        data = await chat_repo.session_stats(days=days)
+    except Exception as e:
+        logger.error("[history] admin_session_stats failed: %s", e, exc_info=True)
+        raise HTTPException(500, str(e))
+    return ApiResponse.ok(data)
+
+
 @router.get("/history/sessions")
 async def list_sessions(authorization: str = Header(...)):
     try:

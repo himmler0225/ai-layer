@@ -4,6 +4,7 @@ from typing import Literal
 
 from app.middleware.auth import verify_api_key
 from app.middleware.rate_limit import limiter
+from app.config.rate_limits import qr_rate_limit, shorten_rate_limit
 from app.utilities.url_shortener import shorten_url
 from app.utilities.qr_generator import generate_qr
 from app.schemas.response import ApiResponse
@@ -21,7 +22,7 @@ class QRRequest(BaseModel):
     rounded: bool                         = True
 
 @router.post("/shorten", summary="Rút gọn URL")
-@limiter.limit("30/minute")
+@limiter.limit(shorten_rate_limit)
 async def shorten(request: Request, body: ShortenRequest):
     result = await shorten_url(str(body.url), provider=body.provider)
     if "error" in result:
@@ -29,7 +30,7 @@ async def shorten(request: Request, body: ShortenRequest):
     return ApiResponse.ok(result)
 
 @router.post("/qr", summary="Tạo mã QR từ URL")
-@limiter.limit("20/minute")
+@limiter.limit(qr_rate_limit)
 async def qr_code(request: Request, body: QRRequest):
     try:
         return ApiResponse.ok(await generate_qr(

@@ -35,6 +35,12 @@ AGENT_MAX_COMMENTS: int = 200
 AGENT_MAX_COMMENT_LEN: int = 150
 AGENT_MAX_LIST_ITEMS: int = 15
 
+# Per-route rate limits — override via Supabase config (see config/remote.py)
+AGENT_RATE_LIMIT: str = "10/minute"
+QR_RATE_LIMIT: str = "20/minute"
+SHORTEN_RATE_LIMIT: str = "30/minute"
+YOUTUBE_RATE_LIMIT: str = "15/minute"
+
 GEOIP_DB_PATH: str = os.getenv("GEOIP_DB_PATH", "")
 GEOIP_CACHE_TTL: int = int(os.getenv("GEOIP_CACHE_TTL", "3600"))
 GEOIP_CACHE_MAX: int = int(os.getenv("GEOIP_CACHE_MAX", "500"))

@@ -96,3 +96,40 @@ XỬ LÝ COMMENTS & REVIEWS
 
 TỪ VIẾT TẮT THƯỜNG GẶP
 sp=sản phẩm · bh=bảo hành · ship=giao hàng · ok/oke/chất/xịn=tốt · tệ/dỏm=kém · fake/nhái=hàng giả · vcl/vl=rất (intensifier)"""
+
+REVIEW_SUMMARY_SYSTEM = (
+    "Bạn là công cụ tổng hợp reviews thương mại điện tử. "
+    "Nhiệm vụ duy nhất: cluster theo chủ đề + trích dẫn nguyên văn. "
+    "TUYỆT ĐỐI không thêm nhận xét cá nhân, không dùng từ 'tốt'/'xấu'/'tệ'."
+)
+
+REVIEW_SUMMARY_PROMPT = """\
+Bạn nhận được {n} comments/reviews về "{product}" từ {source}.
+
+Nhiệm vụ:
+1. CHỈ nhóm comments LIÊN QUAN đến sản phẩm/chủ đề "{product}" (chất lượng, giá, pin, giao hàng, bảo hành, trải nghiệm dùng...)
+2. BỎ QUA hoàn toàn: spam, comment ngoài ngôn ngữ (Indonesia, Bồ Đào Nha, Thái...), meme không liên quan, tag bạn bè
+3. Với mỗi chủ đề, trích dẫn NGUYÊN VĂN tối đa 3 comments đại diện
+4. Ghi rõ số lượng comments đề cập đến chủ đề đó
+
+Format output (BẮT BUỘC — mỗi trích dẫn một dòng blockquote riêng):
+
+### 📦 Chất lượng sản phẩm (23 lượt đề cập)
+> "2 tuần là xanh màn"
+
+> "dùng 3 tháng vẫn tốt, không có vấn đề gì"
+
+### 🚚 Giao hàng (15 lượt đề cập)
+> "ship 2 ngày, đóng gói cẩn thận"
+
+Quy tắc bắt buộc:
+- MỖI trích dẫn phải bắt đầu bằng `> ` trên DÒNG RIÊNG — KHÔNG gộp nhiều quote trên cùng một dòng
+- CHỈ trích dẫn nguyên văn trong dấu ngoặc kép
+- BỎ QUA các bình luận chỉ có mỗi icon hoặc dưới 6 ký tự
+- KHÔNG thêm nhận xét như "tốt", "xấu", "hài lòng", "thất vọng"
+- Giữ nguyên ngôn ngữ gốc kể cả teencode, Vienglish
+- Kết thúc bằng dòng: 📊 Tổng hợp: {n} reviews từ {source}
+
+Reviews:
+{reviews}
+"""

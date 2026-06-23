@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 import httpx
 
 import app.config.settings as settings
@@ -13,9 +15,17 @@ _REMOTABLE_STR = frozenset({
     "OPENAI_MODEL",
     "OPENAI_TOOL_MODEL",
     "DATA_MINER_KEY",
+    "AGENT_RATE_LIMIT",
+    "QR_RATE_LIMIT",
+    "SHORTEN_RATE_LIMIT",
+    "YOUTUBE_RATE_LIMIT",
 })
 
-_PROMPT_KEY = "AGENT_SYSTEM"
+_PROMPT_KEYS = frozenset({
+    "AGENT_SYSTEM",
+    "REVIEW_SUMMARY_SYSTEM",
+    "REVIEW_SUMMARY_PROMPT",
+})
 
 _REMOTABLE_INT = frozenset({
     "OPENAI_MAX_TOKENS",
@@ -67,8 +77,10 @@ async def load_and_apply() -> None:
             except ValueError:
                 pass
 
-    if _PROMPT_KEY in remote:
-        prompts.AGENT_SYSTEM = remote[_PROMPT_KEY]
-        settings.AGENT_SYSTEM = remote[_PROMPT_KEY]
+    for key in _PROMPT_KEYS:
+        if key in remote:
+            setattr(prompts, key, remote[key])
+            if key == "AGENT_SYSTEM":
+                settings.AGENT_SYSTEM = remote[key]
 
     logger.info("[remote_config] applied keys=%d", len(remote))

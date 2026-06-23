@@ -2,44 +2,8 @@ import re
 from typing import Dict, List, Optional
 
 import app.config.settings as _cfg
+import app.services.prompts as _prompts
 from app.utils.openai_responses import create_response, extract_response_text
-
-_SYSTEM = (
-    "Bạn là công cụ tổng hợp reviews thương mại điện tử. "
-    "Nhiệm vụ duy nhất: cluster theo chủ đề + trích dẫn nguyên văn. "
-    "TUYỆT ĐỐI không thêm nhận xét cá nhân, không dùng từ 'tốt'/'xấu'/'tệ'."
-)
-
-REVIEW_SUMMARY_PROMPT = """\
-Bạn nhận được {n} comments/reviews về "{product}" từ {source}.
-
-Nhiệm vụ:
-1. CHỈ nhóm comments LIÊN QUAN đến sản phẩm/chủ đề "{product}" (chất lượng, giá, pin, giao hàng, bảo hành, trải nghiệm dùng...)
-2. BỎ QUA hoàn toàn: spam, comment ngoài ngôn ngữ (Indonesia, Bồ Đào Nha, Thái...), meme không liên quan, tag bạn bè
-3. Với mỗi chủ đề, trích dẫn NGUYÊN VĂN tối đa 3 comments đại diện
-4. Ghi rõ số lượng comments đề cập đến chủ đề đó
-
-Format output (BẮT BUỘC — mỗi trích dẫn một dòng blockquote riêng):
-
-### 📦 Chất lượng sản phẩm (23 lượt đề cập)
-> "2 tuần là xanh màn"
-
-> "dùng 3 tháng vẫn tốt, không có vấn đề gì"
-
-### 🚚 Giao hàng (15 lượt đề cập)
-> "ship 2 ngày, đóng gói cẩn thận"
-
-Quy tắc bắt buộc:
-- MỖI trích dẫn phải bắt đầu bằng `> ` trên DÒNG RIÊNG — KHÔNG gộp nhiều quote trên cùng một dòng
-- CHỈ trích dẫn nguyên văn trong dấu ngoặc kép
-- BỎ QUA các bình luận chỉ có mỗi icon hoặc dưới 6 ký tự
-- KHÔNG thêm nhận xét như "tốt", "xấu", "hài lòng", "thất vọng"
-- Giữ nguyên ngôn ngữ gốc kể cả teencode, Vienglish
-- Kết thúc bằng dòng: 📊 Tổng hợp: {n} reviews từ {source}
-
-Reviews:
-{reviews}
-"""
 
 _HISTORY_MARKER = "\n[Câu hỏi hiện tại]\n"
 _VIET_RE = re.compile(
@@ -62,7 +26,6 @@ _PRODUCT_STOPWORDS = frozenset({
     "review", "cho", "mình", "biết", "về", "của", "the", "người", "dùng",
     "nói", "gì", "là", "có", "không", "như", "thế", "nào", "bao", "nhiêu",
 })
-
 
 def _product_hint(task: str, fallback: str) -> str:
     question = task.split(_HISTORY_MARKER)[-1].strip() if task else ""
@@ -180,7 +143,7 @@ async def summarize_reviews(
     if not relevant:
         relevant = [r for r in reviews if (r.get("content") or "").strip()][:40]
 
-    prompt = REVIEW_SUMMARY_PROMPT.format(
+    prompt = _prompts.REVIEW_SUMMARY_PROMPT.format(
         n=len(relevant),
         product=product_hint,
         source=source,
@@ -189,7 +152,7 @@ async def summarize_reviews(
 
     response = await create_response(
         model=_cfg.OPENAI_MODEL,
-        instructions=_SYSTEM,
+        instructions=_prompts.REVIEW_SUMMARY_SYSTEM,
         input=prompt,
         max_output_tokens=_cfg.OPENAI_MAX_TOKENS,
     )

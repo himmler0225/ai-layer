@@ -10,12 +10,6 @@ HEALTH_CHECK_TIMEOUT    = 3
 DATA_MINER_MAX_CONN         = 20
 DATA_MINER_MAX_KEEPALIVE    = 10
 
-# Rate limits (override via Supabase config RATE_LIMIT_DEFAULT / RATE_LIMIT_BURST)
-AGENT_RATE_LIMIT        = "10/minute"
-QR_RATE_LIMIT           = "20/minute"
-SHORTEN_RATE_LIMIT      = "30/minute"
-YOUTUBE_RATE_LIMIT      = "15/minute"
-
 # Retry
 HTTP_MAX_ATTEMPTS       = 3
 HTTP_RETRY_STATUSES     = {502, 503, 504}
