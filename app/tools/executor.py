@@ -9,14 +9,9 @@ import app.config.settings as _cfg
 from app.services.url_extractor import extract_id_from_url as _url_extract
 from app.tools.definitions import YOUTUBE_TOOLS, TIKTOK_TOOLS, UTIL_TOOLS
 
-# Build input-schema lookup once at import time.
-# NOTE: tool dicts in definitions.py now follow OpenAI's flat function-tool
-# shape ({"type": "function", "name", "description", "parameters"}) instead
-# of Anthropic's ({"name", "description", "input_schema"}), so the schema
-# lives under "parameters" now, not "input_schema".
 _SCHEMAS: Dict[str, Dict] = {
-    t["name"]: t["parameters"]
-    for t in (*YOUTUBE_TOOLS, *TIKTOK_TOOLS, *UTIL_TOOLS)
+    tool["name"]: tool["parameters"]
+    for tool in (*YOUTUBE_TOOLS, *TIKTOK_TOOLS, *UTIL_TOOLS)
 }
 
 async def _youtube_search(inp: Dict) -> Any:

@@ -7,6 +7,9 @@ Usage:
 
 Setup (once, in main.py):
     Logger.setup(level="INFO")
+
+Log format convention:
+    logger.info("[module] message key=%s", value)
 """
 import logging
 import logging.handlers
@@ -110,10 +113,5 @@ class Logger:
 
     @classmethod
     def get(cls, name: str) -> logging.Logger:
-        """
-        Return the child logger for a module.
-        Strips 'app.' prefix from __name__:
-          app.middleware.auth  →  ai_layer.middleware.auth
-        """
         short = name.removeprefix("app.")
         return logging.getLogger(f"{cls._root}.{short}")

@@ -24,10 +24,10 @@ async def _call_provider(url: str, api_url: str, params: dict, provider: str) ->
         r = await _get_http().get(api_url, params=params)
         r.raise_for_status()
         short = r.text.strip()
-        logger.info("%s: %s → %s", provider, url[:60], short)
+        logger.info("[url_shortener] %s %s -> %s", provider, url[:60], short)
         return {"original": url, "short": short, "provider": provider}
     except Exception as e:
-        logger.warning("%s failed: %s", provider, e)
+        logger.warning("[url_shortener] %s failed: %s", provider, exc)
         return {"error": str(e)}
 
 async def shorten_url(url: str, provider: str = "tinyurl") -> dict:

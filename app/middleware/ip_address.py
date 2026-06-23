@@ -28,9 +28,9 @@ if GEOIP_DB_PATH:
     try:
         geoip2_db = importlib.import_module("geoip2.database")
         _reader = geoip2_db.Reader(GEOIP_DB_PATH)
-        logger.info("GeoIP database loaded: %s", GEOIP_DB_PATH)
+        logger.info("[geoip] database loaded path=%s", GEOIP_DB_PATH)
     except Exception as e:
-        logger.warning("GeoIP database failed to load: %s", e)
+        logger.warning("[geoip] database load failed: %s", exc)
 
 _cache: Dict[str, Dict] = {}
 
@@ -99,7 +99,7 @@ async def _api_lookup(ip: str) -> Dict:
                 "org": data.get("org"), "source": "api",
             }
     except Exception as e:
-        logger.warning("GeoIP API lookup failed for %s: %s", ip, e)
+        logger.warning("[geoip] api lookup failed ip=%s error=%s", ip, exc)
     return {"ip": ip, "source": "unknown"}
 
 async def get_geo_info(ip: str) -> Dict:

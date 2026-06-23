@@ -9,8 +9,8 @@ from pydantic import BaseModel
 from app.auth.supabase import get_user_id
 from app.cache.client import get_redis
 from app.config.settings import HISTORY_SESSIONS_TTL, HISTORY_MESSAGES_TTL
-from app.db.base import get_pool
 from app.middleware.auth import verify_api_key
+from app.repositories import chat as chat_repo
 from app.schemas.response import ApiResponse
 from app.config.logger import Logger
 
@@ -56,7 +56,7 @@ async def list_sessions(authorization: str = Header(...)):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("list_sessions auth failed: %s", e, exc_info=True)
+        logger.error("[history] list_sessions auth failed: %s", exc, exc_info=True)
         raise HTTPException(500, str(e))
     redis = await get_redis()
     key = f"history:sessions:{user_id}"
@@ -67,23 +67,17 @@ async def list_sessions(authorization: str = Header(...)):
             return ApiResponse.ok(json.loads(cached))
 
     try:
-        pool = await get_pool()
-        async with pool.acquire() as conn:
-            rows = await conn.fetch(
-                "SELECT id, title, created_at, updated_at FROM chat_sessions "
-                "WHERE user_id = $1 ORDER BY updated_at DESC",
-                user_id,
-            )
+        rows = await chat_repo.list_sessions(user_id)
     except Exception as e:
-        logger.error("list_sessions db failed: %s", e, exc_info=True)
+        logger.error("[history] list_sessions db failed: %s", exc, exc_info=True)
         raise HTTPException(500, str(e))
 
     data = [
         {
-            "id": r["id"],
-            "title": r["title"],
-            "created_at": r["created_at"].isoformat(),
-            "updated_at": r["updated_at"].isoformat(),
+            "id": r.id,
+            "title": r.title,
+            "created_at": r.created_at.isoformat(),
+            "updated_at": r.updated_at.isoformat(),
         }
         for r in rows
     ]
@@ -97,21 +91,13 @@ async def list_sessions(authorization: str = Header(...)):
 async def upsert_session(body: SessionUpsert, authorization: str = Header(...)):
     user_id = await get_user_id(_parse_token(authorization))
 
-    pool = await get_pool()
-    async with pool.acquire() as conn:
-        await conn.execute(
-            """
-            INSERT INTO chat_sessions (id, user_id, title, created_at, updated_at)
-            VALUES ($1, $2, $3, $4, $5)
-            ON CONFLICT (id) DO UPDATE
-              SET title = EXCLUDED.title, updated_at = EXCLUDED.updated_at
-            """,
-            body.id,
-            user_id,
-            body.title,
-            _parse_dt(body.created_at),
-            _parse_dt(body.updated_at),
-        )
+    await chat_repo.upsert_session(
+        session_id=body.id,
+        user_id=user_id,
+        title=body.title,
+        created_at=_parse_dt(body.created_at),
+        updated_at=_parse_dt(body.updated_at),
+    )
 
     await _bust_sessions(await get_redis(), user_id)
     return ApiResponse.ok({"id": body.id})
@@ -120,20 +106,11 @@ async def upsert_session(body: SessionUpsert, authorization: str = Header(...)):
 async def patch_session(session_id: str, body: SessionPatch, authorization: str = Header(...)):
     user_id = await get_user_id(_parse_token(authorization))
 
-    pool = await get_pool()
-    async with pool.acquire() as conn:
-        row = await conn.fetchrow("SELECT user_id FROM chat_sessions WHERE id = $1", session_id)
-        if not row or row["user_id"] != user_id:
-            raise HTTPException(404, "Session not found")
+    owner_id = await chat_repo.get_session_user_id(session_id)
+    if owner_id != user_id:
+        raise HTTPException(404, "Session not found")
 
-        sets, params = ["updated_at = $2"], [session_id, datetime.now(timezone.utc)]
-        if body.title is not None:
-            params.append(body.title)
-            sets.append(f"title = ${len(params)}")
-
-        await conn.execute(
-            f"UPDATE chat_sessions SET {', '.join(sets)} WHERE id = $1", *params
-        )
+    await chat_repo.patch_session(session_id, title=body.title)
 
     await _bust_sessions(await get_redis(), user_id)
     return ApiResponse.ok({"id": session_id})
@@ -142,12 +119,11 @@ async def patch_session(session_id: str, body: SessionPatch, authorization: str 
 async def delete_session(session_id: str, authorization: str = Header(...)):
     user_id = await get_user_id(_parse_token(authorization))
 
-    pool = await get_pool()
-    async with pool.acquire() as conn:
-        row = await conn.fetchrow("SELECT user_id FROM chat_sessions WHERE id = $1", session_id)
-        if not row or row["user_id"] != user_id:
-            raise HTTPException(404, "Session not found")
-        await conn.execute("DELETE FROM chat_sessions WHERE id = $1", session_id)
+    owner_id = await chat_repo.get_session_user_id(session_id)
+    if owner_id != user_id:
+        raise HTTPException(404, "Session not found")
+
+    await chat_repo.delete_session(session_id)
 
     redis = await get_redis()
     await _bust_sessions(redis, user_id)
@@ -165,25 +141,19 @@ async def get_messages(session_id: str, authorization: str = Header(...)):
         if cached:
             return ApiResponse.ok(json.loads(cached))
 
-    pool = await get_pool()
-    async with pool.acquire() as conn:
-        row = await conn.fetchrow("SELECT user_id FROM chat_sessions WHERE id = $1", session_id)
-        if not row or row["user_id"] != user_id:
-            raise HTTPException(404, "Session not found")
+    owner_id = await chat_repo.get_session_user_id(session_id)
+    if owner_id != user_id:
+        raise HTTPException(404, "Session not found")
 
-        msgs = await conn.fetch(
-            "SELECT id, role, content, metadata, created_at FROM chat_messages "
-            "WHERE session_id = $1 ORDER BY created_at ASC",
-            session_id,
-        )
+    msgs = await chat_repo.list_messages(session_id)
 
     data = [
         {
-            "id": m["id"],
-            "role": m["role"],
-            "content": m["content"],
-            "metadata": m["metadata"],  # auto-decoded by pool init codec
-            "created_at": m["created_at"].isoformat(),
+            "id": m.id,
+            "role": m.role,
+            "content": m.content,
+            "metadata": m.metadata_,
+            "created_at": m.created_at.isoformat(),
         }
         for m in msgs
     ]
@@ -197,30 +167,23 @@ async def get_messages(session_id: str, authorization: str = Header(...)):
 async def save_messages(session_id: str, body: list[MessageSave], authorization: str = Header(...)):
     user_id = await get_user_id(_parse_token(authorization))
 
-    pool = await get_pool()
-    async with pool.acquire() as conn:
-        row = await conn.fetchrow("SELECT user_id FROM chat_sessions WHERE id = $1", session_id)
-        if not row or row["user_id"] != user_id:
-            raise HTTPException(404, "Session not found")
+    owner_id = await chat_repo.get_session_user_id(session_id)
+    if owner_id != user_id:
+        raise HTTPException(404, "Session not found")
 
-        for msg in body:
-            await conn.execute(
-                """
-                INSERT INTO chat_messages (id, session_id, role, content, metadata, created_at)
-                VALUES ($1, $2, $3, $4, $5, $6)
-                ON CONFLICT (id) DO NOTHING
-                """,
-                msg.id,
-                session_id,
-                msg.role,
-                msg.content,
-                msg.metadata,  # passed as dict, encoded by pool init codec
-                _parse_dt(msg.created_at),
-            )
-
-        await conn.execute(
-            "UPDATE chat_sessions SET updated_at = NOW() WHERE id = $1", session_id
-        )
+    await chat_repo.save_messages(
+        session_id,
+        [
+            {
+                "id": msg.id,
+                "role": msg.role,
+                "content": msg.content,
+                "metadata": msg.metadata,
+                "created_at": _parse_dt(msg.created_at),
+            }
+            for msg in body
+        ],
+    )
 
     redis = await get_redis()
     await _bust_messages(redis, session_id)

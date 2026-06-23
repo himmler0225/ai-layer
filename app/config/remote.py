@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 import httpx
+
 import app.config.settings as settings
 import app.services.prompts as prompts
+from app.config.logger import Logger
+
+logger = Logger.get(__name__)
 
 _REMOTABLE_STR = frozenset({
     "OPENAI_API_KEY",
@@ -30,7 +34,7 @@ async def load_and_apply() -> None:
 
     try:
         async with httpx.AsyncClient(timeout=5) as client:
-            r = await client.get(
+            response = await client.get(
                 f"{settings.SUPABASE_URL}/rest/v1/config",
                 params={"select": "key,value"},
                 headers={
@@ -39,29 +43,23 @@ async def load_and_apply() -> None:
                 },
             )
 
-            if not r.is_success:
+            if not response.is_success:
                 return
 
             remote = {
                 row["key"]: row["value"]
-                for row in r.json()
+                for row in response.json()
                 if row.get("value") is not None
             }
 
-    except Exception as e:
-        print(f"[remote_config] load failed: {e}")
+    except Exception as exc:
+        logger.warning("[remote_config] load failed: %s", exc)
         return
 
-    # =========================
-    # STRING CONFIG
-    # =========================
     for key in _REMOTABLE_STR:
         if key in remote:
             setattr(settings, key, remote[key])
 
-    # =========================
-    # INT CONFIG
-    # =========================
     for key in _REMOTABLE_INT:
         if key in remote:
             try:
@@ -69,9 +67,8 @@ async def load_and_apply() -> None:
             except ValueError:
                 pass
 
-    # =========================
-    # SYSTEM PROMPT
-    # =========================
     if _PROMPT_KEY in remote:
         prompts.AGENT_SYSTEM = remote[_PROMPT_KEY]
         settings.AGENT_SYSTEM = remote[_PROMPT_KEY]
+
+    logger.info("[remote_config] applied keys=%d", len(remote))

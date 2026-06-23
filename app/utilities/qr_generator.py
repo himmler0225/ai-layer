@@ -43,6 +43,6 @@ def _generate_sync(url: str, size: int, theme: ColorTheme, rounded: bool) -> dic
     return {"url": url, "image": f"data:image/png;base64,{b64}", "theme": theme, "size": size}
 
 async def generate_qr(url: str, size: int = 10, theme: ColorTheme = "default", rounded: bool = True) -> dict:
-    logger.info("Generating QR for: %s (theme=%s)", url[:60], theme)
+    logger.info("[qr] generate url=%s theme=%s", url[:60], theme)
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(None, partial(_generate_sync, url, size, theme, rounded))

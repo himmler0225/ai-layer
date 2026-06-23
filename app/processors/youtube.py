@@ -13,7 +13,7 @@ def _parse_json(raw: str, context: str) -> Dict:
     try:
         return json.loads(raw)
     except (json.JSONDecodeError, TypeError) as e:
-        logger.error("JSON parse error in %s: %s | raw=%s", context, e, raw[:200])
+        logger.error("[youtube] json parse failed context=%s error=%s raw=%s", context, exc, raw[:200])
         raise ValueError(f"ChatGPT returned invalid JSON in {context}: {e}") from e
 
 async def summarize_video(video_id: str) -> Dict:

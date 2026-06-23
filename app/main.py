@@ -21,59 +21,39 @@ from app.api.agent import router as agent_router
 from app.api.utilities import router as utilities_router
 from app.api.history import router as history_router
 
-
-# =========================
-# LOGGER INIT
-# =========================
 Logger.setup(level=settings.LOG_LEVEL)
+logger = Logger.get(__name__)
 
-
-# =========================
-# LIFESPAN
-# =========================
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    # 1. LOAD REMOTE CONFIG FIRST (CRITICAL)
+    logger.info("[startup] loading remote config")
     from app.config.remote import load_and_apply
     await load_and_apply()
 
-    # 2. validate API keys AFTER config load
     if not settings.API_KEYS:
         raise RuntimeError("API_KEYS must be set before starting ai-layer")
 
-    # 3. init DB / cache
-    from app.db.base import init_tables
+    from app.db.session import init_db, close_engine
     from app.cache.client import get_redis
 
     try:
-        await init_tables()
-    except Exception as e:
-        import logging
-        logging.getLogger("app.main").warning(
-            "PostgreSQL init failed (app will still start): %s", e
-        )
+        await init_db()
+    except Exception as exc:
+        Logger.get(__name__).warning("[db] init failed: %s", exc)
 
     await get_redis()
 
     yield
 
-    # =========================
-    # SHUTDOWN
-    # =========================
     from app.clients.data_miner import close_client as close_dm
-    from app.db.base import close_pool
     from app.cache.client import close_redis
     from app.db.mongo import close_mongo
 
     await close_dm()
-    await close_pool()
+    await close_engine()
     await close_redis()
     await close_mongo()
 
-
-# =========================
-# APP INIT
-# =========================
 app = FastAPI(
     title="AI Layer",
     description="AI-powered YouTube + TikTok analysis",
@@ -82,10 +62,6 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-
-# =========================
-# MIDDLEWARE
-# =========================
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
@@ -97,10 +73,6 @@ app.add_middleware(
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
 
-
-# =========================
-# EXCEPTION HANDLER
-# =========================
 @app.exception_handler(HTTPException)
 async def http_exception_handler(_request: Request, exc: HTTPException) -> JSONResponse:
     return JSONResponse(
@@ -108,10 +80,6 @@ async def http_exception_handler(_request: Request, exc: HTTPException) -> JSONR
         content=ApiResponse.fail(str(exc.detail)).model_dump(),
     )
 
-
-# =========================
-# MIDDLEWARE (timing)
-# =========================
 @app.middleware("http")
 async def add_process_time(request: Request, call_next):
     start = time.perf_counter()
@@ -121,19 +89,11 @@ async def add_process_time(request: Request, call_next):
     )
     return response
 
-
-# =========================
-# ROUTES
-# =========================
 app.include_router(youtube_router,   prefix="/ai", tags=["YouTube AI"])
 app.include_router(agent_router,     prefix="/ai", tags=["Agent"])
 app.include_router(utilities_router, prefix="/ai", tags=["Utilities"])
 app.include_router(history_router,   prefix="/ai", tags=["History"])
 
-
-# =========================
-# HEALTH CHECK
-# =========================
 @app.get("/health", tags=["Health"])
 async def health():
     import httpx

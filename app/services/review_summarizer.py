@@ -1,8 +1,7 @@
-from app.utils.openai_client import get_openai_client
-
 from typing import Dict, List, Optional
 
 import app.config.settings as _cfg
+from app.utils.openai_responses import create_response, extract_response_text
 
 _SYSTEM = (
     "Bạn là công cụ tổng hợp reviews thương mại điện tử. "
@@ -49,19 +48,18 @@ Reviews:
 {reviews}
 """
 
+
 def _format_reviews(reviews: List[Dict]) -> str:
     lines = []
-    for i, r in enumerate(reviews[:150], 1):
-        text   = r.get("content") or r.get("comment") or r.get("text") or ""
-        rating = r.get("rating") or r.get("stars")
+    for i, review in enumerate(reviews[:150], 1):
+        text = review.get("content") or review.get("comment") or review.get("text") or ""
+        rating = review.get("rating") or review.get("stars")
         if not text:
             continue
-        # Comment YouTube/TikTok không có rating sao — chỉ thêm tiền tố
-        # "[X★]" khi thực sự có rating (review e-commerce), tránh in literal
-        # "[?★]" mà model có thể chép thẳng vào câu trích dẫn.
         prefix = f"[{rating}★] " if rating else ""
         lines.append(f"{i}. {prefix}{text[:300]}")
     return "\n".join(lines)
+
 
 async def summarize_reviews(
     reviews: List[Dict],
@@ -78,12 +76,10 @@ async def summarize_reviews(
         reviews=_format_reviews(reviews),
     )
 
-    client = get_openai_client()
-    msg = await client.responses.create(
+    response = await create_response(
         model=_cfg.OPENAI_MODEL,
         instructions=_SYSTEM,
         input=prompt,
         max_output_tokens=_cfg.OPENAI_MAX_TOKENS,
     )
-
-    return msg.output_text
+    return extract_response_text(response)

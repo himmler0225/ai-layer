@@ -52,10 +52,10 @@ async def _get(path: str, params: Dict = None) -> Any:
 
         if attempt < _MAX_ATTEMPTS:
             delay = 2 ** (attempt - 1)
-            logger.warning("data-miner GET %s attempt %d/%d — retry in %ds", path, attempt, _MAX_ATTEMPTS, delay)
+            logger.warning("[data_miner] GET %s retry=%d/%d delay=%ds", path, attempt, _MAX_ATTEMPTS, delay)
             await asyncio.sleep(delay)
         else:
-            logger.error("data-miner GET %s — all %d attempts failed", path, _MAX_ATTEMPTS)
+            logger.error("[data_miner] GET %s failed attempts=%d", path, _MAX_ATTEMPTS)
     raise last_exc
 
 async def search_youtube(query: str, max_results: int = 10, sort: str = "relevance") -> Dict:

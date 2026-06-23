@@ -1,8 +1,31 @@
-fastapi[standard]>=0.128.0   # includes uvicorn, fastapi CLI, httpx, pydantic-settings
-openai>=1.40.0
-python-dotenv>=1.1.0
+# Web framework & server (includes uvicorn, httpx, pydantic-settings)
+fastapi[standard]>=0.128.0
+
+# Validation & config
 pydantic>=2.11.0
+python-dotenv>=1.1.0
+jsonschema>=4.0.0
+
+# HTTP clients
+httpx>=0.28.0
+openai>=1.40.0
+
+# Rate limiting
 slowapi>=0.1.10
+
+# PostgreSQL (SQLAlchemy async + asyncpg driver + pgvector)
+sqlalchemy[asyncio]>=2.0.36
 asyncpg>=0.30.0
+pgvector>=0.3.6
+
+# Redis cache
 redis[asyncio]>=5.3.0
+
+# MongoDB (tool/agent logs)
 motor>=3.7.0
+
+# Utilities — QR code generation (StyledPilImage requires Pillow)
+qrcode[pil]>=8.0
+
+# GeoIP local lookup (optional — used when GEOIP_DB_PATH is set)
+geoip2>=4.8.0

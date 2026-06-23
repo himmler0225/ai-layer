@@ -17,7 +17,7 @@ def _db():
         return None
     if _client is None:
         _client = motor.motor_asyncio.AsyncIOMotorClient(_cfg.MONGODB_URL)
-        logger.info("MongoDB client created → db: %s", _cfg.MONGODB_NAME)
+        logger.info("[mongo] client ready db=%s", _cfg.MONGODB_NAME)
     return _client[_cfg.MONGODB_NAME]
 
 
@@ -49,8 +49,8 @@ async def log_tool_call(
             "iteration":  iteration,
             "created_at": datetime.now(timezone.utc),
         })
-    except Exception as e:
-        logger.warning("MongoDB log_tool_call failed: %s", e)
+    except Exception as exc:
+        logger.warning("[mongo] log_tool_call failed: %s", exc)
 
 
 async def log_agent_run(
@@ -78,8 +78,8 @@ async def log_agent_run(
             "reviews_analyzed": reviews_analyzed,
             "created_at":       datetime.now(timezone.utc),
         })
-    except Exception as e:
-        logger.warning("MongoDB log_agent_run failed: %s", e)
+    except Exception as exc:
+        logger.warning("[mongo] log_agent_run failed: %s", exc)
 
 
 def _trim(obj: Any, max_len: int = 5000) -> Any:
