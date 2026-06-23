@@ -1,15 +1,22 @@
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 from urllib.parse import quote
+
 from .review_summarizer import summarize_reviews
+
+_HISTORY_MARKER = "\n[Câu hỏi hiện tại]\n"
+
 
 def _youtube_url(video_id: str) -> str:
     return f"https://www.youtube.com/watch?v={video_id}"
 
+
 def _youtube_search_url(query: str) -> str:
     return f"https://www.youtube.com/results?search_query={quote(query)}"
 
+
 def _tiktok_url(aweme_id: str) -> str:
     return f"https://www.tiktok.com/@_/video/{aweme_id}"
+
 
 def _best_thumb(thumbnails, video_id: str = "") -> Optional[str]:
     if isinstance(thumbnails, list):
@@ -24,8 +31,10 @@ def _best_thumb(thumbnails, video_id: str = "") -> Optional[str]:
         return f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg"
     return None
 
+
 def _safe(item) -> Optional[Dict]:
     return item if isinstance(item, dict) else None
+
 
 def _fmt_views(views) -> Optional[str]:
     try:
@@ -38,6 +47,7 @@ def _fmt_views(views) -> Optional[str]:
     except (TypeError, ValueError):
         return str(views) if views else None
 
+
 def _unwrap(result) -> dict:
     if isinstance(result, dict) and "success" in result and "data" in result:
         inner = result.get("data")
@@ -45,21 +55,42 @@ def _unwrap(result) -> dict:
             return inner if isinstance(inner, dict) else {"_list": inner}
     return result if isinstance(result, dict) else {}
 
-def _collect_all(tool_calls: List[Dict]):
-    seen_urls:   set       = set()
+
+def _detect_source_label(tool_calls: List[Dict]) -> str:
+    has_youtube = any(c.get("tool", "").startswith("youtube_") for c in tool_calls)
+    has_tiktok = any(c.get("tool", "").startswith("tiktok_") for c in tool_calls)
+    if has_youtube and has_tiktok:
+        return "YouTube & TikTok"
+    if has_tiktok:
+        return "TikTok"
+    if has_youtube:
+        return "YouTube"
+    return "đa nguồn"
+
+
+def _review_entry(content: str, *, platform: str, source_url: Optional[str] = None) -> Dict:
+    return {
+        "content": content,
+        "source_url": source_url,
+        "platform": platform,
+    }
+
+
+def _collect_all(tool_calls: List[Dict]) -> Tuple[List[Dict], List[Dict], List[Dict]]:
+    seen_urls: set = set()
     all_reviews: List[Dict] = []
-    all_videos:  List[Dict] = []
-    sources:     List[Dict] = []
+    all_videos: List[Dict] = []
+    sources: List[Dict] = []
 
     def _add_source(label: str, url: str, kind: str, **meta):
-        if url not in seen_urls:
+        if url and url not in seen_urls:
             seen_urls.add(url)
             source = {"label": label[:80], "url": url, "type": kind}
             source.update({k: v for k, v in meta.items() if v is not None})
             sources.append(source)
 
     for call in tool_calls:
-        tool   = call.get("tool", "")
+        tool = call.get("tool", "")
         inputs = call.get("inputs", {})
         result = _unwrap(call.get("result", {}))
 
@@ -70,7 +101,7 @@ def _collect_all(tool_calls: List[Dict]):
             q = inputs.get("keyword") or inputs.get("query", "")
             _add_source(f'YouTube: "{q}"', _youtube_search_url(q), "search", platform="youtube")
             video_list = (
-                result.get("_list")              # unwrapped bare list
+                result.get("_list")
                 or result.get("results")
                 or result.get("videos")
                 or []
@@ -91,7 +122,7 @@ def _collect_all(tool_calls: List[Dict]):
                     all_videos.append({
                         "video_id": vid, "title": v.get("title"),
                         "channel": v.get("channel"), "views": v.get("view_count"),
-                        "thumbnail": thumb, "source_url": url,
+                        "thumbnail": thumb, "source_url": url, "platform": "youtube",
                     })
 
         elif tool == "youtube_get_detail":
@@ -112,7 +143,7 @@ def _collect_all(tool_calls: List[Dict]):
                     "channel": channel, "views": views,
                     "duration": result.get("length_seconds"),
                     "description": (result.get("description") or "")[:300],
-                    "thumbnail": thumb, "source_url": url,
+                    "thumbnail": thumb, "source_url": url, "platform": "youtube",
                 })
 
         elif tool in ("youtube_get_comments", "youtube_get_transcript"):
@@ -121,7 +152,9 @@ def _collect_all(tool_calls: List[Dict]):
             for raw_c in (result.get("comments") or result.get("_list") or []):
                 c = _safe(raw_c)
                 if c:
-                    all_reviews.append({"content": c.get("content") or c.get("text") or "", "source_url": url})
+                    text = c.get("content") or c.get("text") or ""
+                    if text:
+                        all_reviews.append(_review_entry(text, platform="youtube", source_url=url))
             if url:
                 _add_source(f"YouTube: {vid}", url, "reviews", platform="youtube")
 
@@ -135,7 +168,9 @@ def _collect_all(tool_calls: List[Dict]):
                 for raw_c in (vid_result.get("comments") or vid_result.get("segments") or []):
                     c = _safe(raw_c)
                     if c:
-                        all_reviews.append({"content": c.get("content") or c.get("text") or "", "source_url": url})
+                        text = c.get("content") or c.get("text") or ""
+                        if text:
+                            all_reviews.append(_review_entry(text, platform="youtube", source_url=url))
                 if url and (vid_result.get("comments") or vid_result.get("segments")):
                     _add_source(f"YouTube: {vid}", url, "reviews", platform="youtube")
 
@@ -148,7 +183,7 @@ def _collect_all(tool_calls: List[Dict]):
                 aweme = v.get("aweme_id") or v.get("id", "")
                 if not aweme:
                     continue
-                url = _tiktok_url(aweme)
+                url = _tiktok_url(str(aweme))
                 title = v.get("desc") or v.get("title") or aweme
                 author = (v.get("author") or {}).get("nickname") or v.get("author_name", "")
                 plays = (v.get("statistics") or {}).get("play_count") or v.get("play_count")
@@ -159,14 +194,27 @@ def _collect_all(tool_calls: List[Dict]):
                     thumbnail=thumb, channel=author,
                     views=_fmt_views(plays), platform="tiktok",
                 )
-                all_videos.append({"video_id": aweme, "title": title, "channel": author, "views": plays, "thumbnail": thumb, "source_url": url})
+                all_videos.append({
+                    "video_id": aweme, "title": title, "channel": author,
+                    "views": plays, "thumbnail": thumb, "source_url": url, "platform": "tiktok",
+                })
 
         elif tool in ("tiktok_comments", "tiktok_transcript"):
-            url = inputs.get("url", "")
-            for c in (result.get("comments") or result.get("segments") or []):
-                all_reviews.append({"content": c.get("text") or c.get("content") or "", "source_url": url})
+            aweme_id = str(inputs.get("aweme_id") or "")
+            url = inputs.get("url") or (_tiktok_url(aweme_id) if aweme_id else "")
+            items = result.get("comments") or result.get("segments") or []
+            for raw_c in items:
+                c = _safe(raw_c)
+                if c:
+                    text = c.get("content") or c.get("text") or ""
+                elif isinstance(raw_c, str):
+                    text = raw_c
+                else:
+                    continue
+                if text:
+                    all_reviews.append(_review_entry(text, platform="tiktok", source_url=url))
             if url:
-                _add_source(f"TikTok: {url[:40]}", url, "reviews", platform="tiktok")
+                _add_source(f"TikTok: {url[-20:]}", url, "reviews", platform="tiktok")
 
         elif tool == "tiktok_video_info":
             url = inputs.get("url", "")
@@ -182,18 +230,43 @@ def _collect_all(tool_calls: List[Dict]):
 
     return all_reviews, all_videos, sources
 
-async def enrich_agent_result(result_text: str, tool_calls: List[Dict], iterations: int) -> Dict:
+
+def _product_name(task: str, videos: List[Dict]) -> str:
+    question = task.split(_HISTORY_MARKER)[-1].strip() if task else ""
+    if question and len(question) <= 120:
+        return question
+    if videos:
+        return (videos[0].get("title") or "sản phẩm")[:80]
+    return "sản phẩm"
+
+
+async def enrich_agent_result(
+    result_text: str,
+    tool_calls: List[Dict],
+    iterations: int,
+    task: str = "",
+) -> Dict:
     all_reviews, all_videos, sources = _collect_all(tool_calls)
-    video_name = all_videos[0].get("title", "video") if all_videos else "video"
-    review_summary = await summarize_reviews(all_reviews, video_name, "YouTube") if all_reviews else None
+    source_label = _detect_source_label(tool_calls)
+    product = _product_name(task, all_videos)
+
+    review_summary = None
+    if all_reviews:
+        review_summary = await summarize_reviews(
+            all_reviews,
+            product=product,
+            source=source_label,
+            task=task,
+        )
 
     return {
         "result": result_text,
         "data": {
-            "review_summary":   review_summary,
-            "sources":          sources,
-            "videos":           all_videos,
+            "review_summary": review_summary,
+            "sources": sources,
+            "videos": all_videos,
             "reviews_analyzed": len(all_reviews),
+            "review_source": source_label,
         },
         "tool_calls": [{"tool": c["tool"], "inputs": c["inputs"]} for c in tool_calls],
         "iterations": iterations,

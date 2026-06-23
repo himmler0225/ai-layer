@@ -230,7 +230,7 @@ async def run_agent(
                 )
                 input_items.extend(output_items_to_input(response.output))
                 final_text = await _run_synthesis(system=system, input_items=input_items)
-                enriched = await enrich_agent_result(final_text, tool_call_log, iteration)
+                enriched = await enrich_agent_result(final_text, tool_call_log, iteration, task=task)
                 await log_agent_run(
                     session_id,
                     task,
@@ -245,7 +245,7 @@ async def run_agent(
 
             partial = extract_response_text(response)
             if partial:
-                return await enrich_agent_result(partial, tool_call_log, iteration)
+                return await enrich_agent_result(partial, tool_call_log, iteration, task=task)
             raise RuntimeError(f"Model hit max_output_tokens at iteration {iteration} without text.")
 
         call_items = _extract_function_calls(response.output)
@@ -272,7 +272,7 @@ async def run_agent(
         else:
             final_text = extract_response_text(response)
 
-        enriched = await enrich_agent_result(final_text, tool_call_log, iteration)
+        enriched = await enrich_agent_result(final_text, tool_call_log, iteration, task=task)
         await log_agent_run(
             session_id,
             task,
@@ -348,14 +348,14 @@ async def run_agent_stream(
                         if event.type == "response.output_text.delta":
                             synth_text += event.delta
                             yield _sse({"type": "text_delta", "delta": event.delta})
-                enriched = await enrich_agent_result(synth_text, tool_call_log, iteration)
+                enriched = await enrich_agent_result(synth_text, tool_call_log, iteration, task=task)
                 yield _sse({"type": "done", "data": enriched["data"], "tool_calls": enriched["tool_calls"]})
                 return
 
             partial = extract_response_text(final)
             if partial:
                 logger.warning("[agent] max_output_tokens iteration=%d partial=true", iteration)
-                enriched = await enrich_agent_result(partial, tool_call_log, iteration)
+                enriched = await enrich_agent_result(partial, tool_call_log, iteration, task=task)
                 yield _sse({"type": "done", "data": enriched["data"], "tool_calls": enriched["tool_calls"]})
                 return
 
@@ -429,7 +429,7 @@ async def run_agent_stream(
         else:
             collected_text = extract_response_text(final)
 
-        enriched = await enrich_agent_result(collected_text, tool_call_log, iteration)
+        enriched = await enrich_agent_result(collected_text, tool_call_log, iteration, task=task)
         await log_agent_run(
             session_id,
             task,
