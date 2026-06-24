@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+"""CRUD bảng videos."""
+
+
 from typing import Optional
 
 from sqlalchemy import exists, func, select, update
@@ -11,6 +14,7 @@ from app.db.utils import model_to_dict
 
 
 async def get_video(video_id: str) -> Optional[dict]:
+    """Lấy một video từ Postgres theo id."""
     factory = await get_session_factory()
     async with factory() as session:
         row = await session.scalar(select(Video).where(Video.id == video_id))
@@ -18,6 +22,7 @@ async def get_video(video_id: str) -> Optional[dict]:
 
 
 async def exists_video(video_id: str) -> bool:
+    """Kiểm tra video đã có trong DB chưa."""
     factory = await get_session_factory()
     async with factory() as session:
         return bool(
@@ -40,6 +45,7 @@ async def upsert_video(
     transcript: str = "",
     metadata: dict | None = None,
 ) -> None:
+    """Insert hoặc merge metadata video."""
     factory = await get_session_factory()
     async with factory() as session:
         stmt = insert(Video).values(
@@ -77,6 +83,7 @@ async def upsert_video(
 
 
 async def update_transcript(video_id: str, transcript: str) -> None:
+    """Ghi đè nội dung transcript của video."""
     factory = await get_session_factory()
     async with factory() as session:
         await session.execute(

@@ -1,7 +1,10 @@
+"""Alias lấy IP từ request."""
+
 from fastapi import Request
 from slowapi import Limiter
 
 def get_client_ip(request: Request) -> str:
+    """Lấy IP thật của client (ưu tiên X-Forwarded-For)."""
     if cf_ip := request.headers.get("cf-connecting-ip"):
         return cf_ip
 

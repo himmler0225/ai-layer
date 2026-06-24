@@ -1,8 +1,11 @@
+"""Trích video_id từ URL YouTube/TikTok."""
+
 import re
 from typing import Dict
 from urllib.parse import urlparse, parse_qs
 
 def extract_id_from_url(url: str, platform: str = None) -> Dict:
+    """Trích video_id YouTube hoặc URL TikTok từ link."""
     url = url.strip()
     detected = platform or _detect_platform(url)
     if detected == "youtube":
@@ -12,6 +15,7 @@ def extract_id_from_url(url: str, platform: str = None) -> Dict:
     return {"error": f"Unsupported URL: {url}"}
 
 def _detect_platform(url: str) -> str:
+    """Đoán YouTube hay TikTok từ hostname URL."""
     if "youtube.com" in url or "youtu.be" in url:
         return "youtube"
     if "tiktok.com" in url:
@@ -19,6 +23,7 @@ def _detect_platform(url: str) -> str:
     return "unknown"
 
 def _youtube(url: str) -> Dict:
+    """Parse link YouTube → video_id."""
     parsed = urlparse(url)
     qs = parse_qs(parsed.query)
     if "v" in qs:
@@ -33,6 +38,7 @@ def _youtube(url: str) -> Dict:
     return {"error": "Could not extract YouTube video_id"}
 
 def _tiktok(url: str) -> Dict:
+    """Parse link TikTok → URL/id dùng cho tool."""
     # tiktok.com/@username/video/VIDEO_ID
     m = re.search(r"tiktok\.com/@[^/]+/video/(\d+)", url)
     if m:

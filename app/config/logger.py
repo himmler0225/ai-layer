@@ -1,15 +1,7 @@
 """
-Centralized logger.
+Logger tập trung — console màu + file JSON.
 
-Usage:
-    from app.config.logger import Logger
-    logger = Logger.get(__name__)
-
-Setup (once, in main.py):
-    Logger.setup(level="INFO")
-
-Log format convention:
-    logger.info("[module] message key=%s", value)
+Dùng: Logger.get(__name__), setup một lần trong main.py.
 """
 import logging
 import logging.handlers
@@ -32,7 +24,10 @@ _LEVEL_COLOR = {
 }
 
 class _ColorFormatter(logging.Formatter):
+    """Format log console có màu."""
+
     def format(self, record: logging.LogRecord) -> str:
+        """Render một dòng log."""
         ts    = datetime.fromtimestamp(record.created).strftime("%Y-%m-%d %H:%M:%S")
         color = _LEVEL_COLOR.get(record.levelname, "\033[37m")
 
@@ -50,7 +45,10 @@ class _ColorFormatter(logging.Formatter):
         )
 
 class _JSONFormatter(logging.Formatter):
+    """Format log file dạng JSON."""
+
     def format(self, record: logging.LogRecord) -> str:
+        """Render một dòng log."""
         data: Dict[str, Any] = {
             "timestamp": datetime.utcnow().isoformat(),
             "level":     record.levelname,
@@ -65,6 +63,7 @@ class _JSONFormatter(logging.Formatter):
         return json.dumps(data, ensure_ascii=False)
 
 class Logger:
+    """Factory logger namespace `ai_layer.*`."""
 
     _root:       str  = "ai_layer"
     _configured: bool = False
@@ -77,6 +76,7 @@ class Logger:
         max_bytes:    int = 10 * 1024 * 1024,
         backup_count: int = 5,
     ) -> None:
+        """Cấu hình handler console + file (gọi một lần)."""
         if cls._configured:
             return
 
@@ -113,5 +113,6 @@ class Logger:
 
     @classmethod
     def get(cls, name: str) -> logging.Logger:
+        """Lấy logger theo tên module."""
         short = name.removeprefix("app.")
         return logging.getLogger(f"{cls._root}.{short}")

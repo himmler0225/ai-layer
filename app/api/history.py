@@ -1,3 +1,5 @@
+"""API lịch sử chat — session/message, cache Redis, auth Supabase JWT."""
+
 from __future__ import annotations
 import json
 from datetime import datetime, timezone
@@ -18,14 +20,17 @@ logger = Logger.get(__name__)
 
 router = APIRouter(dependencies=[Depends(verify_api_key)])
 
+
 class SessionUpsert(BaseModel):
     id: str
     title: str
     created_at: str
     updated_at: str
 
+
 class SessionPatch(BaseModel):
     title: Optional[str] = None
+
 
 class MessageSave(BaseModel):
     id: str
@@ -34,24 +39,32 @@ class MessageSave(BaseModel):
     metadata: Optional[dict] = None
     created_at: str
 
+
 async def _bust_sessions(redis, user_id: str) -> None:
+    """Xóa cache danh sách session của user."""
     if redis:
         await redis.delete(f"history:sessions:{user_id}")
 
+
 async def _bust_messages(redis, session_id: str) -> None:
+    """Xóa cache message của session."""
     if redis:
         await redis.delete(f"history:messages:{session_id}")
 
+
 def _parse_token(authorization: str) -> str:
+    """Bóc Bearer token từ header Authorization."""
     return authorization.removeprefix("Bearer ").strip()
 
+
 def _parse_dt(s: str) -> datetime:
-    """Parse ISO datetime — handles both 'Z' (JS) and '+00:00' (Python) suffixes."""
+    """Parse ISO datetime — hỗ trợ suffix Z (JS) và +00:00."""
     return datetime.fromisoformat(s.replace("Z", "+00:00"))
+
 
 @router.get("/history/admin/stats")
 async def admin_session_stats(days: int = 7):
-    """BFF admin only — API key auth, no user JWT."""
+    """Thống kê session cho admin — chỉ cần API key."""
     try:
         data = await chat_repo.session_stats(days=days)
     except Exception as e:
@@ -62,12 +75,13 @@ async def admin_session_stats(days: int = 7):
 
 @router.get("/history/sessions")
 async def list_sessions(authorization: str = Header(...)):
+    """Danh sách session của user — cache Redis."""
     try:
         user_id = await get_user_id(_parse_token(authorization))
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("[history] list_sessions auth failed: %s", exc, exc_info=True)
+        logger.error("[history] list_sessions auth failed: %s", e, exc_info=True)
         raise HTTPException(500, str(e))
     redis = await get_redis()
     key = f"history:sessions:{user_id}"
@@ -80,7 +94,7 @@ async def list_sessions(authorization: str = Header(...)):
     try:
         rows = await chat_repo.list_sessions(user_id)
     except Exception as e:
-        logger.error("[history] list_sessions db failed: %s", exc, exc_info=True)
+        logger.error("[history] list_sessions db failed: %s", e, exc_info=True)
         raise HTTPException(500, str(e))
 
     data = [
@@ -98,8 +112,10 @@ async def list_sessions(authorization: str = Header(...)):
 
     return ApiResponse.ok(data)
 
+
 @router.post("/history/sessions")
 async def upsert_session(body: SessionUpsert, authorization: str = Header(...)):
+    """Tạo hoặc cập nhật session."""
     user_id = await get_user_id(_parse_token(authorization))
 
     await chat_repo.upsert_session(
@@ -113,8 +129,10 @@ async def upsert_session(body: SessionUpsert, authorization: str = Header(...)):
     await _bust_sessions(await get_redis(), user_id)
     return ApiResponse.ok({"id": body.id})
 
+
 @router.patch("/history/sessions/{session_id}")
 async def patch_session(session_id: str, body: SessionPatch, authorization: str = Header(...)):
+    """Đổi title session."""
     user_id = await get_user_id(_parse_token(authorization))
 
     owner_id = await chat_repo.get_session_user_id(session_id)
@@ -126,8 +144,10 @@ async def patch_session(session_id: str, body: SessionPatch, authorization: str 
     await _bust_sessions(await get_redis(), user_id)
     return ApiResponse.ok({"id": session_id})
 
+
 @router.delete("/history/sessions/{session_id}")
 async def delete_session(session_id: str, authorization: str = Header(...)):
+    """Xóa session và message liên quan."""
     user_id = await get_user_id(_parse_token(authorization))
 
     owner_id = await chat_repo.get_session_user_id(session_id)
@@ -141,8 +161,10 @@ async def delete_session(session_id: str, authorization: str = Header(...)):
     await _bust_messages(redis, session_id)
     return ApiResponse.ok({"deleted": session_id})
 
+
 @router.get("/history/sessions/{session_id}/messages")
 async def get_messages(session_id: str, authorization: str = Header(...)):
+    """Lấy message theo session — cache Redis."""
     user_id = await get_user_id(_parse_token(authorization))
     redis = await get_redis()
     key = f"history:messages:{session_id}"
@@ -174,8 +196,10 @@ async def get_messages(session_id: str, authorization: str = Header(...)):
 
     return ApiResponse.ok(data)
 
+
 @router.post("/history/sessions/{session_id}/messages")
 async def save_messages(session_id: str, body: list[MessageSave], authorization: str = Header(...)):
+    """Lưu batch message (upsert theo id)."""
     user_id = await get_user_id(_parse_token(authorization))
 
     owner_id = await chat_repo.get_session_user_id(session_id)

@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+"""ORM chat_sessions và chat_messages."""
+
+
 from datetime import datetime
 from typing import Optional
 
@@ -11,6 +14,8 @@ from app.db.models.base import Base
 
 
 class ChatSession(Base):
+    """Phiên chat của user."""
+
     __tablename__ = "chat_sessions"
     __table_args__ = (
         Index("chat_sessions_user_updated", "user_id", "updated_at"),
@@ -34,6 +39,8 @@ class ChatSession(Base):
 
 
 class ChatMessage(Base):
+    """Một tin nhắn trong phiên chat."""
+
     __tablename__ = "chat_messages"
     __table_args__ = (
         CheckConstraint("role IN ('user', 'assistant')", name="chat_messages_role_check"),

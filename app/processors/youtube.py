@@ -1,3 +1,5 @@
+"""Xử lý YouTube qua LLM (summary, comments, trending)."""
+
 import json
 from app.config.logger import Logger
 from typing import Dict, List
@@ -10,6 +12,7 @@ _SYSTEM = """You are an AI assistant analyzing YouTube content.
 Be concise. Always respond in the same language as the video content when possible."""
 
 def _parse_json(raw: str, context: str) -> Dict:
+    """Parse JSON từ LLM, báo lỗi rõ ngữ cảnh."""
     try:
         return json.loads(raw)
     except (json.JSONDecodeError, TypeError) as e:
@@ -17,6 +20,7 @@ def _parse_json(raw: str, context: str) -> Dict:
         raise ValueError(f"ChatGPT returned invalid JSON in {context}: {e}") from e
 
 async def summarize_video(video_id: str) -> Dict:
+    """Tóm tắt nội dung video bằng LLM."""
     detail = await data_miner.get_video_detail(video_id)
 
     prompt = f"""Summarize this YouTube video:
@@ -35,6 +39,7 @@ Return JSON: {{"summary": "...", "key_points": ["..."], "tags": ["..."], "sentim
     return result
 
 async def analyze_comments(video_id: str) -> Dict:
+    """Phân tích sentiment và chủ đề comment bằng LLM."""
     data = await data_miner.get_video_comments(video_id, max_comments=100)
     comments = data.get("comments", [])
     if not comments:
@@ -62,6 +67,7 @@ Return JSON: {{
     return result
 
 async def analyze_trends(limit: int = 20) -> Dict:
+    """Phân tích xu hướng từ video trending."""
     data = await data_miner.get_trending(max_results=limit)
     videos: List[Dict] = data.get("videos", data) if isinstance(data, dict) else data
 

@@ -1,3 +1,5 @@
+"""API agent — chạy tool-calling đồng bộ hoặc SSE stream."""
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
@@ -13,18 +15,21 @@ import app.config.settings as _cfg
 
 router = APIRouter(prefix="/agent", dependencies=[Depends(verify_api_key)])
 
+
 class AgentRequest(BaseModel):
-    task:     str                                  = Field(..., description="Natural language task")
-    tools:    Literal["youtube", "tiktok", "all"] = Field("all")
-    max_iter: Optional[int]                        = Field(None, ge=1, le=20, description="Defaults to AGENT_MAX_ITER from remote config")
-    system:   Optional[str]                        = Field(None)
+    task: str = Field(..., description="Natural language task")
+    tools: Literal["youtube", "tiktok", "all"] = Field("all")
+    max_iter: Optional[int] = Field(None, ge=1, le=20, description="Defaults to AGENT_MAX_ITER from remote config")
+    system: Optional[str] = Field(None)
+
 
 @router.post("/run")
 @limiter.limit(agent_rate_limit)
 async def run(request: Request, body: AgentRequest):
-    tools    = TOOL_SETS.get(body.tools, TOOL_SETS["all"])
+    """Chạy agent và trả kết quả đầy đủ cho UI."""
+    tools = TOOL_SETS.get(body.tools, TOOL_SETS["all"])
     max_iter = body.max_iter or _cfg.AGENT_MAX_ITER
-    kwargs   = {"system": body.system} if body.system else {}
+    kwargs = {"system": body.system} if body.system else {}
     try:
         return ApiResponse.ok(await run_agent(body.task, tools, max_iter=max_iter, **kwargs))
     except RuntimeError as e:
@@ -34,14 +39,17 @@ async def run(request: Request, body: AgentRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @router.post("/run/stream")
 @limiter.limit(agent_rate_limit)
 async def run_stream(request: Request, body: AgentRequest):  # noqa: ARG001
-    tools    = TOOL_SETS.get(body.tools, TOOL_SETS["all"])
+    """Chạy agent và stream kết quả qua SSE."""
+    tools = TOOL_SETS.get(body.tools, TOOL_SETS["all"])
     max_iter = body.max_iter or _cfg.AGENT_MAX_ITER
-    kwargs   = {"system": body.system} if body.system else {}
+    kwargs = {"system": body.system} if body.system else {}
 
     async def generate():
+        """Sinh stream SSE, bọc lỗi thành event error."""
         try:
             async for chunk in run_agent_stream(body.task, tools, max_iter=max_iter, **kwargs):
                 yield chunk

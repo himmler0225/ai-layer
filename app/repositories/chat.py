@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+"""CRUD lịch sử chat Postgres."""
+
+
 from datetime import date, datetime, timedelta, timezone
 
 from typing import Optional
@@ -12,6 +15,7 @@ from app.db.session import get_session_factory
 
 
 async def list_sessions(user_id: str) -> list[ChatSession]:
+    """Lấy tất cả phiên chat của user, mới nhất trước."""
     factory = await get_session_factory()
     async with factory() as session:
         result = await session.execute(
@@ -23,6 +27,7 @@ async def list_sessions(user_id: str) -> list[ChatSession]:
 
 
 async def get_session_user_id(session_id: str) -> str | None:
+    """Lấy user_id sở hữu session (để kiểm tra quyền)."""
     factory = await get_session_factory()
     async with factory() as session:
         return await session.scalar(
@@ -38,6 +43,7 @@ async def upsert_session(
     created_at: datetime,
     updated_at: datetime,
 ) -> None:
+    """Tạo mới hoặc cập nhật phiên chat."""
     factory = await get_session_factory()
     async with factory() as session:
         stmt = insert(ChatSession).values(
@@ -63,6 +69,7 @@ async def patch_session(
     *,
     title: Optional[str] = None,
 ) -> None:
+    """Cập nhật title hoặc updated_at của session."""
     values: dict = {"updated_at": datetime.now(timezone.utc)}
     if title is not None:
         values["title"] = title
@@ -76,6 +83,7 @@ async def patch_session(
 
 
 async def delete_session(session_id: str) -> None:
+    """Xóa phiên chat (cascade message)."""
     factory = await get_session_factory()
     async with factory() as session:
         await session.execute(delete(ChatSession).where(ChatSession.id == session_id))
@@ -83,6 +91,7 @@ async def delete_session(session_id: str) -> None:
 
 
 async def list_messages(session_id: str) -> list[ChatMessage]:
+    """Lấy message trong session theo thứ tự thời gian."""
     factory = await get_session_factory()
     async with factory() as session:
         result = await session.execute(
@@ -97,6 +106,7 @@ async def save_messages(
     session_id: str,
     messages: list[dict],
 ) -> None:
+    """Lưu batch message, bỏ qua nếu trùng id."""
     if not messages:
         return
 
@@ -126,7 +136,7 @@ async def save_messages(
 
 
 async def session_stats(days: int = 7) -> dict:
-    """Aggregate chat_sessions counts per day (UTC) for admin dashboards."""
+    """Thống kê session theo ngày cho admin dashboard."""
     days = max(1, min(int(days), 30))
     now = datetime.now(timezone.utc)
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)

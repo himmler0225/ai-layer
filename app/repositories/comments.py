@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+"""CRUD bảng comments."""
+
+
 from sqlalchemy import delete, func, select
 from sqlalchemy.dialects.postgresql import insert
 
@@ -9,6 +12,7 @@ from app.db.utils import model_to_dict
 
 
 async def insert_comments(video_id: str, comments: list[dict]) -> None:
+    """Insert comment mới, bỏ qua nếu trùng id."""
     if not comments:
         return
 
@@ -34,6 +38,7 @@ async def insert_comments(video_id: str, comments: list[dict]) -> None:
 
 
 async def get_comments(video_id: str, limit: int = 100) -> list[dict]:
+    """Lấy comment của video, ưu tiên nhiều like."""
     factory = await get_session_factory()
     async with factory() as session:
         result = await session.execute(
@@ -46,6 +51,7 @@ async def get_comments(video_id: str, limit: int = 100) -> list[dict]:
 
 
 async def count_comments(video_id: str) -> int:
+    """Đếm số comment đã lưu của video."""
     factory = await get_session_factory()
     async with factory() as session:
         return int(
@@ -57,6 +63,7 @@ async def count_comments(video_id: str) -> int:
 
 
 async def delete_comments(video_id: str) -> None:
+    """Xóa toàn bộ comment của một video."""
     factory = await get_session_factory()
     async with factory() as session:
         await session.execute(delete(Comment).where(Comment.video_id == video_id))

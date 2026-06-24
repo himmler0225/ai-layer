@@ -1,3 +1,5 @@
+"""Tóm tắt review bằng LLM."""
+
 import re
 from typing import Dict, List, Optional
 
@@ -28,6 +30,7 @@ _PRODUCT_STOPWORDS = frozenset({
 })
 
 def _product_hint(task: str, fallback: str) -> str:
+    """Lấy gợi ý tên sản phẩm từ task hoặc fallback."""
     question = task.split(_HISTORY_MARKER)[-1].strip() if task else ""
     for pattern in (
         r"về\s+(.+?)(?:\?|$)",
@@ -49,11 +52,13 @@ def _product_hint(task: str, fallback: str) -> str:
 
 
 def _product_tokens(product: str) -> List[str]:
+    """Tách từ khóa sản phẩm để lọc review liên quan."""
     tokens = re.findall(r"[a-z0-9]{2,}", product.lower())
     return [t for t in tokens if t not in _PRODUCT_STOPWORDS]
 
 
 def _is_viet_or_english(text: str) -> bool:
+    """Chỉ giữ review tiếng Việt hoặc tiếng Anh."""
     if _VIET_RE.search(text):
         return True
     letters = re.findall(r"[a-zA-Z]", text)
@@ -61,6 +66,7 @@ def _is_viet_or_english(text: str) -> bool:
 
 
 def _is_noise(text: str) -> bool:
+    """Loại comment rác, quá ngắn hoặc không liên quan."""
     stripped = text.strip()
     if len(stripped) < 6:
         return True
@@ -70,6 +76,7 @@ def _is_noise(text: str) -> bool:
 
 
 def filter_reviews(reviews: List[Dict], product: str) -> List[Dict]:
+    """Lọc review theo chất lượng và độ liên quan sản phẩm."""
     tokens = _product_tokens(product)
     filtered: List[Dict] = []
 
@@ -95,6 +102,7 @@ def filter_reviews(reviews: List[Dict], product: str) -> List[Dict]:
 
 
 def _format_reviews(reviews: List[Dict]) -> str:
+    """Ghép review thành block text gửi LLM."""
     lines = []
     for i, review in enumerate(reviews[:120], 1):
         text = review.get("content") or review.get("comment") or review.get("text") or ""
@@ -109,6 +117,7 @@ def _format_reviews(reviews: List[Dict]) -> str:
 
 
 def _normalize_review_markdown(text: str) -> str:
+    """Chỉnh markdown tóm tắt cho hiển thị đẹp."""
     lines: List[str] = []
     for line in text.splitlines():
         stripped = line.strip()
@@ -135,6 +144,7 @@ async def summarize_reviews(
     source: str = "",
     task: str = "",
 ) -> Optional[str]:
+    """Lọc review rồi gọi LLM viết tóm tắt."""
     if not reviews:
         return None
 

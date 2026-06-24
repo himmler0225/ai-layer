@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+"""ORM cache kết quả search theo query."""
+
+
 from datetime import datetime
 from typing import Optional
 
@@ -11,6 +14,8 @@ from app.db.models.base import Base
 
 
 class SearchCache(Base):
+    """Cache video_ids theo query search."""
+
     __tablename__ = "search_cache"
 
     query: Mapped[str] = mapped_column(Text, primary_key=True)

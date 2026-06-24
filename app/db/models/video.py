@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+"""ORM videos, comments, video_chunks (pgvector)."""
+
+
 from datetime import datetime
 from typing import Optional
 
@@ -21,6 +24,8 @@ from app.db.models.base import Base
 
 
 class Video(Base):
+    """Metadata video YouTube/TikTok."""
+
     __tablename__ = "videos"
     __table_args__ = (
         CheckConstraint(
@@ -53,6 +58,8 @@ class Video(Base):
 
 
 class Comment(Base):
+    """Comment của video."""
+
     __tablename__ = "comments"
     __table_args__ = (Index("comments_video_id", "video_id"),)
 
@@ -74,6 +81,8 @@ class Comment(Base):
 
 
 class VideoChunk(Base):
+    """Đoạn text + vector embedding cho RAG."""
+
     __tablename__ = "video_chunks"
     __table_args__ = (
         CheckConstraint(

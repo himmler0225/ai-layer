@@ -1,3 +1,5 @@
+"""Biến kết quả agent thành payload UI (sources, videos, tóm tắt review)."""
+
 from typing import Dict, List, Optional, Tuple
 from urllib.parse import quote
 
@@ -7,18 +9,22 @@ _HISTORY_MARKER = "\n[Câu hỏi hiện tại]\n"
 
 
 def _youtube_url(video_id: str) -> str:
+    """Tạo URL xem video YouTube."""
     return f"https://www.youtube.com/watch?v={video_id}"
 
 
 def _youtube_search_url(query: str) -> str:
+    """Tạo link trang kết quả tìm kiếm YouTube."""
     return f"https://www.youtube.com/results?search_query={quote(query)}"
 
 
 def _tiktok_url(aweme_id: str) -> str:
+    """Tạo URL xem video TikTok."""
     return f"https://www.tiktok.com/@_/video/{aweme_id}"
 
 
 def _best_thumb(thumbnails, video_id: str = "") -> Optional[str]:
+    """Chọn thumbnail chất lượng cao nhất."""
     if isinstance(thumbnails, list):
         for t in reversed(thumbnails):
             if isinstance(t, dict):
@@ -33,10 +39,12 @@ def _best_thumb(thumbnails, video_id: str = "") -> Optional[str]:
 
 
 def _safe(item) -> Optional[Dict]:
+    """Trả dict nếu hợp lệ, không thì None."""
     return item if isinstance(item, dict) else None
 
 
 def _fmt_views(views) -> Optional[str]:
+    """Định dạng lượt xem kiểu 1.2M views."""
     try:
         n = int(views)
         if n >= 1_000_000:
@@ -49,6 +57,7 @@ def _fmt_views(views) -> Optional[str]:
 
 
 def _unwrap(result) -> dict:
+    """Bóc lớp ApiResponse bọc ngoài kết quả crawl."""
     if isinstance(result, dict) and "success" in result and "data" in result:
         inner = result.get("data")
         if isinstance(inner, (dict, list)):
@@ -57,6 +66,7 @@ def _unwrap(result) -> dict:
 
 
 def _detect_source_label(tool_calls: List[Dict]) -> str:
+    """Gắn nhãn nguồn YouTube/TikTok cho UI."""
     has_youtube = any(c.get("tool", "").startswith("youtube_") for c in tool_calls)
     has_tiktok = any(c.get("tool", "").startswith("tiktok_") for c in tool_calls)
     if has_youtube and has_tiktok:
@@ -69,6 +79,7 @@ def _detect_source_label(tool_calls: List[Dict]) -> str:
 
 
 def _review_entry(content: str, *, platform: str, source_url: Optional[str] = None) -> Dict:
+    """Tạo object review chuẩn cho summarizer."""
     return {
         "content": content,
         "source_url": source_url,
@@ -77,12 +88,14 @@ def _review_entry(content: str, *, platform: str, source_url: Optional[str] = No
 
 
 def _collect_all(tool_calls: List[Dict]) -> Tuple[List[Dict], List[Dict], List[Dict]]:
+    """Gom review, video, source từ toàn bộ tool call."""
     seen_urls: set = set()
     all_reviews: List[Dict] = []
     all_videos: List[Dict] = []
     sources: List[Dict] = []
 
     def _add_source(label: str, url: str, kind: str, **meta):
+        """Thêm một nguồn vào danh sách (tránh trùng URL)."""
         if url and url not in seen_urls:
             seen_urls.add(url)
             source = {"label": label[:80], "url": url, "type": kind}
@@ -232,6 +245,7 @@ def _collect_all(tool_calls: List[Dict]) -> Tuple[List[Dict], List[Dict], List[D
 
 
 def _product_name(task: str, videos: List[Dict]) -> str:
+    """Suy ra tên sản phẩm từ câu hỏi hoặc video đầu tiên."""
     question = task.split(_HISTORY_MARKER)[-1].strip() if task else ""
     if question and len(question) <= 120:
         return question
@@ -246,6 +260,7 @@ async def enrich_agent_result(
     iterations: int,
     task: str = "",
 ) -> Dict:
+    """Biến kết quả agent thành payload UI (sources, videos, tóm tắt)."""
     all_reviews, all_videos, sources = _collect_all(tool_calls)
     source_label = _detect_source_label(tool_calls)
     product = _product_name(task, all_videos)

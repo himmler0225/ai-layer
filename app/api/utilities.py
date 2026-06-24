@@ -1,3 +1,5 @@
+"""API tiện ích — rút gọn URL, tạo QR."""
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, HttpUrl
 from typing import Literal
@@ -24,6 +26,7 @@ class QRRequest(BaseModel):
 @router.post("/shorten", summary="Rút gọn URL")
 @limiter.limit(shorten_rate_limit)
 async def shorten(request: Request, body: ShortenRequest):
+    """Rút gọn URL qua tinyurl hoặc is.gd."""
     result = await shorten_url(str(body.url), provider=body.provider)
     if "error" in result:
         raise HTTPException(status_code=502, detail=result["error"])
@@ -32,6 +35,7 @@ async def shorten(request: Request, body: ShortenRequest):
 @router.post("/qr", summary="Tạo mã QR từ URL")
 @limiter.limit(qr_rate_limit)
 async def qr_code(request: Request, body: QRRequest):
+    """Tạo ảnh QR base64 từ URL."""
     try:
         return ApiResponse.ok(await generate_qr(
             url=str(body.url), size=body.size, theme=body.theme, rounded=body.rounded,

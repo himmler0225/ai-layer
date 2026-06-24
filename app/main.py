@@ -1,3 +1,5 @@
+"""FastAPI entry — khởi tạo DB, Redis, RabbitMQ producer, mount routers."""
+
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -20,12 +22,15 @@ from app.api.youtube import router as youtube_router
 from app.api.agent import router as agent_router
 from app.api.utilities import router as utilities_router
 from app.api.history import router as history_router
+from app.api.admin import router as admin_router
+from app.services.health import collect_checks, is_healthy
 
 Logger.setup(level=settings.LOG_LEVEL)
 logger = Logger.get(__name__)
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    """Khởi động/tắt: remote config, DB, Redis, ingest producer."""
     logger.info("[startup] loading remote config")
     from app.config.remote import load_and_apply
     await load_and_apply()
@@ -43,12 +48,16 @@ async def lifespan(_app: FastAPI):
 
     await get_redis()
 
+    from app.ingest.producer import init_producer, close_producer
+    await init_producer()
+
     yield
 
     from app.clients.data_miner import close_client as close_dm
     from app.cache.client import close_redis
     from app.db.mongo import close_mongo
 
+    await close_producer()
     await close_dm()
     await close_engine()
     await close_redis()
@@ -75,6 +84,7 @@ app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
 
 @app.exception_handler(HTTPException)
 async def http_exception_handler(_request: Request, exc: HTTPException) -> JSONResponse:
+    """Chuẩn hóa HTTPException → ApiResponse.fail."""
     return JSONResponse(
         status_code=exc.status_code,
         content=ApiResponse.fail(str(exc.detail)).model_dump(),
@@ -82,6 +92,7 @@ async def http_exception_handler(_request: Request, exc: HTTPException) -> JSONR
 
 @app.middleware("http")
 async def add_process_time(request: Request, call_next):
+    """Gắn header X-Process-Time-Ms cho mỗi request."""
     start = time.perf_counter()
     response = await call_next(request)
     response.headers["X-Process-Time-Ms"] = str(
@@ -93,34 +104,14 @@ app.include_router(youtube_router,   prefix="/ai", tags=["YouTube AI"])
 app.include_router(agent_router,     prefix="/ai", tags=["Agent"])
 app.include_router(utilities_router, prefix="/ai", tags=["Utilities"])
 app.include_router(history_router,   prefix="/ai", tags=["History"])
+app.include_router(admin_router,     prefix="/ai", tags=["Admin"])
 
 @app.get("/health", tags=["Health"])
 async def health():
-    import httpx
-
-    checks: dict = {}
-
-    # data miner
-    try:
-        r = await httpx.AsyncClient(timeout=3).get(
-            f"{settings.DATA_MINER_URL}/health"
-        )
-        checks["data_miner"] = "ok" if r.is_success else f"status {r.status_code}"
-    except Exception as e:
-        checks["data_miner"] = f"unreachable: {e}"
-
-    # openai key
-    checks["openai_key"] = "set" if settings.OPENAI_API_KEY else "missing"
-
-    healthy = (
-        checks["data_miner"] == "ok"
-        and checks["openai_key"] == "set"
-    )
-
-    return ApiResponse.ok(
-        {
-            "service": "ai-layer",
-            "healthy": healthy,
-            "checks": checks,
-        }
-    )
+    """Kiểm tra Postgres, Redis, Mongo, RabbitMQ, data-miner, OpenAI key."""
+    checks = await collect_checks()
+    return ApiResponse.ok({
+        "service": "ai-layer",
+        "healthy": is_healthy(checks),
+        "checks": checks,
+    })

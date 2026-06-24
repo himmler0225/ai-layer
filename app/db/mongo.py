@@ -1,4 +1,7 @@
 from __future__ import annotations
+
+"""Ghi log agent/tool vào MongoDB (tùy chọn)."""
+
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
@@ -12,6 +15,7 @@ _client: Optional[motor.motor_asyncio.AsyncIOMotorClient] = None
 
 
 def _db():
+    """Lấy database MongoDB (None nếu chưa cấu hình)."""
     global _client
     if not _cfg.MONGODB_URL:
         return None
@@ -22,6 +26,7 @@ def _db():
 
 
 async def close_mongo() -> None:
+    """Đóng kết nối MongoDB."""
     global _client
     if _client:
         _client.close()
@@ -36,6 +41,7 @@ async def log_tool_call(
     result: Any,
     iteration: int,
 ) -> None:
+    """Ghi log một lần gọi tool."""
     db = _db()
     if db is None:
         return
@@ -63,6 +69,7 @@ async def log_agent_run(
     videos: List[Dict],
     reviews_analyzed: int,
 ) -> None:
+    """Ghi log một lần chạy agent hoàn tất."""
     db = _db()
     if db is None:
         return
@@ -83,6 +90,7 @@ async def log_agent_run(
 
 
 def _trim(obj: Any, max_len: int = 5000) -> Any:
+    """Cắt object log để không vượt giới hạn MongoDB."""
     if isinstance(obj, dict):
         return {k: _trim(v, max_len // max(len(obj), 1)) for k, v in obj.items()}
     if isinstance(obj, list):

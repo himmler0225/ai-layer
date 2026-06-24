@@ -1,3 +1,5 @@
+"""Export middleware dùng chung."""
+
 from .auth import verify_api_key
 from .rate_limit import limiter, rate_limit_exceeded_handler, RateLimitExceeded
 from .ip_address import get_client_ip

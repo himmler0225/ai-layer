@@ -1,4 +1,7 @@
 from __future__ import annotations
+
+"""Xác thực JWT Supabase → user_id."""
+
 import hashlib
 import httpx
 from fastapi import HTTPException
@@ -7,6 +10,7 @@ from app.cache.client import get_redis
 from app.constants import SUPABASE_AUTH_TIMEOUT
 
 async def get_user_id(token: str) -> str:
+    """Xác thực JWT Supabase, cache Redis."""
     cache_key = f"auth:{hashlib.sha256(token.encode()).hexdigest()[:32]}"
 
     redis = await get_redis()

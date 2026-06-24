@@ -1,3 +1,5 @@
+"""Tải config từ Supabase bảng `config` và ghi đè settings/prompts."""
+
 from __future__ import annotations
 
 import json
@@ -39,6 +41,7 @@ _REMOTABLE_INT = frozenset({
 
 
 async def load_and_apply() -> None:
+    """Fetch config remote và apply vào settings + prompts."""
     if not settings.SUPABASE_URL or not settings.SUPABASE_SERVICE_KEY:
         return
 

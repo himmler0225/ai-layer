@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+"""CRUD cache search video_ids."""
+
+
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -11,6 +14,7 @@ from app.db.session import get_session_factory
 
 
 async def get_search_cache(query: str, platform: str) -> Optional[list[str]]:
+    """Lấy danh sách video_id đã cache theo query."""
     factory = await get_session_factory()
     async with factory() as session:
         return await session.scalar(
@@ -26,6 +30,7 @@ async def upsert_search_cache(
     platform: str,
     video_ids: list[str],
 ) -> None:
+    """Lưu kết quả search (query → video_ids)."""
     factory = await get_session_factory()
     async with factory() as session:
         stmt = insert(SearchCache).values(
@@ -46,6 +51,7 @@ async def upsert_search_cache(
 
 
 async def delete_search_cache(query: str, platform: str) -> None:
+    """Xóa cache một cặp query/platform."""
     factory = await get_session_factory()
     async with factory() as session:
         await session.execute(
@@ -58,6 +64,7 @@ async def delete_search_cache(query: str, platform: str) -> None:
 
 
 async def clear_expired_cache(days: int = 7) -> None:
+    """Dọn cache search cũ hơn N ngày."""
     cutoff = datetime.now(timezone.utc) - timedelta(days=days)
 
     factory = await get_session_factory()

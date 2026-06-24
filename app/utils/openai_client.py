@@ -1,3 +1,5 @@
+"""Client OpenAI async dùng chung."""
+
 from typing import Optional
 from openai import AsyncOpenAI
 
@@ -7,6 +9,7 @@ _openai_client: Optional[AsyncOpenAI] = None
 
 
 def get_openai_client() -> AsyncOpenAI:
+    """Lấy hoặc tạo singleton AsyncOpenAI."""
     global _openai_client
 
     if not _cfg.OPENAI_API_KEY:

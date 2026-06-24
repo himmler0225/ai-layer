@@ -1,4 +1,7 @@
 from __future__ import annotations
+
+"""Lấy IP client và tra GeoIP."""
+
 from app.constants import GEOIP_LOOKUP_TIMEOUT
 
 import importlib
@@ -18,6 +21,7 @@ _IPV4 = re.compile(r"^(\d{1,3}\.){3}\d{1,3}$")
 _IPV6 = re.compile(r"^[0-9a-fA-F:]+$")
 
 def _is_valid_ip(ip: str) -> bool:
+    """Kiểm tra chuỗi có phải IPv4/IPv6 hợp lệ."""
     if _IPV4.match(ip):
         return all(0 <= int(p) <= 255 for p in ip.split("."))
     return bool(_IPV6.match(ip) and 2 <= ip.count(":") <= 7)
@@ -35,12 +39,14 @@ if GEOIP_DB_PATH:
 _cache: Dict[str, Dict] = {}
 
 def _from_cache(ip: str) -> Optional[Dict]:
+    """Đọc kết quả GeoIP từ cache RAM."""
     entry = _cache.get(ip)
     if entry and time.time() - entry["ts"] < GEOIP_CACHE_TTL:
         return entry["data"]
     return None
 
 def _to_cache(ip: str, data: Dict) -> None:
+    """Ghi kết quả GeoIP vào cache RAM."""
     _cache[ip] = {"data": data, "ts": time.time()}
     if len(_cache) > GEOIP_CACHE_MAX:
         oldest = sorted(_cache, key=lambda k: _cache[k]["ts"])[:100]
@@ -50,12 +56,14 @@ def _to_cache(ip: str, data: Dict) -> None:
 _http: Optional[httpx.AsyncClient] = None
 
 def _get_http() -> httpx.AsyncClient:
+    """Http client dùng chung cho rút gọn URL."""
     global _http
     if _http is None or _http.is_closed:
         _http = httpx.AsyncClient(timeout=GEOIP_LOOKUP_TIMEOUT)
     return _http
 
 def get_client_ip(request: Request) -> str:
+    """Lấy IP thật của client (ưu tiên X-Forwarded-For)."""
     for header in ("X-Forwarded-For", "X-Real-IP"):
         raw = request.headers.get(header)
         if not raw:
@@ -67,6 +75,7 @@ def get_client_ip(request: Request) -> str:
     return request.client.host if request.client else "unknown"
 
 def _local_lookup(ip: str) -> Optional[Dict]:
+    """Tra GeoIP bằng file MaxMind local."""
     if not _reader:
         return None
     try:
@@ -83,6 +92,7 @@ def _local_lookup(ip: str) -> Optional[Dict]:
         return None
 
 async def _api_lookup(ip: str) -> Dict:
+    """Tra GeoIP qua ip-api.com khi không có file local."""
     try:
         r = await _get_http().get(
             f"http://ip-api.com/json/{ip}",
@@ -103,6 +113,7 @@ async def _api_lookup(ip: str) -> Dict:
     return {"ip": ip, "source": "unknown"}
 
 async def get_geo_info(ip: str) -> Dict:
+    """Tra vị trí địa lý từ IP (cache → local → API)."""
     if ip in ("127.0.0.1", "::1", "unknown"):
         return {"ip": ip, "country": "Localhost", "source": "local"}
     cached = _from_cache(ip)

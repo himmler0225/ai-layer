@@ -24,6 +24,9 @@ redis[asyncio]>=5.3.0
 # MongoDB (tool/agent logs)
 motor>=3.7.0
 
+# RabbitMQ knowledge ingest
+aio-pika>=9.5.0
+
 # Utilities — QR code generation (StyledPilImage requires Pillow)
 qrcode[pil]>=8.0
 

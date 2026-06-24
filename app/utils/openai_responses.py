@@ -1,3 +1,5 @@
+"""Helper gọi OpenAI Responses API (tool + text)."""
+
 from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
@@ -10,6 +12,7 @@ logger = Logger.get(__name__)
 
 
 def extract_response_text(response: Any) -> str:
+    """Lấy toàn bộ text từ response OpenAI."""
     text = getattr(response, "output_text", None)
     if text is not None:
         return text
@@ -24,6 +27,7 @@ def extract_response_text(response: Any) -> str:
 
 
 def is_incomplete_for(reason: str, response: Any) -> bool:
+    """Kiểm tra response bị cắt vì hết token."""
     return (
         getattr(response, "status", None) == "incomplete"
         and getattr(response, "incomplete_details", None) is not None
@@ -32,6 +36,7 @@ def is_incomplete_for(reason: str, response: Any) -> bool:
 
 
 def status_error(response: Any) -> Optional[str]:
+    """Trả message lỗi nếu response failed/cancelled."""
     status = getattr(response, "status", None)
     if status in ("failed", "cancelled"):
         return f"OpenAI response {status}: {getattr(response, 'error', None)}"
@@ -39,6 +44,7 @@ def status_error(response: Any) -> Optional[str]:
 
 
 def output_item_to_input(item: Any) -> Dict:
+    """Chuyển một output item sang input cho vòng tiếp theo."""
     item_type = getattr(item, "type", None)
 
     if item_type == "function_call":
@@ -67,6 +73,7 @@ def output_item_to_input(item: Any) -> Dict:
 
 
 def output_items_to_input(output: List[Any]) -> List[Dict]:
+    """Chuyển toàn bộ output sang input messages."""
     return [output_item_to_input(item) for item in output]
 
 
@@ -79,6 +86,7 @@ async def create_response(
     tools: Optional[List[Dict]] = None,
     tool_choice: Optional[str] = None,
 ) -> Any:
+    """Gọi OpenAI Responses API (có tools)."""
     resolved_model = model or _cfg.OPENAI_MODEL
     kwargs: Dict[str, Any] = {
         "model": resolved_model,
@@ -104,6 +112,7 @@ async def complete(
     max_tokens: Optional[int] = None,
     model: Optional[str] = None,
 ) -> str:
+    """Gọi LLM trả text thuần (không tools)."""
     inputs: List[Dict[str, str]] = []
     if system_prompt:
         inputs.append({"role": "system", "content": system_prompt})
@@ -123,6 +132,7 @@ async def complete_json(
     max_tokens: Optional[int] = None,
     model: Optional[str] = None,
 ) -> str:
+    """Gọi LLM và yêu cầu trả JSON."""
     system_with_json = (
         f"{system_prompt}\n\nRespond with valid JSON only. No markdown, no explanation."
     )

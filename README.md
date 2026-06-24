@@ -193,6 +193,13 @@ SUPABASE_SERVICE_KEY=
 
 GEOIP_DB_PATH=
 LOG_LEVEL=INFO
+
+# RabbitMQ ingest (optional — tắt bằng INGEST_ENABLED=false)
+RABBITMQ_URL=amqp://ingest:changeme@localhost:5672/
+RABBITMQ_EXCHANGE=knowledge.ingest
+INGEST_ENABLED=true
+EMBEDDING_MODEL=text-embedding-3-small
+EMBEDDING_DIM=1536
 ```
 
 ---

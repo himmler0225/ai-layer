@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+"""Tạo mã QR PNG base64."""
+
+
 import asyncio
 import base64
 import io
@@ -23,6 +26,7 @@ _THEMES: dict[str, dict] = {
 }
 
 def _generate_sync(url: str, size: int, theme: ColorTheme, rounded: bool) -> dict:
+    """Tạo ảnh QR trong thread (tránh block event loop)."""
     colors = _THEMES.get(theme, _THEMES["default"])
     qr = qrcode.QRCode(
         version=1,
@@ -43,6 +47,7 @@ def _generate_sync(url: str, size: int, theme: ColorTheme, rounded: bool) -> dic
     return {"url": url, "image": f"data:image/png;base64,{b64}", "theme": theme, "size": size}
 
 async def generate_qr(url: str, size: int = 10, theme: ColorTheme = "default", rounded: bool = True) -> dict:
+    """Tạo mã QR PNG base64 từ URL."""
     logger.info("[qr] generate url=%s theme=%s", url[:60], theme)
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(None, partial(_generate_sync, url, size, theme, rounded))

@@ -1,3 +1,5 @@
+"""Định nghĩa tool schema cho OpenAI function calling."""
+
 YOUTUBE_TOOLS = [
 
     {

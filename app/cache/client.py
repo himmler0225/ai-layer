@@ -1,10 +1,14 @@
 from __future__ import annotations
+
+"""Client Redis async dùng chung."""
+
 import redis.asyncio as aioredis
 from app.config.settings import REDIS_HOST, REDIS_PORT, REDIS_DB
 
 _redis: aioredis.Redis | None = None
 
 async def get_redis() -> aioredis.Redis | None:
+    """Kết nối Redis lần đầu (None nếu Redis down)."""
     global _redis
     if _redis is None:
         try:
@@ -16,6 +20,7 @@ async def get_redis() -> aioredis.Redis | None:
     return _redis
 
 async def close_redis() -> None:
+    """Đóng kết nối Redis."""
     global _redis
     if _redis:
         await _redis.aclose()

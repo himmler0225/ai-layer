@@ -1,3 +1,5 @@
+"""PostgreSQL async session — SQLAlchemy + asyncpg."""
+
 from __future__ import annotations
 
 import json
@@ -21,6 +23,7 @@ _session_factory: async_sessionmaker[AsyncSession] | None = None
 
 
 def _database_url() -> str:
+    """Chuẩn hóa DATABASE_URL sang driver asyncpg."""
     url = _s.DATABASE_URL
     if not url:
         raise RuntimeError("DATABASE_URL is not configured")
@@ -32,6 +35,7 @@ def _database_url() -> str:
 
 
 async def get_session_factory() -> async_sessionmaker[AsyncSession]:
+    """Khởi tạo engine và session factory lần đầu."""
     global _engine, _session_factory
 
     if _session_factory is None:
@@ -48,6 +52,7 @@ async def get_session_factory() -> async_sessionmaker[AsyncSession]:
 
 
 async def init_db() -> None:
+    """Tạo bảng Postgres; bỏ video_chunks nếu không có pgvector."""
     await get_session_factory()
     assert _engine is not None
 
@@ -75,6 +80,7 @@ async def init_db() -> None:
 
 
 async def close_engine() -> None:
+    """Đóng connection pool Postgres."""
     global _engine, _session_factory
 
     if _engine is not None:

@@ -1,3 +1,5 @@
+"""Biến môi trường — load từ .env, có thể override bởi Supabase remote config."""
+
 from __future__ import annotations
 
 import os
@@ -65,3 +67,10 @@ SUPABASE_TOKEN_TTL: int = 3600
 HISTORY_SESSIONS_TTL: int = 300
 HISTORY_MESSAGES_TTL: int = 600
 REMOTE_CONFIG_TTL: int = 5
+
+# RabbitMQ knowledge ingest
+RABBITMQ_URL: str = os.getenv("RABBITMQ_URL", "")
+RABBITMQ_EXCHANGE: str = os.getenv("RABBITMQ_EXCHANGE", "knowledge.ingest")
+INGEST_ENABLED: bool = os.getenv("INGEST_ENABLED", "true").lower() == "true"
+EMBEDDING_MODEL: str = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
+EMBEDDING_DIM: int = int(os.getenv("EMBEDDING_DIM", "1536"))
