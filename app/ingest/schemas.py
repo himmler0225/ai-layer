@@ -19,6 +19,9 @@ QUEUE_COMMENTS = "ingest.comments"
 QUEUE_TRANSCRIPT = "ingest.transcript"
 QUEUE_EMBED = "ingest.embed"
 
+ROUTING_SUMMARIZE = "product.summarize"
+QUEUE_SUMMARIZE = "ingest.summarize"
+
 Platform = Literal["youtube", "tiktok"]
 
 

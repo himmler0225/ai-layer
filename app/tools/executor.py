@@ -5,15 +5,18 @@ from __future__ import annotations
 from typing import Any, Dict
 
 import jsonschema
-
 from app.clients import data_miner
 import app.config.settings as _cfg
 from app.services.url_extractor import extract_id_from_url as _url_extract
 from app.tools.definitions import YOUTUBE_TOOLS, TIKTOK_TOOLS, UTIL_TOOLS
+from app.tools.rag_definitions import RAG_TOOLS
+from app.rag import search as rag_search
+
+_RAG_TOOL_NAMES = frozenset(t["name"] for t in RAG_TOOLS)
 
 _SCHEMAS: Dict[str, Dict] = {
     tool["name"]: tool["parameters"]
-    for tool in (*YOUTUBE_TOOLS, *TIKTOK_TOOLS, *UTIL_TOOLS)
+    for tool in (*(RAG_TOOLS if _cfg.RAG_ENABLED else []), *YOUTUBE_TOOLS, *TIKTOK_TOOLS, *UTIL_TOOLS)
 }
 
 async def _youtube_search(inp: Dict) -> Any:
@@ -149,18 +152,34 @@ _REGISTRY = {
     "extract_id_from_url":           _extract_id_from_url,
 }
 
-async def execute_tool(name: str, inputs: Dict) -> Dict:
+async def execute_tool(name: str, inputs: Dict, **kwargs) -> Dict:
     """Chạy tool theo tên: kiểm tra input rồi gọi handler tương ứng."""
-    fn = _REGISTRY.get(name)
-    if fn is None:
-        return {"error": f"Unknown tool: {name}"}
-
     schema = _SCHEMAS.get(name)
     if schema:
         try:
             jsonschema.validate(instance=inputs, schema=schema)
         except jsonschema.ValidationError as e:
             return {"error": f"Invalid input for {name}: {e.message}"}
+
+    if name in _RAG_TOOL_NAMES:
+        if not _cfg.RAG_ENABLED:
+            return {"error": "RAG disabled"}
+        if name == "search_product_summary":
+            return await rag_search.search_aspect_summary(
+                inputs["product_id"], inputs["query"], aspect=inputs.get("aspect")
+            )
+        if name == "search_aspect_evidence":
+            return await rag_search.search_aspect_evidence(
+                inputs["product_id"], inputs["query"], aspect=inputs.get("aspect")
+            )
+        if name == "get_raw_reviews":
+            return await rag_search.get_raw_reviews(
+                inputs["product_id"], limit=int(inputs.get("limit") or 10)
+            )
+
+    fn = _REGISTRY.get(name)
+    if fn is None:
+        return {"error": f"Unknown tool: {name}"}
 
     try:
         result = await fn(inputs)

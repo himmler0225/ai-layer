@@ -3,8 +3,10 @@
 from dotenv import load_dotenv
 load_dotenv()
 
+import asyncio
 import time
 from contextlib import asynccontextmanager
+from typing import Optional
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import HTTPException
@@ -28,6 +30,73 @@ from app.services.health import collect_checks, is_healthy
 Logger.setup(level=settings.LOG_LEVEL)
 logger = Logger.get(__name__)
 
+_ingest_worker_task: Optional[asyncio.Task] = None
+
+
+_config_refresh_task: Optional[asyncio.Task] = None
+
+
+async def _remote_config_refresher() -> None:
+    """Tải lại Supabase config theo REMOTE_CONFIG_TTL (phút)."""
+    from app.config.remote import load_and_apply
+
+    while True:
+        await asyncio.sleep(max(settings.REMOTE_CONFIG_TTL, 1) * 60)
+        try:
+            await load_and_apply()
+            logger.info("[remote_config] refreshed")
+        except Exception as exc:
+            logger.warning("[remote_config] refresh failed: %s", exc)
+
+
+async def _start_config_refresher() -> None:
+    global _config_refresh_task
+    if not settings.SUPABASE_URL or not settings.SUPABASE_SERVICE_KEY:
+        return
+    _config_refresh_task = asyncio.create_task(_remote_config_refresher(), name="config-refresher")
+
+
+async def _stop_config_refresher() -> None:
+    global _config_refresh_task
+    if _config_refresh_task is None:
+        return
+    _config_refresh_task.cancel()
+    try:
+        await _config_refresh_task
+    except asyncio.CancelledError:
+        pass
+    _config_refresh_task = None
+
+
+async def _start_inline_ingest_worker() -> None:
+    """Chạy RabbitMQ consumer trong cùng process (local dev — một lệnh)."""
+    global _ingest_worker_task
+    if not settings.INGEST_ENABLED or not settings.RABBITMQ_URL:
+        return
+    if not settings.INGEST_WORKER_INLINE:
+        logger.info("[startup] ingest worker inline disabled (INGEST_WORKER_INLINE=false)")
+        return
+
+    from app.ingest.consumer import run_consumer
+
+    _ingest_worker_task = asyncio.create_task(run_consumer(), name="ingest-worker")
+    logger.info("[startup] ingest worker inline started")
+
+
+async def _stop_inline_ingest_worker() -> None:
+    """Dừng consumer nền trước khi đóng broker."""
+    global _ingest_worker_task
+    if _ingest_worker_task is None:
+        return
+    _ingest_worker_task.cancel()
+    try:
+        await _ingest_worker_task
+    except asyncio.CancelledError:
+        pass
+    _ingest_worker_task = None
+    logger.info("[shutdown] ingest worker inline stopped")
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     """Khởi động/tắt: remote config, DB, Redis, ingest producer."""
@@ -44,24 +113,28 @@ async def lifespan(_app: FastAPI):
     try:
         await init_db()
     except Exception as exc:
-        Logger.get(__name__).warning("[db] init failed: %s", exc)
+        logger.error("[db] init failed: %s", exc)
+        raise RuntimeError(f"Database initialization failed: {exc}") from exc
 
     await get_redis()
+    await _start_config_refresher()
 
     from app.ingest.producer import init_producer, close_producer
     await init_producer()
+    await _start_inline_ingest_worker()
 
     yield
 
+    await _stop_inline_ingest_worker()
+    await _stop_config_refresher()
+
     from app.clients.data_miner import close_client as close_dm
     from app.cache.client import close_redis
-    from app.db.mongo import close_mongo
 
     await close_producer()
     await close_dm()
     await close_engine()
     await close_redis()
-    await close_mongo()
 
 app = FastAPI(
     title="AI Layer",
@@ -108,7 +181,7 @@ app.include_router(admin_router,     prefix="/ai", tags=["Admin"])
 
 @app.get("/health", tags=["Health"])
 async def health():
-    """Kiểm tra Postgres, Redis, Mongo, RabbitMQ, data-miner, OpenAI key."""
+    """Kiểm tra Postgres, Redis, RabbitMQ, data-miner, OpenAI key."""
     checks = await collect_checks()
     return ApiResponse.ok({
         "service": "ai-layer",

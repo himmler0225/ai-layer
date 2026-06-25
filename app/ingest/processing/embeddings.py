@@ -7,7 +7,11 @@ _BATCH_SIZE = 64
 
 
 async def embed_texts(texts: list[str]) -> list[list[float]]:
-    """Tạo vector embedding cho batch text qua OpenAI."""
+    """
+    Tạo vector embedding batch qua OpenAI (text-embedding-3-small).
+
+    Dùng cho: video_chunks (flat), aspect_chunks (L2), aspect_summaries (L1).
+    """
     if not texts:
         return []
 

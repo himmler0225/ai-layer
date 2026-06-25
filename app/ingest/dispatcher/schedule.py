@@ -5,15 +5,14 @@ from typing import Any
 from app.config.logger import Logger
 from app.ingest.dispatcher.routes import route_tool
 from app.ingest.mappers import unwrap_result
+from app.rag.product_hint import extract_product_name
 
 logger = Logger.get(__name__)
-_HISTORY_MARKER = "\n[Câu hỏi hiện tại]\n"
 
 
 def _product_hint(task: str) -> str:
-    """Lấy câu hỏi hiện tại làm gợi ý sản phẩm cho metadata RAG."""
-    question = task.split(_HISTORY_MARKER)[-1].strip() if task else ""
-    return question[:120] if question else ""
+    name = extract_product_name(task)
+    return name[:120] if name else ""
 
 
 async def schedule_tool_ingest(
@@ -23,7 +22,7 @@ async def schedule_tool_ingest(
     *,
     task: str = "",
 ) -> None:
-    """Sau tool call — đẩy job ingest nếu crawl thành công."""
+    # Sau tool crawl OK → đẩy job ingest (unwrap + route_tool).
     data = unwrap_result(result)
     if data is None:
         return

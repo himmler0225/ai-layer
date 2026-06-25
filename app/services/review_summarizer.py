@@ -5,6 +5,7 @@ from typing import Dict, List, Optional
 
 import app.config.settings as _cfg
 import app.services.prompts as _prompts
+from app.rag.product_hint import extract_product_name
 from app.utils.openai_responses import create_response, extract_response_text
 
 _HISTORY_MARKER = "\n[Câu hỏi hiện tại]\n"
@@ -15,7 +16,6 @@ _VIET_RE = re.compile(
 _EMOJI_ONLY_RE = re.compile(
     r"^[\s\U0001F300-\U0001FAFF\U00002600-\U000027BF\U0000FE00-\U0000FEFF!?.…,]+$"
 )
-_INLINE_QUOTES_RE = re.compile(r'"([^"]+)"')
 _COMMERCE_RE = re.compile(
     r"\b(giá|pin|sạc|bh|bảo hành|shop|mua|bán|xài|dùng|chất|ok|oke|xịn|keng|body|màn|active|trả|vn/a|like new)\b",
     re.IGNORECASE,
@@ -29,8 +29,31 @@ _PRODUCT_STOPWORDS = frozenset({
     "nói", "gì", "là", "có", "không", "như", "thế", "nào", "bao", "nhiêu",
 })
 
+def _clean_summary(text: str) -> str:
+    """Bỏ quote/blockquote/emoji header nếu model vẫn trả template cũ."""
+    lines: list[str] = []
+    for line in text.splitlines():
+        s = line.strip()
+        if not s:
+            lines.append("")
+            continue
+        if s.startswith(">"):
+            continue
+        if s.startswith('"') and s.endswith('"') and len(s) > 40:
+            continue
+        if s.startswith("📱") or s.startswith("📊") or s.startswith("💬"):
+            s = re.sub(r"^[📱📊💬]\s*", "", s)
+            s = re.sub(r"\(\d+\s+lượt.*\)$", "", s).strip()
+        lines.append(s)
+    out = "\n".join(lines)
+    out = re.sub(r"\n{3,}", "\n\n", out).strip()
+    return out
+
+
 def _product_hint(task: str, fallback: str) -> str:
-    """Lấy gợi ý tên sản phẩm từ task hoặc fallback."""
+    from_block = extract_product_name(task)
+    if from_block:
+        return from_block
     question = task.split(_HISTORY_MARKER)[-1].strip() if task else ""
     for pattern in (
         r"về\s+(.+?)(?:\?|$)",
@@ -116,28 +139,6 @@ def _format_reviews(reviews: List[Dict]) -> str:
     return "\n".join(lines)
 
 
-def _normalize_review_markdown(text: str) -> str:
-    """Chỉnh markdown tóm tắt cho hiển thị đẹp."""
-    lines: List[str] = []
-    for line in text.splitlines():
-        stripped = line.strip()
-        if (
-            stripped
-            and not stripped.startswith(">")
-            and not stripped.startswith("#")
-            and not stripped.startswith("📊")
-            and '"' in stripped
-        ):
-            quotes = _INLINE_QUOTES_RE.findall(stripped)
-            if len(quotes) >= 2:
-                for quote in quotes:
-                    lines.append(f'> "{quote}"')
-                    lines.append("")
-                continue
-        lines.append(line)
-    return "\n".join(lines)
-
-
 async def summarize_reviews(
     reviews: List[Dict],
     product: str = "",
@@ -152,6 +153,11 @@ async def summarize_reviews(
     relevant = filter_reviews(reviews, product_hint)
     if not relevant:
         relevant = [r for r in reviews if (r.get("content") or "").strip()][:40]
+
+    if not (_prompts.REVIEW_SUMMARY_SYSTEM or "").strip():
+        return None
+    if not (_prompts.REVIEW_SUMMARY_PROMPT or "").strip():
+        return None
 
     prompt = _prompts.REVIEW_SUMMARY_PROMPT.format(
         n=len(relevant),
@@ -169,10 +175,5 @@ async def summarize_reviews(
     raw = extract_response_text(response)
     if not raw:
         return None
-    normalized = _normalize_review_markdown(raw)
-    return re.sub(
-        r"📊 Tổng hợp:.*",
-        f"📊 Tổng hợp: {len(relevant)} reviews từ {source}",
-        normalized,
-        count=1,
-    )
+    cleaned = _clean_summary(raw.strip())
+    return cleaned or None

@@ -41,8 +41,8 @@ async def get_session_factory() -> async_sessionmaker[AsyncSession]:
     if _session_factory is None:
         _engine = create_async_engine(
             _database_url(),
-            pool_size=2,
-            max_overflow=8,
+            pool_size=5,
+            max_overflow=15,
             json_serializer=json.dumps,
             json_deserializer=json.loads,
         )

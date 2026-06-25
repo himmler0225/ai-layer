@@ -1,12 +1,15 @@
-"""Helper gọi OpenAI Responses API (tool + text)."""
+"""Gọi OpenAI Responses API."""
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+import asyncio
+from contextlib import asynccontextmanager
+from typing import Any, AsyncIterator, Dict, List, Optional
 
 import app.config.settings as _cfg
 from app.config.logger import Logger
 from app.utils.openai_client import get_openai_client
+from app.utils.openai_errors import log_error, should_retry
 
 logger = Logger.get(__name__)
 
@@ -102,8 +105,39 @@ async def create_response(
     if tool_choice is not None:
         kwargs["tool_choice"] = tool_choice
 
-    logger.info("[openai] responses.create model=%s", resolved_model)
-    return await get_openai_client().responses.create(**kwargs)
+    logger.info("[openai] responses.create model=%s tools=%s", resolved_model, len(tools or []))
+
+    last_exc: Exception | None = None
+    for attempt in (1, 2):
+        try:
+            return await get_openai_client().responses.create(**kwargs)
+        except Exception as exc:
+            last_exc = exc
+            log_error(logger, exc, where=f"responses.create attempt={attempt}")
+            if attempt == 1 and should_retry(exc):
+                await asyncio.sleep(2)
+                continue
+            raise
+    raise last_exc  # type: ignore[misc]
+
+
+@asynccontextmanager
+async def response_stream_with_retry(**kwargs: Any) -> AsyncIterator[Any]:
+    """OpenAI Responses stream — retry một lần khi 429/5xx/timeout."""
+    last_exc: Exception | None = None
+    for attempt in (1, 2):
+        try:
+            async with get_openai_client().responses.stream(**kwargs) as stream:
+                yield stream
+                return
+        except Exception as exc:
+            last_exc = exc
+            log_error(logger, exc, where=f"responses.stream attempt={attempt}")
+            if attempt == 1 and should_retry(exc):
+                await asyncio.sleep(2)
+                continue
+            raise
+    raise last_exc  # type: ignore[misc]
 
 
 async def complete(

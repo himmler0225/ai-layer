@@ -1,3 +1,6 @@
+import app.config.settings as _settings
+from app.tools.rag_definitions import RAG_TOOLS
+
 """Định nghĩa tool schema cho OpenAI function calling."""
 
 YOUTUBE_TOOLS = [
@@ -6,17 +9,15 @@ YOUTUBE_TOOLS = [
         "type": "function",
         "name": "youtube_search",
         "description": (
-            "Tìm kiếm video YouTube theo từ khóa. "
-            "DÙNG KHI: cần video_id nhưng user chưa cung cấp link. "
-            "TRẢ VỀ: danh sách video gồm video_id, title, view_count. "
-            "TIẾP THEO: chọn video view_count cao nhất rồi gọi youtube_get_comments. "
-            "KHÔNG DÙNG khi user đã paste link YouTube — gọi extract_id_from_url trước."
+            "Tìm video YouTube theo từ khóa. "
+            "DÙNG max_results=5, chọn đúng 3 video view cao nhất rồi gọi comments_batch + transcript_batch. "
+            "KHÔNG gọi search lại. KHÔNG liệt kê video trong câu trả lời."
         ),
         "parameters": {
             "type": "object",
             "properties": {
                 "keyword":     {"type": "string", "description": "Từ khóa tìm kiếm"},
-                "max_results": {"type": "integer", "default": 5, "maximum": 10},
+                "max_results": {"type": "integer", "default": 5, "maximum": 5},
                 "sort": {
                     "type": "string",
                     "enum": ["relevance", "upload_date", "view_count", "rating"],
@@ -370,10 +371,12 @@ TIKTOK_TOOLS = [
     },
 ]
 
-ALL_TOOLS = YOUTUBE_TOOLS + TIKTOK_TOOLS + UTIL_TOOLS
+_RAG_TOOLS = RAG_TOOLS
+
+ALL_TOOLS = (_RAG_TOOLS if _settings.RAG_ENABLED else []) + YOUTUBE_TOOLS + TIKTOK_TOOLS + UTIL_TOOLS
 
 TOOL_SETS = {
-    "youtube": YOUTUBE_TOOLS + UTIL_TOOLS,
-    "tiktok":  TIKTOK_TOOLS  + UTIL_TOOLS,
+    "youtube": (_RAG_TOOLS if _settings.RAG_ENABLED else []) + YOUTUBE_TOOLS + UTIL_TOOLS,
+    "tiktok":  (_RAG_TOOLS if _settings.RAG_ENABLED else []) + TIKTOK_TOOLS  + UTIL_TOOLS,
     "all":     ALL_TOOLS,
 }

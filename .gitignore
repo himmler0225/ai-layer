@@ -5,3 +5,8 @@
 __pycache__/
 *.pyc
 .DS_Store
+logs/
+
+# README nội bộ — chỉ /README.md ở root push GitHub
+**/README.md
+!/README.md

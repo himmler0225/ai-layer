@@ -1,8 +1,6 @@
-"""Tải config từ Supabase bảng `config` và ghi đè settings/prompts."""
+"""Load Supabase bảng `config` → settings + prompts."""
 
 from __future__ import annotations
-
-import json
 
 import httpx
 
@@ -39,10 +37,46 @@ _REMOTABLE_INT = frozenset({
     "AGENT_MAX_LIST_ITEMS",
 })
 
+_REQUIRED_KEYS = frozenset({
+    "OPENAI_API_KEY",
+    "OPENAI_MODEL",
+    "OPENAI_MAX_TOKENS",
+    "AGENT_MAX_ITER",
+    "AGENT_SYSTEM",
+    "REVIEW_SUMMARY_SYSTEM",
+    "REVIEW_SUMMARY_PROMPT",
+})
+
+
+def _value_for_key(key: str) -> str | int:
+    if key in _PROMPT_KEYS:
+        return getattr(prompts, key, "")
+    return getattr(settings, key, "")
+
+
+def validate_config() -> None:
+    """Sau load_and_apply — báo lỗi nếu thiếu key bắt buộc."""
+    missing: list[str] = []
+    for key in _REQUIRED_KEYS:
+        val = _value_for_key(key)
+        if isinstance(val, int):
+            if val <= 0 and key == "AGENT_MAX_ITER":
+                missing.append(key)
+            elif val <= 0 and key == "OPENAI_MAX_TOKENS":
+                missing.append(key)
+        elif not str(val).strip():
+            missing.append(key)
+    if missing:
+        raise RuntimeError(
+            "Thiếu config trên Supabase (bảng config): "
+            + ", ".join(sorted(missing))
+        )
+
 
 async def load_and_apply() -> None:
-    """Fetch config remote và apply vào settings + prompts."""
     if not settings.SUPABASE_URL or not settings.SUPABASE_SERVICE_KEY:
+        logger.warning("[remote_config] SUPABASE_URL/SERVICE_KEY trống — bỏ qua load")
+        validate_config()
         return
 
     try:
@@ -57,6 +91,8 @@ async def load_and_apply() -> None:
             )
 
             if not response.is_success:
+                logger.warning("[remote_config] fetch failed status=%s", response.status_code)
+                validate_config()
                 return
 
             remote = {
@@ -67,6 +103,7 @@ async def load_and_apply() -> None:
 
     except Exception as exc:
         logger.warning("[remote_config] load failed: %s", exc)
+        validate_config()
         return
 
     for key in _REMOTABLE_STR:
@@ -78,7 +115,7 @@ async def load_and_apply() -> None:
             try:
                 setattr(settings, key, int(remote[key]))
             except ValueError:
-                pass
+                logger.warning("[remote_config] invalid int key=%s", key)
 
     for key in _PROMPT_KEYS:
         if key in remote:
@@ -87,3 +124,4 @@ async def load_and_apply() -> None:
                 settings.AGENT_SYSTEM = remote[key]
 
     logger.info("[remote_config] applied keys=%d", len(remote))
+    validate_config()

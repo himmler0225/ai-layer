@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from app.ingest.handlers import comments, embed, transcript, video
+from app.ingest.handlers import comments, embed, transcript, video, summarize
 from app.ingest.schemas import (
     ROUTING_COMMENTS,
     ROUTING_EMBED,
     ROUTING_TRANSCRIPT,
     ROUTING_VIDEO,
+    ROUTING_SUMMARIZE,
 )
 
 _HANDLERS = {
@@ -13,6 +14,7 @@ _HANDLERS = {
     ROUTING_COMMENTS: comments.handle_comments_upsert,
     ROUTING_TRANSCRIPT: transcript.handle_transcript_upsert,
     ROUTING_EMBED: embed.handle_chunks_embed,
+    ROUTING_SUMMARIZE: summarize.handle_product_summarize,
 }
 
 

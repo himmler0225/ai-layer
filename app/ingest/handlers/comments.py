@@ -5,10 +5,20 @@ from app.ingest.producer import publish
 from app.ingest.schemas import ROUTING_EMBED
 from app.repositories.comments import insert_comments
 from app.repositories.videos import exists_video, upsert_video
-
+from app.ingest.processing.rag_sync import sync_comments_to_product_rag
 
 async def handle_comments_upsert(envelope: dict) -> None:
-    """Ghi comments; comment đạt chất lượng → queue embed."""
+    """
+    Ingest comment sau crawl (flat + RAG khi có rag_sync).
+
+    Luồng flat (đang chạy):
+    1. upsert video nếu chưa có
+    2. insert_comments → bảng comments
+    3. comment_chunks → publish ROUTING_EMBED → video_chunks
+
+    Luồng RAG (P2-wire — thêm sync_comments_to_product_rag sau bước 2):
+    → products + raw_reviews + curated_reviews → queue summarize
+    """
     payload = envelope.get("payload") or {}
     video_id = envelope.get("video_id") or payload.get("video_id")
     platform = envelope.get("platform") or payload.get("platform") or "youtube"
@@ -24,11 +34,18 @@ async def handle_comments_upsert(envelope: dict) -> None:
 
     await insert_comments(video_id, raw_comments)
 
+    hint = envelope.get("product_hint") or payload.get("product_hint") or ""
+    await sync_comments_to_product_rag(
+        product_hint=hint,
+        platform=platform,
+        video_id=video_id,
+        raw_comments=raw_comments,
+    )
+
     chunks = comment_chunks(video_id, raw_comments)
     if not chunks:
         return
 
-    hint = envelope.get("product_hint", "")
     await publish(
         ROUTING_EMBED,
         platform=platform,
