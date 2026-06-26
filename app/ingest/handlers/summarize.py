@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 
 import app.config.settings as _cfg
+from app.ai.router import TASK_ASPECT_GROUP, TASK_ASPECT_SUMMARY
 from app.config.logger import Logger
 from app.ingest.processing.embeddings import embed_texts
 from app.repositories.aspect_chunks import delete_aspect_chunks_for_product, upsert_aspect_chunks
@@ -66,8 +67,8 @@ async def _llm_group_aspects(curated: list[dict], *, product_name: str) -> list[
         raw = await complete_json(
             prompt,
             rag_prompts.ASPECT_GROUP_SYSTEM,
-            max_tokens=4096,
-            model=_cfg.OPENAI_TOOL_MODEL or _cfg.OPENAI_MODEL,
+            max_tokens=_cfg.OPENAI_TOOL_MAX_TOKENS,
+            task=TASK_ASPECT_GROUP,
         )
         parsed = _parse_json(raw)
         groups = None
@@ -109,8 +110,8 @@ async def _llm_summarize_aspect(aspect: str, chunk_content: str, *, product_name
         raw = await complete_json(
             prompt,
             rag_prompts.ASPECT_SUMMARY_SYSTEM,
-            max_tokens=1024,
-            model=_cfg.OPENAI_TOOL_MODEL or _cfg.OPENAI_MODEL,
+            max_tokens=_cfg.OPENAI_TOOL_MAX_TOKENS,
+            task=TASK_ASPECT_SUMMARY,
         )
         parsed = _parse_json(raw)
         if isinstance(parsed, dict) and parsed.get("summary"):

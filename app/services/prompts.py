@@ -1,6 +1,7 @@
 """Prompt LLM — AGENT_* và REVIEW_* nằm trên Supabase `config`, load qua remote.py."""
 
 AGENT_SYSTEM = ""
+AGENT_SYNTH_SYSTEM = ""
 REVIEW_SUMMARY_SYSTEM = ""
 REVIEW_SUMMARY_PROMPT = ""
 

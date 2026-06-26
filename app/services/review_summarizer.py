@@ -6,6 +6,7 @@ from typing import Dict, List, Optional
 import app.config.settings as _cfg
 import app.services.prompts as _prompts
 from app.rag.product_hint import extract_product_name
+from app.ai.router import TASK_REVIEW_SUMMARY
 from app.utils.openai_responses import create_response, extract_response_text
 
 _HISTORY_MARKER = "\n[Câu hỏi hiện tại]\n"
@@ -167,6 +168,7 @@ async def summarize_reviews(
     )
 
     response = await create_response(
+        task=TASK_REVIEW_SUMMARY,
         model=_cfg.OPENAI_MODEL,
         instructions=_prompts.REVIEW_SUMMARY_SYSTEM,
         input=prompt,

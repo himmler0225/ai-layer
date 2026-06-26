@@ -14,6 +14,9 @@ _REMOTABLE_STR = frozenset({
     "OPENAI_API_KEY",
     "OPENAI_MODEL",
     "OPENAI_TOOL_MODEL",
+    "DEEP_SEEK_API_KEY",
+    "DEEP_SEEK_MODEL",
+    "DEEP_SEEK_TOOL_MODEL",
     "DATA_MINER_KEY",
     "AGENT_RATE_LIMIT",
     "QR_RATE_LIMIT",
@@ -23,6 +26,7 @@ _REMOTABLE_STR = frozenset({
 
 _PROMPT_KEYS = frozenset({
     "AGENT_SYSTEM",
+    "AGENT_SYNTH_SYSTEM",
     "REVIEW_SUMMARY_SYSTEM",
     "REVIEW_SUMMARY_PROMPT",
 })
@@ -40,6 +44,8 @@ _REMOTABLE_INT = frozenset({
 _REQUIRED_KEYS = frozenset({
     "OPENAI_API_KEY",
     "OPENAI_MODEL",
+    "DEEP_SEEK_API_KEY",
+    "DEEP_SEEK_MODEL",
     "OPENAI_MAX_TOKENS",
     "AGENT_MAX_ITER",
     "AGENT_SYSTEM",

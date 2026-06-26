@@ -32,6 +32,11 @@ OPENAI_TOOL_MODEL: str = _env_str("OPENAI_TOOL_MODEL")
 OPENAI_MAX_TOKENS: int = _env_int("OPENAI_MAX_TOKENS")
 OPENAI_TOOL_MAX_TOKENS: int = _env_int("OPENAI_TOOL_MAX_TOKENS")
 
+# DeepSeek
+DEEP_SEEK_API_KEY: str = _env_str("DEEP_SEEK_API_KEY")
+DEEP_SEEK_MODEL: str = _env_str("DEEP_SEEK_MODEL")
+DEEP_SEEK_TOOL_MODEL: str = _env_str("DEEP_SEEK_TOOL_MODEL")
+
 DATA_MINER_URL: str = os.getenv("DATA_MINER_URL", "http://localhost:8000")
 DATA_MINER_KEY: str = _env_str("DATA_MINER_KEY")
 DATA_MINER_TIMEOUT: int = int(os.getenv("DATA_MINER_TIMEOUT", "60"))

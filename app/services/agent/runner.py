@@ -14,6 +14,7 @@ from app.services.agent.loop import (
 )
 from app.utils.openai_errors import log_error, user_message
 from app.utils.openai_responses import create_response, status_error
+from app.ai.router import TASK_AGENT_TOOL
 
 logger = Logger.get(__name__)
 
@@ -34,6 +35,7 @@ async def run_agent(
 
         try:
             response = await create_response(
+                task=TASK_AGENT_TOOL,
                 model=config.tool_model(),
                 max_output_tokens=config.tool_max_tokens(),
                 instructions=ctx["system"],

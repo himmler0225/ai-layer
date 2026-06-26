@@ -17,6 +17,7 @@ from app.services.agent.loop import (
 )
 from app.services.agent.synthesis import iter_synthesis_deltas
 from app.services.agent.tool_status import _parse_args, tool_status
+from app.ai.router import TASK_AGENT_TOOL
 from app.utils.openai_errors import log_error, user_message
 from app.utils.openai_responses import (
     extract_response_text,
@@ -34,7 +35,7 @@ def _sse(data: Dict) -> str:
 
 async def _emit_done(ctx: Dict, iteration: int, final_text: str) -> AsyncGenerator[str, None]:
     enriched = await finish_agent(
-        ctx, iteration=iteration, final_text=final_text, include_summary=False
+        ctx, iteration=iteration, final_text=final_text, include_summary=True
     )
     yield _sse({"type": "done", "data": enriched["data"], "tool_calls": enriched["tool_calls"]})
 
@@ -62,6 +63,7 @@ async def run_agent_stream(
 
         try:
             async with response_stream_with_retry(
+                task=TASK_AGENT_TOOL,
                 model=config.tool_model(),
                 max_output_tokens=config.tool_max_tokens(),
                 instructions=ctx["system"],
