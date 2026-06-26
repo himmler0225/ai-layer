@@ -17,6 +17,8 @@ from app.ingest.schemas import (
     ROUTING_EMBED,
     ROUTING_TRANSCRIPT,
     ROUTING_VIDEO,
+    QUEUE_SUMMARIZE,
+    ROUTING_SUMMARIZE,
 )
 
 logger = Logger.get(__name__)
@@ -37,6 +39,7 @@ async def declare_topology() -> None:
         (QUEUE_COMMENTS, ROUTING_COMMENTS),
         (QUEUE_TRANSCRIPT, ROUTING_TRANSCRIPT),
         (QUEUE_EMBED, ROUTING_EMBED),
+        (QUEUE_SUMMARIZE, ROUTING_SUMMARIZE),
     )
     for queue_name, routing_key in bindings:
         queue = await channel.declare_queue(

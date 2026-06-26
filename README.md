@@ -1,38 +1,40 @@
 # AI Layer
 
-The AI orchestration tier of a 3-service stack. It turns a natural-language question (“is this product worth buying?”) into a multi-step research run over **YouTube and TikTok** — searching, pulling comments/transcripts, and clustering real user opinions into a sourced answer.
+Orchestration service for **ReviewMine** — turns a product question into a researched answer from **YouTube and TikTok** (search, transcripts, comments) with optional **RAG** over previously ingested reviews.
 
-Built on **OpenAI Responses API** with tool-use: the model decides which tools to call, the layer executes them against the `data-miner` scraping API, and the results are streamed back token-by-token.
+Built on the **OpenAI Responses API** (tool calling). The model plans tool use; this service executes tools against **data-miner**, streams the answer to the chatbot, and runs a background **ingest → RAG** pipeline into PostgreSQL.
 
 ```
    ai-chatbot (Next.js)
-        │  X-API-Key + Supabase JWT
+        │  X-API-Key (+ Supabase JWT for history)
         ▼
-   AI Layer  ── OpenAI agent loop ──►  data-miner (YouTube / TikTok scraping)
+   AI Layer ── agent loop (SSE) ──► data-miner (YouTube / TikTok crawl)
         │
-        ├─ PostgreSQL   chat history + video cache (SQLAlchemy)
-        ├─ Redis        auth + history cache
-        ├─ MongoDB      tool / agent-run logs
-        └─ Supabase     JWT auth + remote config
+        ├─ PostgreSQL (local)   chat, video cache, products, RAG vectors
+        ├─ Redis                auth + history cache
+        ├─ RabbitMQ             ingest jobs (comments → RAG → summarize)
+        └─ Supabase             Auth, profiles, runtime config table only
 ```
+
+Further reading: [docs/FLOW.md](docs/FLOW.md) (end-to-end flow) · [docs/RAG-GUIDE.md](docs/RAG-GUIDE.md) (RAG pipeline chi tiết — đọc/ghi/nâng cấp)
 
 ---
 
 ## Highlights
 
-- **Agentic tool-use loop** — OpenAI plans and calls from a catalogue of 20 tools (14 YouTube, 5 TikTok, 1 URL extractor); configurable max-iteration budget.
-- **Dual-model mode** — optional `OPENAI_TOOL_MODEL` (e.g. `gpt-4o-mini`) for tool selection + `OPENAI_MODEL` (e.g. `gpt-4o`) for final synthesis.
-- **Token streaming (SSE)** — `/agent/run/stream` streams `text_delta`, `tool_start`/`tool_done`, and a final enriched `done` event.
-- **Result enrichment** — after the model answers, tool outputs are mined for `sources`, `videos`, and `reviews`; a quote-based review summary is generated (clusters by topic, quotes verbatim).
-- **Chat history** — sessions/messages in PostgreSQL via SQLAlchemy, cached in Redis, scoped per user via Supabase JWT.
-- **Remote configuration** — model, token budgets, agent limits, system prompt, and downstream keys loaded from Supabase `config` at startup.
-- **Observability** — every tool call and agent run logged to MongoDB.
+- **Agent loop** — OpenAI tool calling with YouTube, TikTok, RAG, and URL-parse tools; platform-aware tool filtering; max iteration budget from config.
+- **Dual-model mode** — optional `OPENAI_TOOL_MODEL` for tool rounds + `OPENAI_MODEL` for final synthesis when they differ.
+- **SSE streaming** — token-by-token `text_delta` (including live synthesis in dual-mode); tool progress events; metadata without blocking the text stream.
+- **Enrichment** — derives `sources`, analyzed `videos` (only videos actually crawled, not full search pages); narrative answer lives in the agent bubble only.
+- **3-tier RAG** — L1 `aspect_summaries` → L2 `aspect_chunks` → L3 `raw_reviews`; vector search via pgvector; ingest worker on RabbitMQ.
+- **Chat history** — sessions/messages in PostgreSQL, Redis cache, scoped by Supabase JWT.
+- **Remote config** — prompts, OpenAI keys, agent limits, and rate limits loaded from Supabase `config` at startup (see [Configuration](#configuration)).
 
 ---
 
 ## Tech stack
 
-FastAPI · OpenAI (Responses API) · SQLAlchemy 2 (async) · asyncpg · pgvector · Redis · MongoDB (motor) · Supabase · slowapi · Uvicorn
+FastAPI · OpenAI Responses API · SQLAlchemy 2 (async) · asyncpg · pgvector · Redis · RabbitMQ · Supabase · slowapi · Uvicorn
 
 ---
 
@@ -41,183 +43,205 @@ FastAPI · OpenAI (Responses API) · SQLAlchemy 2 (async) · asyncpg · pgvector
 ```
 app/
 ├── api/
-│   ├── agent.py          # POST /ai/agent/run[/stream]
-│   ├── youtube.py        # direct YouTube AI endpoints
-│   ├── utilities.py      # URL shortener, QR generator
-│   └── history.py        # chat sessions + messages
+│   ├── agent.py           # POST /ai/agent/run[/stream]
+│   ├── youtube.py         # direct YouTube AI endpoints
+│   ├── history.py         # chat sessions + messages
+│   ├── utilities.py       # URL shortener, QR
+│   └── admin.py           # health detail, ingest queue stats
 ├── services/
-│   ├── agent.py          # agent loop (sync + SSE stream)
-│   ├── enricher.py       # sources / videos / review summary
+│   ├── agent/             # runner, stream, synthesis, tools, platform filter
+│   ├── enricher.py        # sources / videos / review summary
 │   ├── review_summarizer.py
-│   └── chatgpt.py        # re-exports complete / complete_json
-├── utils/
-│   ├── openai_responses.py   # shared responses.create wrapper
-│   └── openai_client.py
+│   ├── prompts.py         # ASPECT_* for ingest LLM; agent prompts from Supabase
+│   └── health.py
 ├── tools/
-│   ├── definitions.py    # OpenAI tool schemas
-│   └── executor.py       # dispatch + jsonschema validation
-├── repositories/         # SQLAlchemy data access
-│   ├── chat.py
-│   ├── videos.py
-│   ├── comments.py
-│   └── search_cache.py
-├── db/
-│   ├── session.py        # engine + init_db
-│   └── models/           # declarative models (chat, video, cache, vectors)
+│   ├── definitions.py     # YouTube / TikTok tool schemas
+│   ├── rag_definitions.py # RAG tool schemas (when RAG_ENABLED)
+│   └── executor.py        # dispatch + jsonschema validation
+├── rag/                   # vector search, product_id, product_hint
+├── ingest/                # RabbitMQ consumer, handlers, RAG sync, summarize
+├── repositories/          # SQLAlchemy data access
+├── db/models/             # chat, video, product RAG tables
 ├── clients/data_miner.py
-├── cache/client.py       # Redis
-└── db/mongo.py           # optional tool/agent logs
+├── config/
+│   ├── settings.py        # env / infra
+│   └── remote.py          # Supabase config load + validate
+└── utils/
+    ├── openai_responses.py
+    └── openai_errors.py   # user-facing OpenAI error messages
 ```
 
 ---
 
 ## API
 
-All endpoints are mounted under `/ai` and require an `X-API-Key` header. History endpoints additionally require `Authorization: Bearer <supabase_jwt>`.
+Mounted under `/ai`. Most routes require `X-API-Key`. History requires `Authorization: Bearer <supabase_jwt>`.
 
 ### Agent
 
 | Method | Path | Notes |
 |--------|------|-------|
-| `POST` | `/ai/agent/run` | Run the agent, return enriched result |
-| `POST` | `/ai/agent/run/stream` | Same, streamed as Server-Sent Events |
+| `POST` | `/ai/agent/run` | Full JSON result |
+| `POST` | `/ai/agent/run/stream` | Server-Sent Events (preferred for UI) |
 
 Body: `{ "task": "...", "tools": "youtube"|"tiktok"|"all", "max_iter?": 10, "system?": "..." }`
 
-SSE event types: `text_delta` · `tool_start` · `tool_done` · `data_preview` · `done` · `error`
+**SSE event types**
 
-### YouTube AI (direct, no agent loop)
+| Event | Purpose |
+|-------|---------|
+| `text_delta` | Answer text chunk (streamed as generated) |
+| `tool_start` / `tool_done` | Tool execution progress (`detail_vi` / `detail_en` on start) |
+| `status` | Phase hints (analyzing, writing answer, …) |
+| `data_preview` | Early video list from tool results |
+| `done` | `sources`, `videos`, `tool_calls` |
+| `error` | User-safe error message |
 
-| Method | Path |
-|--------|------|
-| `GET` | `/ai/youtube/videos/{video_id}/summary` |
-| `GET` | `/ai/youtube/videos/{video_id}/comments/analysis` |
-| `GET` | `/ai/youtube/trending/analysis` |
+### Other
 
-### Utilities
-
-| Method | Path |
-|--------|------|
-| `POST` | `/ai/utilities/shorten` |
-| `POST` | `/ai/utilities/qr` |
-
-### History (Supabase JWT)
-
-`GET/POST /ai/history/sessions` · `PATCH/DELETE /ai/history/sessions/{id}` · `GET/POST /ai/history/sessions/{id}/messages`
-
-### Health
-
-`GET /health` — checks data-miner reachability and OpenAI key presence.
+| Area | Paths |
+|------|-------|
+| YouTube AI | `GET /ai/youtube/videos/{id}/summary`, `.../comments/analysis`, `.../trending/analysis` |
+| Utilities | `POST /ai/utilities/shorten`, `POST /ai/utilities/qr` |
+| History | `/ai/history/sessions`, `.../messages` |
+| Health | `GET /health` |
+| Admin | `GET /ai/admin/health/detail`, `GET /ai/admin/ingest/queues` |
 
 ---
 
 ## Tools
 
-Declared as OpenAI function schemas in `tools/definitions.py`, dispatched in `tools/executor.py` (validated with `jsonschema`, executed via `clients/data_miner.py`).
+Schemas in `tools/definitions.py` + `tools/rag_definitions.py`, executed in `tools/executor.py` via `clients/data_miner.py` (social) or `rag/search.py` (RAG).
 
-| Set | Tools |
-|-----|-------|
-| **YouTube** | search, by-topic, shorts, live, by-region, detail, comments (+batch), transcript (+batch), channel info/videos/playlists, playlist videos |
-| **TikTok** | search, video-info, comments, profile, transcript |
-| **Utility** | `extract_id_from_url` (offline URL parse) |
+| Set | Examples |
+|-----|----------|
+| **YouTube** | search, comments_batch, transcript_batch, detail, channel, … |
+| **TikTok** | search, video_info, comments, transcript, profile |
+| **RAG** | `search_product_summary`, `search_aspect_evidence`, `get_raw_reviews` |
+| **Util** | `extract_id_from_url` |
 
-Selectable per request: `youtube`, `tiktok`, or `all`. When the user explicitly names a platform in the task, cross-platform tools are blocked at the code level.
+Per request: `tools: "youtube" | "tiktok" | "all"`. `prepare_tools_for_task()` narrows by platform, product context block, and **RAG cache-first** when saved summaries are fresh.
 
 ---
 
-## OpenAI integration
+## Agent loop (current)
 
-All `responses.create` calls go through `app/utils/openai_responses.py`:
+1. OpenAI Responses API call with selected tools (`tool_choice: auto`).
+2. On `function_call` → execute tools in parallel → trim results → append to conversation → repeat.
+3. Final answer: stream tokens directly, or in **dual-mode** run a separate synthesis stream on `OPENAI_MODEL`.
+4. Emit `done` with `sources`, `videos`, `tool_calls`.
 
-- `create_response()` — unified wrapper with logging
-- `complete()` / `complete_json()` — simple text/JSON completions
-- `extract_response_text()`, `status_error()`, `output_items_to_input()` — shared helpers for the agent loop
+Prompts and limits come from **Supabase `config`**, not hardcoded in the repo.
 
 ---
 
 ## Database
 
-PostgreSQL schema is managed via SQLAlchemy models in `app/db/models/`:
+PostgreSQL (local `DATABASE_URL`). Schema via SQLAlchemy models.
 
-| Table | Purpose |
-|-------|---------|
-| `chat_sessions` / `chat_messages` | Chat history |
-| `videos` / `comments` | Video + comment cache |
-| `search_cache` | Search result cache |
-| `video_chunks` | Vector RAG chunks (`vector(1536)` + HNSW index) |
+**Migrations (Alembic)** — `alembic/`:
+- Fresh DB: `alembic upgrade head`
+- DB đã có bảng từ `init_db()`: `alembic stamp head` (một lần), rồi `alembic revision --autogenerate` cho thay đổi tiếp theo
+- Vector search SQL nằm trong `repositories/aspect_summaries.py` + `aspect_chunks.py` (không còn trong `rag/search.py`)
 
-Requires the **pgvector** extension. Tables are created on startup via `init_db()`.
-
----
-
-## Agent loop
-
-1. Send the task to OpenAI with selected tools; first iteration forces a tool call unless the task carries prior history.
-2. On `function_call`, execute tools in parallel, trim results to a token budget, feed outputs back.
-3. Repeat until the model returns a final answer or the iteration budget is hit.
-4. In dual-model mode, a synthesis pass on `OPENAI_MODEL` produces the final user-facing text.
-5. Enrich with sources/videos/review summary; persist run to MongoDB.
+| Area | Tables |
+|------|--------|
+| Chat | `chat_sessions`, `chat_messages` |
+| Video cache | `videos`, `comments`, `search_cache`, `video_chunks` |
+| Product RAG | `products`, `raw_reviews`, `curated_reviews`, `aspect_chunks`, `aspect_summaries` |
 
 ---
 
 ## Configuration
 
-**From Supabase `config` table** (`config/remote.py`):  
-`OPENAI_API_KEY`, `OPENAI_MODEL`, `OPENAI_TOOL_MODEL`, `OPENAI_MAX_TOKENS`, `OPENAI_TOOL_MAX_TOKENS`, `DATA_MINER_KEY`, `AGENT_SYSTEM`, `AGENT_MAX_ITER`, `AGENT_MAX_RESULT_CHARS`, `AGENT_MAX_COMMENTS`, `AGENT_MAX_COMMENT_LEN`, `AGENT_MAX_LIST_ITEMS`
+### Supabase `config` table (required at startup)
 
-**From environment** (see `.env.example`):
+Loaded by `app/config/remote.py`. Missing keys → startup error.
 
-```env
-API_KEYS=
-CORS_ORIGINS=http://localhost:3000
+| Keys | Purpose |
+|------|---------|
+| `OPENAI_API_KEY`, `OPENAI_MODEL`, `OPENAI_TOOL_MODEL` | Models |
+| `OPENAI_MAX_TOKENS`, `OPENAI_TOOL_MAX_TOKENS` | Token budgets |
+| `DATA_MINER_KEY` | Downstream scrape API |
+| `AGENT_SYSTEM`, `REVIEW_SUMMARY_SYSTEM`, `REVIEW_SUMMARY_PROMPT` | Prompts |
+| `AGENT_MAX_ITER`, `AGENT_MAX_RESULT_CHARS`, `AGENT_MAX_COMMENTS`, … | Agent tuning |
+| `AGENT_RATE_LIMIT`, `QR_RATE_LIMIT`, … | slowapi limits |
 
-DATA_MINER_URL=http://localhost:8000
-DATA_MINER_TIMEOUT=60
+Manage via ai-chatbot admin `/admin/config` or Supabase SQL.
 
-OPENAI_MODEL=gpt-4o
-OPENAI_TOOL_MODEL=gpt-4o-mini
-OPENAI_MAX_TOKENS=4096
-OPENAI_TOOL_MAX_TOKENS=2048
+### Environment (infra)
 
-DATABASE_URL=postgresql://postgres:postgres@localhost:5432/youtube
-REDIS_HOST=localhost
-REDIS_PORT=6379
-REDIS_DB=1
+See `.env.example` — `API_KEYS`, `DATABASE_URL`, `REDIS_*`, `RABBITMQ_*`, `SUPABASE_*`, `RAG_ENABLED`, ingest flags, etc.
 
-MONGODB_URL=
-MONGODB_NAME=
-
-SUPABASE_URL=
-SUPABASE_ANON_KEY=
-SUPABASE_SERVICE_KEY=
-
-GEOIP_DB_PATH=
-LOG_LEVEL=INFO
-
-# RabbitMQ ingest (optional — tắt bằng INGEST_ENABLED=false)
-RABBITMQ_URL=amqp://ingest:changeme@localhost:5672/
-RABBITMQ_EXCHANGE=knowledge.ingest
-INGEST_ENABLED=true
-EMBEDDING_MODEL=text-embedding-3-small
-EMBEDDING_DIM=1536
-```
-
----
-
-## Logging
-
-Convention: `logger.info("[module] message key=%s", value)` — e.g. `[agent]`, `[openai]`, `[data_miner]`, `[db]`, `[mongo]`.
+OpenAI model values are **not** defaulted in code; they must exist in Supabase `config` (or env before remote load in dev).
 
 ---
 
 ## Getting started
 
 ```bash
+cd ai-layer
+python -m venv .venv && source .venv/bin/activate   # use ai-layer venv, not data-miner
 pip install -r requirements.txt
-fastapi run app/main.py --host 0.0.0.0 --port 8001
-# or: uvicorn app.main:app --reload --port 8001
+cp .env.example .env
+# Fill API_KEYS, DATABASE_URL, SUPABASE_*, RABBITMQ_URL
+# Fill Supabase config table (prompts + OPENAI_*)
+
+fastapi dev app/main.py --port 8001
 ```
 
-Requires PostgreSQL (with pgvector), Redis, and a Supabase project (auth + config). MongoDB is optional (logging only).
+- **Inline ingest** (dev): `INGEST_WORKER_INLINE=true` — one process runs API + RabbitMQ consumer.
+- **Separate worker**: `INGEST_WORKER_INLINE=false` + `python -m app.ingest`.
 
-Interactive docs: `http://localhost:8001/docs`
+Docker stack lives in the parent monorepo (`docker-compose.yml`): postgres (pgvector), redis, rabbitmq, `ai-layer`, `ingest-worker`.
+
+Docs UI: `http://localhost:8001/docs`
+
+---
+
+## Logging
+
+`logger.info("[module] message key=%s", value)` — namespaces like `[agent]`, `[openai]`, `[ingest]`, `[rag_sync]`. Rotating files under `logs/` (gitignored).
+
+---
+
+## Roadmap: LangGraph
+
+The agent loop today is a **custom while-loop** around OpenAI Responses API (`services/agent/runner.py`, `stream.py`). That is enough for the current flow: tool rounds → optional synthesis → enrich.
+
+**LangGraph is a reasonable next step**, but not urgent. Consider migrating when you need several of these:
+
+| Need | Why LangGraph helps |
+|------|---------------------|
+| **Explicit graph** | Nodes for `rag_lookup`, `crawl_youtube`, `synthesize`, `enrich` — easier to reason about than nested `if` in a loop |
+| **Checkpointing / resume** | Long runs (many tools) survive restarts; replay from last node |
+| **Branching** | e.g. RAG sufficient → answer; else crawl; else ask user — without prompt-only control |
+| **Human-in-the-loop** | Pause before expensive crawl, or approve TikTok branch |
+| **Observability** | LangSmith traces per node (latency, token cost per step) |
+
+**What to keep as-is during a migration**
+
+- `tools/executor.py` + `definitions.py` — tool implementations stay; LangGraph nodes call the same functions
+- `ingest/` pipeline — already async/offline; not part of the online graph
+- `enricher.py`, SSE contract toward ai-chatbot — adapt the outer `stream.py` to emit the same events from `graph.astream_events()`
+
+**Risks / costs**
+
+- Extra dependency and abstraction; team must own graph versioning
+- OpenAI **Responses API** integration may need an adapter (many LangGraph examples use Chat Completions); verify streaming + tool format before committing
+- Do not rewrite ingest/RAG at the same time — migrate **orchestration only**
+
+**Suggested order**
+
+1. Stabilize current loop (tests, RAG cache-first, Alembic autogenerate for schema changes).
+2. Draw the target graph on paper (5–7 nodes max).
+3. Spike LangGraph behind a feature flag (`AGENT_BACKEND=langgraph`) sharing the same `/agent/run/stream` API.
+4. Cut over when parity on streaming, tool filtering, and dual-model synthesis is proven.
+
+Until then, the custom loop remains simpler to debug and matches OpenAI Responses API directly — a valid choice for this stage.
+
+---
+
+## License / stack context
+
+Part of the ReviewMine monorepo: **ai-chatbot** (UI) · **ai-layer** (this repo) · **data-miner** (scraping).

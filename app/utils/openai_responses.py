@@ -1,18 +1,30 @@
-"""Helper gọi OpenAI Responses API (tool + text)."""
+"""Gọi LLM qua Router — giữ API cũ cho agent/ingest."""
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from contextlib import asynccontextmanager
+from typing import Any, AsyncIterator, Dict, List, Optional
 
-import app.config.settings as _cfg
+from app.ai.router import TASK_DEFAULT, get_router
+from app.ai.types import LLMResponse
 from app.config.logger import Logger
-from app.utils.openai_client import get_openai_client
 
 logger = Logger.get(__name__)
 
 
 def extract_response_text(response: Any) -> str:
-    """Lấy toàn bộ text từ response OpenAI."""
+    """Lấy toàn bộ text từ response OpenAI hoặc LLMResponse."""
+    if isinstance(response, LLMResponse):
+        if response.output_text:
+            return response.output_text
+        chunks: list[str] = []
+        for item in response.output:
+            if getattr(item, "type", None) == "message":
+                for content in item.content:
+                    if getattr(content, "type", None) == "output_text":
+                        chunks.append(content.text)
+        return "".join(chunks)
+
     text = getattr(response, "output_text", None)
     if text is not None:
         return text
@@ -39,7 +51,7 @@ def status_error(response: Any) -> Optional[str]:
     """Trả message lỗi nếu response failed/cancelled."""
     status = getattr(response, "status", None)
     if status in ("failed", "cancelled"):
-        return f"OpenAI response {status}: {getattr(response, 'error', None)}"
+        return f"LLM response {status}: {getattr(response, 'error', None)}"
     return None
 
 
@@ -79,6 +91,7 @@ def output_items_to_input(output: List[Any]) -> List[Dict]:
 
 async def create_response(
     *,
+    task: str = TASK_DEFAULT,
     model: Optional[str] = None,
     instructions: Optional[str] = None,
     input: Any = None,
@@ -86,24 +99,29 @@ async def create_response(
     tools: Optional[List[Dict]] = None,
     tool_choice: Optional[str] = None,
 ) -> Any:
-    """Gọi OpenAI Responses API (có tools)."""
-    resolved_model = model or _cfg.OPENAI_MODEL
-    kwargs: Dict[str, Any] = {
-        "model": resolved_model,
-        "max_output_tokens": max_output_tokens or _cfg.OPENAI_MAX_TOKENS,
-    }
-
+    """Gọi LLM Responses/Chat (có tools) — provider do router chọn."""
+    kwargs: Dict[str, Any] = {}
+    if model is not None:
+        kwargs["model"] = model
     if instructions is not None:
         kwargs["instructions"] = instructions
     if input is not None:
         kwargs["input"] = input
+    if max_output_tokens is not None:
+        kwargs["max_output_tokens"] = max_output_tokens
     if tools is not None:
         kwargs["tools"] = tools
     if tool_choice is not None:
         kwargs["tool_choice"] = tool_choice
 
-    logger.info("[openai] responses.create model=%s", resolved_model)
-    return await get_openai_client().responses.create(**kwargs)
+    return await get_router().create_response(task, **kwargs)
+
+
+@asynccontextmanager
+async def response_stream_with_retry(*, task: str = TASK_DEFAULT, **kwargs: Any) -> AsyncIterator[Any]:
+    """LLM stream — retry một lần khi 429/5xx/timeout (trong provider)."""
+    async with get_router().response_stream(task, **kwargs) as stream:
+        yield stream
 
 
 async def complete(
@@ -111,19 +129,17 @@ async def complete(
     system_prompt: str,
     max_tokens: Optional[int] = None,
     model: Optional[str] = None,
+    *,
+    task: str = TASK_DEFAULT,
 ) -> str:
     """Gọi LLM trả text thuần (không tools)."""
-    inputs: List[Dict[str, str]] = []
-    if system_prompt:
-        inputs.append({"role": "system", "content": system_prompt})
-    inputs.append({"role": "user", "content": user_prompt})
-
-    response = await create_response(
+    return await get_router().complete(
+        task,
+        user_prompt=user_prompt,
+        system_prompt=system_prompt,
+        max_tokens=max_tokens,
         model=model,
-        input=inputs,
-        max_output_tokens=max_tokens,
     )
-    return extract_response_text(response)
 
 
 async def complete_json(
@@ -131,9 +147,14 @@ async def complete_json(
     system_prompt: str,
     max_tokens: Optional[int] = None,
     model: Optional[str] = None,
+    *,
+    task: str = TASK_DEFAULT,
 ) -> str:
     """Gọi LLM và yêu cầu trả JSON."""
-    system_with_json = (
-        f"{system_prompt}\n\nRespond with valid JSON only. No markdown, no explanation."
+    return await get_router().complete_json(
+        task,
+        user_prompt=user_prompt,
+        system_prompt=system_prompt,
+        max_tokens=max_tokens,
+        model=model,
     )
-    return await complete(user_prompt, system_with_json, max_tokens, model)

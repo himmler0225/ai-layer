@@ -7,7 +7,7 @@ _SPAM_RE = re.compile(r"^(subscribe|like and subscribe|first!|nice video)\.?$", 
 
 
 def is_indexable_comment(text: str) -> bool:
-    """Comment đủ dài và không phải spam thì mới embed."""
+    """Comment đủ dài, không spam → được curate và embed (flat + RAG)."""
     cleaned = (text or "").strip()
     if len(cleaned) < _MIN_LEN:
         return False

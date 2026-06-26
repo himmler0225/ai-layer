@@ -38,24 +38,6 @@ async def check_redis() -> str:
         return f"error: {exc}"
 
 
-async def check_mongo() -> str:
-    """Ping MongoDB — skipped nếu chưa cấu hình."""
-    if not settings.MONGODB_URL:
-        return "skipped"
-    try:
-        import motor.motor_asyncio
-
-        client = motor.motor_asyncio.AsyncIOMotorClient(
-            settings.MONGODB_URL,
-            serverSelectionTimeoutMS=HEALTH_CHECK_TIMEOUT * 1000,
-        )
-        await client.admin.command("ping")
-        client.close()
-        return "ok"
-    except Exception as exc:
-        return f"error: {exc}"
-
-
 async def check_rabbitmq() -> str:
     """Ping RabbitMQ — skipped nếu ingest tắt hoặc chưa cấu hình URL."""
     if not settings.INGEST_ENABLED:
@@ -97,7 +79,6 @@ async def collect_checks() -> dict[str, str]:
     return {
         "postgres": await check_postgres(),
         "redis": await check_redis(),
-        "mongodb": await check_mongo(),
         "rabbitmq": await check_rabbitmq(),
         "data_miner": await check_data_miner(),
         "openai_key": check_openai_key(),

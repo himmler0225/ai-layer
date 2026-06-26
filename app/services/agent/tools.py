@@ -5,7 +5,6 @@ import json
 from typing import Any, Dict, List, Tuple
 
 from app.config.logger import Logger
-from app.db.mongo import log_tool_call
 from app.ingest.dispatcher import schedule_tool_ingest
 from app.services.agent.serialize import serialize_result
 from app.tools.executor import execute_tool
@@ -36,7 +35,7 @@ async def execute_parallel(
     )
 
     async def _run(item: Any):
-        """Chạy một tool call và ghi log."""
+        """Chạy một tool call."""
         try:
             args = json.loads(item.arguments) if item.arguments else {}
         except json.JSONDecodeError:
@@ -44,7 +43,6 @@ async def execute_parallel(
             args = {}
         result = await execute_tool(item.name, args)
         await schedule_tool_ingest(item.name, args, result, task=task)
-        await log_tool_call(session_id, task, item.name, args, result, iteration)
         return item, args, result
 
     triples = await asyncio.gather(*[_run(call) for call in call_items])

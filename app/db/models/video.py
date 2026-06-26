@@ -6,7 +6,6 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional
 
-from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
     BigInteger,
     CheckConstraint,
@@ -21,6 +20,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.models.base import Base
+from app.db.models.vector_dim import embedding_vector
 
 
 class Video(Base):
@@ -106,7 +106,7 @@ class VideoChunk(Base):
     )
     platform: Mapped[str] = mapped_column(Text, nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
-    embedding: Mapped[Optional[list]] = mapped_column(Vector(1536), nullable=True)
+    embedding: Mapped[Optional[list]] = mapped_column(embedding_vector(), nullable=True)
     metadata_: Mapped[dict] = mapped_column(
         "metadata", JSONB, nullable=False, server_default="{}"
     )

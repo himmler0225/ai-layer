@@ -1,29 +1,39 @@
 import app.config.settings as _cfg
+from app.ai.router import (
+    TASK_AGENT_SYNTH,
+    TASK_AGENT_TOOL,
+    max_tokens_for_task,
+    resolve,
+)
 
 
 def tool_model() -> str:
-    """Model gọi tool (có thể khác model tổng hợp)."""
-    return _cfg.OPENAI_TOOL_MODEL or _cfg.OPENAI_MODEL
+    """Model gọi tool (DeepSeek khi dual-mode)."""
+    _, model = resolve(TASK_AGENT_TOOL)
+    return model
 
 
 def synth_model() -> str:
-    """Model viết câu trả lời cuối."""
-    return _cfg.OPENAI_MODEL
+    """Model viết câu trả lời cuối (OpenAI)."""
+    _, model = resolve(TASK_AGENT_SYNTH)
+    return model
 
 
 def dual_mode() -> bool:
-    """Bật khi TOOL_MODEL ≠ MODEL — tách bước crawl và synthesis."""
-    return bool(_cfg.OPENAI_TOOL_MODEL) and _cfg.OPENAI_TOOL_MODEL != _cfg.OPENAI_MODEL
+    """Bật khi tool provider ≠ synth provider."""
+    p_tool, _ = resolve(TASK_AGENT_TOOL)
+    p_synth, _ = resolve(TASK_AGENT_SYNTH)
+    return p_tool != p_synth
 
 
 def tool_max_tokens() -> int:
     """Giới hạn token cho bước gọi tool."""
-    return _cfg.OPENAI_TOOL_MAX_TOKENS if dual_mode() else _cfg.OPENAI_MAX_TOKENS
+    return max_tokens_for_task(TASK_AGENT_TOOL)
 
 
 def synth_max_tokens() -> int:
     """Giới hạn token cho bước tổng hợp câu trả lời."""
-    return _cfg.OPENAI_MAX_TOKENS
+    return max_tokens_for_task(TASK_AGENT_SYNTH)
 
 
 def max_result_chars() -> int:
