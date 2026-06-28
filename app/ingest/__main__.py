@@ -11,7 +11,7 @@ load_dotenv()
 import app.config.settings as settings
 from app.config.logger import Logger
 from app.config.remote import load_and_apply
-from app.db.session import close_engine, init_db
+from app.config.db.session import close_engine, init_db
 from app.ingest.broker import close_broker
 from app.ingest.consumer import run_consumer
 

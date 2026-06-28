@@ -3,8 +3,8 @@ from __future__ import annotations
 from sqlalchemy import func
 from sqlalchemy.dialects.postgresql import insert
 
-from app.db.models import VideoChunk
-from app.db.session import get_session_factory
+from app.config.db.models import VideoChunk
+from app.config.db.session import get_session_factory
 
 
 async def upsert_chunks(rows: list[dict]) -> None:

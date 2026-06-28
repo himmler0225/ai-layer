@@ -35,7 +35,7 @@ if GEOIP_DB_PATH:
         _reader = geoip2_db.Reader(GEOIP_DB_PATH)
         logger.info("[geoip] database loaded path=%s", GEOIP_DB_PATH)
     except Exception as e:
-        logger.warning("[geoip] database load failed: %s", exc)
+        logger.warning("[geoip] database load failed: %s", e)
 
 _cache: Dict[str, Dict] = {}
 

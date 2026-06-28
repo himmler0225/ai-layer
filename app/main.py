@@ -113,7 +113,7 @@ async def lifespan(_app: FastAPI):
         raise RuntimeError("API_KEYS must be set before starting ai-layer")
 
     from app.cache.client import get_redis
-    from app.db.session import close_engine, init_db
+    from app.config.db.session import close_engine, init_db
 
     try:
         await init_db()

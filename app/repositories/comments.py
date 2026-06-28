@@ -6,9 +6,9 @@ from __future__ import annotations
 from sqlalchemy import delete, func, select
 from sqlalchemy.dialects.postgresql import insert
 
-from app.db.models import Comment
-from app.db.session import get_session_factory
-from app.db.utils import model_to_dict
+from app.config.db.models import Comment
+from app.config.db.session import get_session_factory
+from app.config.db.utils import model_to_dict
 
 
 async def insert_comments(video_id: str, comments: list[dict]) -> None:

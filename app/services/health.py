@@ -15,7 +15,7 @@ async def check_postgres() -> str:
     try:
         from sqlalchemy import text
 
-        from app.db.session import get_session_factory
+        from app.config.db.session import get_session_factory
 
         factory = await get_session_factory()
         async with factory() as session:

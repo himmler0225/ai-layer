@@ -9,8 +9,8 @@ from typing import Optional
 from sqlalchemy import delete, func, select
 from sqlalchemy.dialects.postgresql import insert
 
-from app.db.models import SearchCache
-from app.db.session import get_session_factory
+from app.config.db.models import SearchCache
+from app.config.db.session import get_session_factory
 
 
 async def get_search_cache(query: str, platform: str) -> Optional[list[str]]:

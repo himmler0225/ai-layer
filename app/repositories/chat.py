@@ -9,8 +9,8 @@ from typing import Optional
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert
 
-from app.db.models import ChatMessage, ChatSession
-from app.db.session import get_session_factory
+from app.config.db.models import ChatMessage, ChatSession
+from app.config.db.session import get_session_factory
 
 
 async def list_sessions(user_id: str) -> list[ChatSession]:

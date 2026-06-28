@@ -8,9 +8,9 @@ from typing import Optional
 from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 
-from app.db.models import Product
-from app.db.session import get_session_factory
-from app.db.utils import model_to_dict
+from app.config.db.models import Product
+from app.config.db.session import get_session_factory
+from app.config.db.utils import model_to_dict
 
 
 async def get_product(product_id: str) -> Optional[dict]:

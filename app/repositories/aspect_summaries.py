@@ -8,9 +8,9 @@ from typing import Optional
 from sqlalchemy import func, select, text
 from sqlalchemy.dialects.postgresql import insert
 
-from app.db.models import AspectSummary
-from app.db.session import get_session_factory
-from app.db.utils import model_to_dict
+from app.config.db.models import AspectSummary
+from app.config.db.session import get_session_factory
+from app.config.db.utils import model_to_dict
 from app.repositories.pgvector import vector_literal
 
 

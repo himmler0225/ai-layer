@@ -10,9 +10,8 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 import app.config.settings as settings
-import app.db.models  # noqa: F401
 from alembic import context
-from app.db.models import Base  # noqa: F401 — registers all tables on metadata
+from app.config.db.models import Base  # noqa: F401 — registers all tables on metadata
 
 config = context.config
 if config.config_file_name is not None:

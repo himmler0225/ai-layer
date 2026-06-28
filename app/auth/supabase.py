@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-"""Xác thực JWT Supabase → user_id."""
-
 import hashlib
 
 import httpx

@@ -1,5 +1,3 @@
-"""Schema-driven remote config loader — ai-layer (no proxy; proxy lives in data-miner)."""
-
 from __future__ import annotations
 
 import json
@@ -14,7 +12,7 @@ from app.config.logger import Logger
 
 logger = Logger.get(__name__)
 
-_SCHEMA_PATH = Path(__file__).resolve().parents[2] / "config" / "remote-schema.json"
+_SCHEMA_PATH = Path(__file__).resolve().parent / "json" / "remote-schema.json"
 
 _PROMPT_MAP: dict[tuple[str, str], tuple[str, str]] = {
     ("agent", "system"): ("AGENT_SYSTEM", "settings"),

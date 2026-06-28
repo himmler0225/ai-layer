@@ -1,7 +1,5 @@
 """
-Logger tập trung — console màu + file JSON.
-
-Dùng: Logger.get(__name__), setup một lần trong main.py.
+Logger tập trung
 """
 
 import json

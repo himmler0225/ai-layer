@@ -11,8 +11,8 @@ from sqlalchemy import (DateTime, Float, ForeignKey, Index, Integer,
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.db.models.base import Base
-from app.db.models.vector_dim import embedding_vector
+from app.config.db.models.base import Base
+from app.config.db.models.vector_dim import embedding_vector
 
 
 class Product(Base):

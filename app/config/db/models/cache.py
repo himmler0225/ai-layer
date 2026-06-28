@@ -10,7 +10,7 @@ from sqlalchemy import DateTime, Text, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.db.models.base import Base
+from app.config.db.models.base import Base
 
 
 class SearchCache(Base):
