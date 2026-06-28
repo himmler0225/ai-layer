@@ -76,7 +76,9 @@ async def get_aspect_chunk(chunk_id: str) -> Optional[dict]:
     """Lấy một aspect chunk."""
     factory = await get_session_factory()
     async with factory() as session:
-        row = await session.scalar(select(AspectChunk).where(AspectChunk.id == chunk_id))
+        row = await session.scalar(
+            select(AspectChunk).where(AspectChunk.id == chunk_id)
+        )
         return model_to_dict(row) if row else None
 
 
@@ -105,7 +107,8 @@ async def search_similar_chunks(
 ) -> list[dict]:
     """Vector cosine search trên aspect_chunks (L2)."""
     vec = vector_literal(query_vector)
-    sql = text("""
+    sql = text(
+        """
         SELECT aspect, content, review_ids, positive_percent,
                1 - (embedding <=> CAST(:vec AS vector)) AS score
         FROM aspect_chunks
@@ -114,12 +117,17 @@ async def search_similar_chunks(
           AND (CAST(:aspect AS text) IS NULL OR aspect = :aspect)
         ORDER BY embedding <=> CAST(:vec AS vector)
         LIMIT :k
-    """)
+    """
+    )
     factory = await get_session_factory()
     async with factory() as session:
         rows = (
-            await session.execute(
-                sql, {"vec": vec, "pid": product_id, "aspect": aspect, "k": limit}
+            (
+                await session.execute(
+                    sql, {"vec": vec, "pid": product_id, "aspect": aspect, "k": limit}
+                )
             )
-        ).mappings().all()
+            .mappings()
+            .all()
+        )
         return [dict(r) for r in rows]

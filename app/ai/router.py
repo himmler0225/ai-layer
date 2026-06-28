@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Optional, Tuple
 
-import app.config.settings as _cfg
+import app.config.settings as settings
 from app.ai.base import BaseLLM
 from app.ai.factory import LLMFactory
 
@@ -39,22 +39,28 @@ def resolve(task: str) -> Tuple[str, str]:
 def _model_for_task(task: str, provider: str) -> str:
     if provider == "deepseek":
         if task == TASK_AGENT_TOOL:
-            return _cfg.DEEP_SEEK_TOOL_MODEL or _cfg.DEEP_SEEK_MODEL or "deepseek-chat"
-        return _cfg.DEEP_SEEK_TOOL_MODEL or _cfg.DEEP_SEEK_MODEL or "deepseek-chat"
+            return (
+                settings.DEEP_SEEK_TOOL_MODEL
+                or settings.DEEP_SEEK_MODEL
+                or "deepseek-chat"
+            )
+        return (
+            settings.DEEP_SEEK_TOOL_MODEL or settings.DEEP_SEEK_MODEL or "deepseek-chat"
+        )
 
     if task == TASK_AGENT_SYNTH:
-        return _cfg.OPENAI_MODEL
+        return settings.OPENAI_MODEL
     if task in (TASK_ASPECT_GROUP, TASK_ASPECT_SUMMARY):
-        return _cfg.OPENAI_TOOL_MODEL or _cfg.OPENAI_MODEL
-    return _cfg.OPENAI_MODEL
+        return settings.OPENAI_TOOL_MODEL or settings.OPENAI_MODEL
+    return settings.OPENAI_MODEL
 
 
 def max_tokens_for_task(task: str) -> int:
     if task == TASK_AGENT_TOOL:
-        return _cfg.OPENAI_TOOL_MAX_TOKENS or _cfg.OPENAI_MAX_TOKENS or 4096
+        return settings.OPENAI_TOOL_MAX_TOKENS or settings.OPENAI_MAX_TOKENS or 4096
     if task in (TASK_ASPECT_GROUP, TASK_ASPECT_SUMMARY):
-        return _cfg.OPENAI_TOOL_MAX_TOKENS or _cfg.OPENAI_MAX_TOKENS or 4096
-    return _cfg.OPENAI_MAX_TOKENS or 4096
+        return settings.OPENAI_TOOL_MAX_TOKENS or settings.OPENAI_MAX_TOKENS or 4096
+    return settings.OPENAI_MAX_TOKENS or 4096
 
 
 class LLMRouter:

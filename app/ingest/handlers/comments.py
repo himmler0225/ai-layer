@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 from app.ingest.processing.chunking import comment_chunks
+from app.ingest.processing.rag_sync import sync_comments_to_product_rag
 from app.ingest.producer import publish
 from app.ingest.schemas import ROUTING_EMBED
 from app.repositories.comments import insert_comments
 from app.repositories.videos import exists_video, upsert_video
-from app.ingest.processing.rag_sync import sync_comments_to_product_rag
+
 
 async def handle_comments_upsert(envelope: dict) -> None:
     """

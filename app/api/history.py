@@ -1,6 +1,7 @@
 """API lịch sử chat — session/message, cache Redis, auth Supabase JWT."""
 
 from __future__ import annotations
+
 import json
 from datetime import datetime, timezone
 from typing import Optional
@@ -10,11 +11,11 @@ from pydantic import BaseModel
 
 from app.auth.supabase import get_user_id
 from app.cache.client import get_redis
-from app.config.settings import HISTORY_SESSIONS_TTL, HISTORY_MESSAGES_TTL
+from app.config.logger import Logger
+from app.config.settings import HISTORY_MESSAGES_TTL, HISTORY_SESSIONS_TTL
 from app.middleware.auth import verify_api_key
 from app.repositories import chat as chat_repo
 from app.schemas.response import ApiResponse
-from app.config.logger import Logger
 
 logger = Logger.get(__name__)
 
@@ -131,7 +132,9 @@ async def upsert_session(body: SessionUpsert, authorization: str = Header(...)):
 
 
 @router.patch("/history/sessions/{session_id}")
-async def patch_session(session_id: str, body: SessionPatch, authorization: str = Header(...)):
+async def patch_session(
+    session_id: str, body: SessionPatch, authorization: str = Header(...)
+):
     """Đổi title session."""
     user_id = await get_user_id(_parse_token(authorization))
 
@@ -198,7 +201,9 @@ async def get_messages(session_id: str, authorization: str = Header(...)):
 
 
 @router.post("/history/sessions/{session_id}/messages")
-async def save_messages(session_id: str, body: list[MessageSave], authorization: str = Header(...)):
+async def save_messages(
+    session_id: str, body: list[MessageSave], authorization: str = Header(...)
+):
     """Lưu batch message (upsert theo id)."""
     user_id = await get_user_id(_parse_token(authorization))
 

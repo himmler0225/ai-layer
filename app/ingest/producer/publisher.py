@@ -6,7 +6,7 @@ from typing import Optional
 
 import aio_pika
 
-import app.config.settings as _cfg
+import app.config.settings as settings
 from app.config.logger import Logger
 from app.ingest.broker import close_broker, declare_topology, get_exchange
 from app.ingest.schemas import IngestEnvelope
@@ -18,7 +18,7 @@ _ready = False
 async def init_producer() -> None:
     """Khởi tạo producer khi API bật."""
     global _ready
-    if not _cfg.INGEST_ENABLED or not _cfg.RABBITMQ_URL:
+    if not settings.INGEST_ENABLED or not settings.RABBITMQ_URL:
         logger.info("[ingest] producer disabled")
         return
     try:
@@ -40,7 +40,7 @@ async def close_producer() -> None:
 
 def _enabled() -> bool:
     """Kiểm tra producer đã sẵn sàng gửi job chưa."""
-    return _cfg.INGEST_ENABLED and bool(_cfg.RABBITMQ_URL) and _ready
+    return settings.INGEST_ENABLED and bool(settings.RABBITMQ_URL) and _ready
 
 
 async def publish(

@@ -1,18 +1,20 @@
 from __future__ import annotations
 
-# RAG L1/L2/L3 — orchestration; vector SQL nằm trong repositories.
-
-import app.config.settings as _cfg
+import app.config.settings as settings
 from app.ingest.processing.embeddings import embed_texts
 from app.repositories.aspect_chunks import search_similar_chunks
 from app.repositories.aspect_summaries import search_similar_summaries
-from app.repositories.raw_reviews import get_raw_reviews as repo_get_raw_reviews
+from app.repositories.raw_reviews import \
+    get_raw_reviews as repo_get_raw_reviews
+
+# RAG L1/L2/L3 — orchestration; vector SQL nằm trong repositories.
+
 
 
 def _coverage(score: float, has_items: bool) -> str:
     if not has_items:
         return "none"
-    if score >= _cfg.RAG_MIN_SCORE:
+    if score >= settings.RAG_MIN_SCORE:
         return "sufficient"
     return "partial"
 
@@ -24,7 +26,7 @@ async def search_aspect_summary(
     aspect: str | None = None,
     top_k: int | None = None,
 ) -> dict:
-    k = top_k or _cfg.RAG_TOP_K
+    k = top_k or settings.RAG_TOP_K
     query_vector = (await embed_texts([query]))[0]
     items = await search_similar_summaries(
         product_id, query_vector, aspect=aspect, limit=k
@@ -40,7 +42,7 @@ async def search_aspect_evidence(
     aspect: str | None = None,
     top_k: int | None = None,
 ) -> dict:
-    k = top_k or _cfg.RAG_TOP_K
+    k = top_k or settings.RAG_TOP_K
     query_vector = (await embed_texts([query]))[0]
     items = await search_similar_chunks(
         product_id, query_vector, aspect=aspect, limit=k

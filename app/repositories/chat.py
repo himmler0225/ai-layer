@@ -4,7 +4,6 @@ from __future__ import annotations
 
 
 from datetime import date, datetime, timedelta, timezone
-
 from typing import Optional
 
 from sqlalchemy import delete, func, select, update
@@ -112,7 +111,9 @@ async def save_messages(
 
     factory = await get_session_factory()
     async with factory() as session:
-        stmt = insert(ChatMessage).on_conflict_do_nothing(index_elements=[ChatMessage.id])
+        stmt = insert(ChatMessage).on_conflict_do_nothing(
+            index_elements=[ChatMessage.id]
+        )
         await session.execute(
             stmt,
             [

@@ -9,7 +9,10 @@ RAG_TOOLS = [
         "parameters": {
             "type": "object",
             "properties": {
-                "product_id": {"type": "string", "description": "Slug sản phẩm, vd. iphone-17-pro"},
+                "product_id": {
+                    "type": "string",
+                    "description": "Slug sản phẩm, vd. iphone-17-pro",
+                },
                 "query": {"type": "string", "description": "Câu hỏi người dùng"},
                 "aspect": {
                     "type": "string",

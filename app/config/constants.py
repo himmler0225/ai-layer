@@ -1,4 +1,4 @@
-"""Hằng số timeout, pool và retry dùng chung HTTP clients."""
+"""HTTP timeouts, pool sizes, and retry policy for shared clients."""
 
 # Timeout HTTP (giây)
 YOUTUBE_API_TIMEOUT = 15

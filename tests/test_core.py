@@ -68,7 +68,12 @@ def test_merge_curated_incremental():
         }
     ]
     new_rows = [
-        {"id": "new", "content": "brand new review text", "likes": 99, "product_id": "p1"},
+        {
+            "id": "new",
+            "content": "brand new review text",
+            "likes": 99,
+            "product_id": "p1",
+        },
     ]
     merged = merge_curated(existing, new_rows, top_n=5)
     assert merged[0]["raw_review_id"] == "new"

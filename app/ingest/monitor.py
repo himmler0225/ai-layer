@@ -5,14 +5,8 @@ from __future__ import annotations
 import aio_pika
 
 import app.config.settings as settings
-from app.ingest.schemas import (
-    DLQ_NAME,
-    EXCHANGE_NAME,
-    QUEUE_COMMENTS,
-    QUEUE_EMBED,
-    QUEUE_TRANSCRIPT,
-    QUEUE_VIDEO,
-)
+from app.ingest.schemas import (DLQ_NAME, EXCHANGE_NAME, QUEUE_COMMENTS,
+                                QUEUE_EMBED, QUEUE_TRANSCRIPT, QUEUE_VIDEO)
 
 _INGEST_QUEUES = (
     QUEUE_VIDEO,

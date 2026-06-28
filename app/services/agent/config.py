@@ -1,10 +1,6 @@
-import app.config.settings as _cfg
-from app.ai.router import (
-    TASK_AGENT_SYNTH,
-    TASK_AGENT_TOOL,
-    max_tokens_for_task,
-    resolve,
-)
+import app.config.settings as settings
+from app.ai.router import (TASK_AGENT_SYNTH, TASK_AGENT_TOOL,
+                           max_tokens_for_task, resolve)
 
 
 def tool_model() -> str:
@@ -38,19 +34,19 @@ def synth_max_tokens() -> int:
 
 def max_result_chars() -> int:
     """Giới hạn độ dài tool result đưa lại model."""
-    return _cfg.AGENT_MAX_RESULT_CHARS
+    return settings.AGENT_MAX_RESULT_CHARS
 
 
 def max_comments() -> int:
     """Số comment tối đa giữ lại mỗi lần gọi tool."""
-    return _cfg.AGENT_MAX_COMMENTS
+    return settings.AGENT_MAX_COMMENTS
 
 
 def max_comment_len() -> int:
     """Độ dài tối đa mỗi comment trong result."""
-    return _cfg.AGENT_MAX_COMMENT_LEN
+    return settings.AGENT_MAX_COMMENT_LEN
 
 
 def max_list_items() -> int:
     """Số phần tử tối đa mỗi list trong result."""
-    return _cfg.AGENT_MAX_LIST_ITEMS
+    return settings.AGENT_MAX_LIST_ITEMS

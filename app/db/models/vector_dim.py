@@ -2,8 +2,8 @@
 
 from pgvector.sqlalchemy import Vector
 
-import app.config.settings as _cfg
+import app.config.settings as settings
 
 
 def embedding_vector() -> Vector:
-    return Vector(_cfg.EMBEDDING_DIM)
+    return Vector(settings.EMBEDDING_DIM)

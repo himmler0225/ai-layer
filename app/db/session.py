@@ -5,14 +5,10 @@ from __future__ import annotations
 import json
 
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import (
-    AsyncEngine,
-    AsyncSession,
-    async_sessionmaker,
-    create_async_engine,
-)
+from sqlalchemy.ext.asyncio import (AsyncEngine, AsyncSession,
+                                    async_sessionmaker, create_async_engine)
 
-import app.config.settings as _s
+import app.config.settings as settings
 from app.config.logger import Logger
 from app.db.models import Base
 
@@ -24,7 +20,7 @@ _session_factory: async_sessionmaker[AsyncSession] | None = None
 
 def _database_url() -> str:
     """Chuẩn hóa DATABASE_URL sang driver asyncpg."""
-    url = _s.DATABASE_URL
+    url = settings.DATABASE_URL
     if not url:
         raise RuntimeError("DATABASE_URL is not configured")
     if url.startswith("postgresql://"):

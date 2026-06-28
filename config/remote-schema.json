@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "keys": {
+    "AI_AGENT": {
+      "bind": { "type": "flat_prefix", "prefix": "AGENT_", "module": "settings", "cast": "int" },
+      "store": "agent"
+    },
+    "AI_MODELS": {
+      "bind": {
+        "type": "provider",
+        "module": "settings",
+        "providers": { "openai": "OPENAI", "deepseek": "DEEP_SEEK" },
+        "int_fields": ["max_tokens", "tool_max_tokens"]
+      },
+      "store": "models"
+    },
+    "PROMPTS": {
+      "bind": { "type": "group_field", "module": "prompts" },
+      "store": "prompts",
+      "mirror": [{ "group": "agent", "field": "system", "module": "settings", "attr": "AGENT_SYSTEM" }]
+    },
+    "SERVICES": {
+      "bind": { "type": "service", "module": "settings" },
+      "store": "services"
+    },
+    "RATE_LIMIT": {
+      "bind": { "type": "rate_limit_apis", "module": "settings" },
+      "store": "rate_limit"
+    }
+  },
+  "required": [
+    "OPENAI_API_KEY",
+    "OPENAI_MODEL",
+    "DEEP_SEEK_API_KEY",
+    "DEEP_SEEK_MODEL",
+    "OPENAI_MAX_TOKENS",
+    "AGENT_MAX_ITER",
+    "AGENT_SYSTEM",
+    "REVIEW_SUMMARY_SYSTEM",
+    "REVIEW_SUMMARY_PROMPT",
+    "ASPECT_GROUP_SYSTEM",
+    "ASPECT_GROUP_PROMPT",
+    "ASPECT_SUMMARY_SYSTEM",
+    "ASPECT_SUMMARY_PROMPT"
+  ],
+  "admin": {
+    "groups": {
+      "models": ["AI_MODELS"],
+      "agent": ["AI_AGENT"],
+      "limits": ["RATE_LIMIT"],
+      "prompts": ["PROMPTS"],
+      "services": ["SERVICES"]
+    },
+    "json_keys": ["AI_AGENT", "AI_MODELS", "PROMPTS", "RATE_LIMIT", "SERVICES"],
+    "secret_keys": ["AI_MODELS", "SERVICES"],
+    "long_text_keys": ["PROMPTS"]
+  }
+}

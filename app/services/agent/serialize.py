@@ -9,13 +9,20 @@ from app.services.agent import config
 def serialize_result(result: Any) -> str:
     """Cắt ngắn kết quả tool trước khi đưa lại model."""
     if not isinstance(result, dict):
-        return json.dumps(result, ensure_ascii=False, default=str)[: config.max_result_chars()]
+        return json.dumps(result, ensure_ascii=False, default=str)[
+            : config.max_result_chars()
+        ]
 
     data = dict(result)
 
     if "comments" in data and isinstance(data["comments"], list):
         data["comments"] = [
-            {**c, "content": (c.get("content") or c.get("text") or "")[: config.max_comment_len()]}
+            {
+                **c,
+                "content": (c.get("content") or c.get("text") or "")[
+                    : config.max_comment_len()
+                ],
+            }
             for c in data["comments"][: config.max_comments()]
         ]
 

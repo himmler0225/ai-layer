@@ -36,14 +36,18 @@ def tool_status(tool: str, args: dict) -> tuple[str, str]:
     if tool == "youtube_search":
         q = _clip(a.get("keyword") or a.get("query") or "")
         return (
-            f'Đang tìm video YouTube: «{q}»…' if q else "Đang tìm video trên YouTube…",
+            f"Đang tìm video YouTube: «{q}»…" if q else "Đang tìm video trên YouTube…",
             f'Searching YouTube for "{q}"…' if q else "Searching YouTube…",
         )
 
     if tool == "youtube_get_comments":
         vid = a.get("video_id") or ""
         return (
-            f"Đang lấy bình luận video {vid}…" if vid else "Đang lấy bình luận YouTube…",
+            (
+                f"Đang lấy bình luận video {vid}…"
+                if vid
+                else "Đang lấy bình luận YouTube…"
+            ),
             f"Fetching comments for {vid}…" if vid else "Fetching YouTube comments…",
         )
 
@@ -60,13 +64,24 @@ def tool_status(tool: str, args: dict) -> tuple[str, str]:
                 f"Đang lấy bình luận {n} video YouTube ({ids[0]}…)…",
                 f"Fetching comments from {n} YouTube videos…",
             )
-        return "Đang lấy bình luận nhiều video YouTube…", "Fetching YouTube comments (batch)…"
+        return (
+            "Đang lấy bình luận nhiều video YouTube…",
+            "Fetching YouTube comments (batch)…",
+        )
 
     if tool in ("youtube_get_transcript",):
         vid = a.get("video_id") or ""
         return (
-            f"Đang lấy transcript video {vid}…" if vid else "Đang lấy transcript YouTube…",
-            f"Fetching transcript for {vid}…" if vid else "Fetching YouTube transcript…",
+            (
+                f"Đang lấy transcript video {vid}…"
+                if vid
+                else "Đang lấy transcript YouTube…"
+            ),
+            (
+                f"Fetching transcript for {vid}…"
+                if vid
+                else "Fetching YouTube transcript…"
+            ),
         )
 
     if tool == "youtube_get_transcript_batch":
@@ -94,7 +109,11 @@ def tool_status(tool: str, args: dict) -> tuple[str, str]:
     if tool == "youtube_get_by_topic":
         topic = a.get("topic") or ""
         return (
-            f"Đang lấy video chủ đề {topic}…" if topic else "Đang lấy video theo chủ đề…",
+            (
+                f"Đang lấy video chủ đề {topic}…"
+                if topic
+                else "Đang lấy video theo chủ đề…"
+            ),
             f"Browsing YouTube topic {topic}…" if topic else "Browsing by topic…",
         )
 
@@ -123,28 +142,48 @@ def tool_status(tool: str, args: dict) -> tuple[str, str]:
     if tool == "tiktok_search":
         q = _clip(a.get("keyword") or "")
         return (
-            f'Đang tìm TikTok: «{q}»…' if q else "Đang tìm video TikTok…",
+            f"Đang tìm TikTok: «{q}»…" if q else "Đang tìm video TikTok…",
             f'Searching TikTok for "{q}"…' if q else "Searching TikTok…",
         )
 
     if tool == "tiktok_comments":
         aweme = a.get("aweme_id") or ""
         return (
-            f"Đang lấy bình luận TikTok ({aweme})…" if aweme else "Đang lấy bình luận TikTok…",
-            f"Fetching TikTok comments ({aweme})…" if aweme else "Fetching TikTok comments…",
+            (
+                f"Đang lấy bình luận TikTok ({aweme})…"
+                if aweme
+                else "Đang lấy bình luận TikTok…"
+            ),
+            (
+                f"Fetching TikTok comments ({aweme})…"
+                if aweme
+                else "Fetching TikTok comments…"
+            ),
         )
 
     if tool == "tiktok_transcript":
         aweme = a.get("aweme_id") or ""
         return (
-            f"Đang lấy transcript TikTok ({aweme})…" if aweme else "Đang lấy transcript TikTok…",
-            f"Fetching TikTok transcript ({aweme})…" if aweme else "Fetching TikTok transcript…",
+            (
+                f"Đang lấy transcript TikTok ({aweme})…"
+                if aweme
+                else "Đang lấy transcript TikTok…"
+            ),
+            (
+                f"Fetching TikTok transcript ({aweme})…"
+                if aweme
+                else "Fetching TikTok transcript…"
+            ),
         )
 
     if tool == "tiktok_video_info":
         url = _clip(a.get("url") or "")
         return (
-            f"Đang xem video TikTok…" if not url else "Đang xem thông tin video TikTok…",
+            (
+                f"Đang xem video TikTok…"
+                if not url
+                else "Đang xem thông tin video TikTok…"
+            ),
             "Loading TikTok video…",
         )
 
@@ -158,7 +197,11 @@ def tool_status(tool: str, args: dict) -> tuple[str, str]:
     if tool == "search_product_summary":
         pid = _clip(a.get("product_id") or "")
         return (
-            f"Đang đọc tổng quan review «{pid}»…" if pid else "Đang đọc tổng quan review…",
+            (
+                f"Đang đọc tổng quan review «{pid}»…"
+                if pid
+                else "Đang đọc tổng quan review…"
+            ),
             f"Reading saved summary for {pid}…" if pid else "Reading product summary…",
         )
 

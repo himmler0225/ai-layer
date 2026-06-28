@@ -25,11 +25,7 @@ async def exists_video(video_id: str) -> bool:
     """Kiểm tra video đã có trong DB chưa."""
     factory = await get_session_factory()
     async with factory() as session:
-        return bool(
-            await session.scalar(
-                select(exists().where(Video.id == video_id))
-            )
-        )
+        return bool(await session.scalar(select(exists().where(Video.id == video_id))))
 
 
 async def upsert_video(

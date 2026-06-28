@@ -10,11 +10,9 @@ from app.services.agent.finalize import finish
 from app.services.agent.platform import prepare_tools_for_task
 from app.services.agent.synthesis import run_synthesis
 from app.services.agent.tools import execute_parallel, extract_function_calls
-from app.utils.openai_responses import (
-    extract_response_text,
-    is_incomplete_for,
-    output_items_to_input,
-)
+from app.utils.openai_responses import (extract_response_text,
+                                        is_incomplete_for,
+                                        output_items_to_input)
 
 
 def new_context(
@@ -47,7 +45,9 @@ async def bootstrap_agent(
     if not (resolved_system or "").strip():
         raise ValueError("AGENT_SYSTEM chưa cấu hình — thêm key trên Supabase config")
     prepared = await prepare_tools_for_task(tools, task)
-    return new_context(task=task, tools=prepared, system=resolved_system, max_iter=max_iter)
+    return new_context(
+        task=task, tools=prepared, system=resolved_system, max_iter=max_iter
+    )
 
 
 def extract_calls(output: Any) -> List[Any]:
@@ -108,16 +108,22 @@ async def finish_agent(
     )
 
 
-async def handle_incomplete_sync(ctx: Dict[str, Any], response: Any, iteration: int) -> Dict[str, Any]:
+async def handle_incomplete_sync(
+    ctx: Dict[str, Any], response: Any, iteration: int
+) -> Dict[str, Any]:
     if config.dual_mode() and ctx["tool_call_log"]:
         ctx["input_items"].extend(output_items_to_input(response.output))
-        final_text = await run_synthesis(system=ctx["system"], input_items=ctx["input_items"])
+        final_text = await run_synthesis(
+            system=ctx["system"], input_items=ctx["input_items"]
+        )
         return await finish_agent(ctx, iteration=iteration, final_text=final_text)
 
     partial = extract_response_text(response)
     if partial:
         return await finish_agent(ctx, iteration=iteration, final_text=partial)
-    raise RuntimeError(f"Model hit max_output_tokens at iteration {iteration} without text.")
+    raise RuntimeError(
+        f"Model hit max_output_tokens at iteration {iteration} without text."
+    )
 
 
 def video_preview(tool_call_log: List[Dict]) -> List[Dict]:

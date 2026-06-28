@@ -3,11 +3,16 @@ from __future__ import annotations
 """Xác thực JWT Supabase → user_id."""
 
 import hashlib
+
 import httpx
 from fastapi import HTTPException
-from app.config.settings import SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_TOKEN_TTL
+
 from app.cache.client import get_redis
-from app.constants import SUPABASE_AUTH_TIMEOUT
+from app.config.constants import SUPABASE_AUTH_TIMEOUT
+from app.config.headers import get_supabase_auth_headers
+from app.config.settings import (SUPABASE_ANON_KEY, SUPABASE_TOKEN_TTL,
+                                 SUPABASE_URL)
+
 
 async def get_user_id(token: str) -> str:
     """Xác thực JWT Supabase, cache Redis."""
@@ -22,7 +27,7 @@ async def get_user_id(token: str) -> str:
     async with httpx.AsyncClient(timeout=SUPABASE_AUTH_TIMEOUT) as client:
         r = await client.get(
             f"{SUPABASE_URL}/auth/v1/user",
-            headers={"Authorization": f"Bearer {token}", "apikey": SUPABASE_ANON_KEY},
+            headers=get_supabase_auth_headers(token, SUPABASE_ANON_KEY),
         )
 
     if r.status_code != 200:

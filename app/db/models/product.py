@@ -6,17 +6,8 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import (
-    DateTime,
-    Float,
-    ForeignKey,
-    Index,
-    Integer,
-    SmallInteger,
-    Text,
-    UniqueConstraint,
-    func,
-)
+from sqlalchemy import (DateTime, Float, ForeignKey, Index, Integer,
+                        SmallInteger, Text, UniqueConstraint, func)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -75,7 +66,9 @@ class CuratedReview(Base):
 
     __tablename__ = "curated_reviews"
     __table_args__ = (
-        UniqueConstraint("product_id", "raw_review_id", name="curated_reviews_product_raw_uq"),
+        UniqueConstraint(
+            "product_id", "raw_review_id", name="curated_reviews_product_raw_uq"
+        ),
         Index("curated_reviews_product_rank_idx", "product_id", "rank"),
     )
 
@@ -131,7 +124,9 @@ class AspectSummary(Base):
 
     __tablename__ = "aspect_summaries"
     __table_args__ = (
-        UniqueConstraint("product_id", "aspect", name="aspect_summaries_product_aspect_uq"),
+        UniqueConstraint(
+            "product_id", "aspect", name="aspect_summaries_product_aspect_uq"
+        ),
         Index("aspect_summaries_product_aspect_idx", "product_id", "aspect"),
         Index(
             "aspect_summaries_embedding_idx",
@@ -150,7 +145,9 @@ class AspectSummary(Base):
     pros: Mapped[list] = mapped_column(JSONB, nullable=False, server_default="[]")
     cons: Mapped[list] = mapped_column(JSONB, nullable=False, server_default="[]")
     positive_percent: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
-    source_chunk_ids: Mapped[list] = mapped_column(JSONB, nullable=False, server_default="[]")
+    source_chunk_ids: Mapped[list] = mapped_column(
+        JSONB, nullable=False, server_default="[]"
+    )
     embedding: Mapped[Optional[list]] = mapped_column(embedding_vector(), nullable=True)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()

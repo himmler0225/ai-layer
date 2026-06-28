@@ -24,10 +24,7 @@ def unwrap_result(result: Any) -> dict | None:
 def extract_search_query(inputs: dict) -> str:
     """Lấy từ khóa search từ input tool."""
     return (
-        inputs.get("keyword")
-        or inputs.get("query")
-        or inputs.get("topic")
-        or ""
+        inputs.get("keyword") or inputs.get("query") or inputs.get("topic") or ""
     ).strip()
 
 

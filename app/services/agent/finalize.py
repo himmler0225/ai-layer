@@ -15,5 +15,9 @@ async def finish(
     include_summary: bool = True,
 ) -> Dict[str, Any]:
     return await enrich_agent_result(
-        final_text, tool_call_log, iteration, task=task, include_summary=include_summary,
+        final_text,
+        tool_call_log,
+        iteration,
+        task=task,
+        include_summary=include_summary,
     )

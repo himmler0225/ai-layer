@@ -3,7 +3,8 @@ from __future__ import annotations
 from app.ingest.processing.chunking import chunk_transcript
 from app.ingest.producer import publish
 from app.ingest.schemas import ROUTING_EMBED
-from app.repositories.videos import exists_video, update_transcript, upsert_video
+from app.repositories.videos import (exists_video, update_transcript,
+                                     upsert_video)
 
 
 async def handle_transcript_upsert(envelope: dict) -> None:

@@ -2,24 +2,15 @@ from __future__ import annotations
 
 from aio_pika import ExchangeType
 
-import app.config.settings as _cfg
+import app.config.settings as settings
 from app.config.logger import Logger
 from app.ingest.broker.connection import get_channel
-from app.ingest.schemas import (
-    DLQ_NAME,
-    DLX_NAME,
-    EXCHANGE_NAME,
-    QUEUE_COMMENTS,
-    QUEUE_EMBED,
-    QUEUE_TRANSCRIPT,
-    QUEUE_VIDEO,
-    ROUTING_COMMENTS,
-    ROUTING_EMBED,
-    ROUTING_TRANSCRIPT,
-    ROUTING_VIDEO,
-    QUEUE_SUMMARIZE,
-    ROUTING_SUMMARIZE,
-)
+from app.ingest.schemas import (DLQ_NAME, DLX_NAME, EXCHANGE_NAME,
+                                QUEUE_COMMENTS, QUEUE_EMBED, QUEUE_SUMMARIZE,
+                                QUEUE_TRANSCRIPT, QUEUE_VIDEO,
+                                ROUTING_COMMENTS, ROUTING_EMBED,
+                                ROUTING_SUMMARIZE, ROUTING_TRANSCRIPT,
+                                ROUTING_VIDEO)
 
 logger = Logger.get(__name__)
 
@@ -27,13 +18,15 @@ logger = Logger.get(__name__)
 async def declare_topology() -> None:
     """Khai báo exchange, queue, DLQ và bind routing key."""
     channel = await get_channel()
-    exchange_name = _cfg.RABBITMQ_EXCHANGE or EXCHANGE_NAME
+    exchange_name = settings.RABBITMQ_EXCHANGE or EXCHANGE_NAME
 
     dlx = await channel.declare_exchange(DLX_NAME, ExchangeType.DIRECT, durable=True)
     dlq = await channel.declare_queue(DLQ_NAME, durable=True)
     await dlq.bind(dlx, routing_key=DLQ_NAME)
 
-    exchange = await channel.declare_exchange(exchange_name, ExchangeType.TOPIC, durable=True)
+    exchange = await channel.declare_exchange(
+        exchange_name, ExchangeType.TOPIC, durable=True
+    )
     bindings = (
         (QUEUE_VIDEO, ROUTING_VIDEO),
         (QUEUE_COMMENTS, ROUTING_COMMENTS),
@@ -52,4 +45,6 @@ async def declare_topology() -> None:
         )
         await queue.bind(exchange, routing_key=routing_key)
 
-    logger.info("[ingest] topology ready exchange=%s queues=%d", exchange_name, len(bindings))
+    logger.info(
+        "[ingest] topology ready exchange=%s queues=%d", exchange_name, len(bindings)
+    )

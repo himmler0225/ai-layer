@@ -6,7 +6,7 @@ import aio_pika
 from aio_pika import ExchangeType
 from aio_pika.abc import AbstractChannel, AbstractRobustConnection
 
-import app.config.settings as _cfg
+import app.config.settings as settings
 from app.ingest.schemas import EXCHANGE_NAME
 
 _connection: Optional[AbstractRobustConnection] = None
@@ -18,9 +18,9 @@ async def get_connection() -> AbstractRobustConnection:
     """Mở kết nối robust tới RabbitMQ (tái dùng singleton)."""
     global _connection
     if _connection is None or _connection.is_closed:
-        if not _cfg.RABBITMQ_URL:
+        if not settings.RABBITMQ_URL:
             raise RuntimeError("RABBITMQ_URL is not configured")
-        _connection = await aio_pika.connect_robust(_cfg.RABBITMQ_URL)
+        _connection = await aio_pika.connect_robust(settings.RABBITMQ_URL)
     return _connection
 
 
@@ -40,7 +40,7 @@ async def get_exchange() -> aio_pika.abc.AbstractExchange:
     if _exchange is None:
         channel = await get_channel()
         _exchange = await channel.declare_exchange(
-            _cfg.RABBITMQ_EXCHANGE or EXCHANGE_NAME,
+            settings.RABBITMQ_EXCHANGE or EXCHANGE_NAME,
             ExchangeType.TOPIC,
             durable=True,
         )

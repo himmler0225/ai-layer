@@ -1,10 +1,9 @@
-import app.config.settings as _settings
+import app.config.settings as settings
 from app.tools.rag_definitions import RAG_TOOLS
 
 """Định nghĩa tool schema cho OpenAI function calling."""
 
 YOUTUBE_TOOLS = [
-
     {
         "type": "function",
         "name": "youtube_search",
@@ -16,7 +15,7 @@ YOUTUBE_TOOLS = [
         "parameters": {
             "type": "object",
             "properties": {
-                "keyword":     {"type": "string", "description": "Từ khóa tìm kiếm"},
+                "keyword": {"type": "string", "description": "Từ khóa tìm kiếm"},
                 "max_results": {"type": "integer", "default": 5, "maximum": 5},
                 "sort": {
                     "type": "string",
@@ -27,7 +26,6 @@ YOUTUBE_TOOLS = [
             "required": ["keyword"],
         },
     },
-
     {
         "type": "function",
         "name": "youtube_get_by_topic",
@@ -39,13 +37,24 @@ YOUTUBE_TOOLS = [
         "parameters": {
             "type": "object",
             "properties": {
-                "topic":       {"type": "string", "enum": ["music", "gaming", "news", "sports", "tech", "beauty", "food", "travel"]},
+                "topic": {
+                    "type": "string",
+                    "enum": [
+                        "music",
+                        "gaming",
+                        "news",
+                        "sports",
+                        "tech",
+                        "beauty",
+                        "food",
+                        "travel",
+                    ],
+                },
                 "max_results": {"type": "integer", "default": 20, "maximum": 50},
             },
             "required": ["topic"],
         },
     },
-
     {
         "type": "function",
         "name": "youtube_get_shorts",
@@ -60,7 +69,6 @@ YOUTUBE_TOOLS = [
             },
         },
     },
-
     {
         "type": "function",
         "name": "youtube_get_live",
@@ -72,12 +80,15 @@ YOUTUBE_TOOLS = [
         "parameters": {
             "type": "object",
             "properties": {
-                "query":       {"type": "string", "description": "Từ khóa lọc (tùy chọn)", "default": ""},
+                "query": {
+                    "type": "string",
+                    "description": "Từ khóa lọc (tùy chọn)",
+                    "default": "",
+                },
                 "max_results": {"type": "integer", "default": 20, "maximum": 50},
             },
         },
     },
-
     {
         "type": "function",
         "name": "youtube_get_by_region",
@@ -89,9 +100,16 @@ YOUTUBE_TOOLS = [
         "parameters": {
             "type": "object",
             "properties": {
-                "gl":          {"type": "string", "description": "Mã quốc gia (VN, JP, US...)"},
-                "hl":          {"type": "string", "description": "Mã ngôn ngữ (vi, ja, en...)", "default": "vi"},
-                "query":       {"type": "string", "description": "Từ khóa tìm kiếm theo ngôn ngữ địa phương"},
+                "gl": {"type": "string", "description": "Mã quốc gia (VN, JP, US...)"},
+                "hl": {
+                    "type": "string",
+                    "description": "Mã ngôn ngữ (vi, ja, en...)",
+                    "default": "vi",
+                },
+                "query": {
+                    "type": "string",
+                    "description": "Từ khóa tìm kiếm theo ngôn ngữ địa phương",
+                },
                 "max_results": {"type": "integer", "default": 20, "maximum": 100},
             },
             "required": ["gl", "query"],
@@ -107,12 +125,14 @@ YOUTUBE_TOOLS = [
         "parameters": {
             "type": "object",
             "properties": {
-                "video_id": {"type": "string", "description": "YouTube video ID (vd: dQw4w9WgXcQ)"},
+                "video_id": {
+                    "type": "string",
+                    "description": "YouTube video ID (vd: dQw4w9WgXcQ)",
+                },
             },
             "required": ["video_id"],
         },
     },
-
     {
         "type": "function",
         "name": "youtube_get_comments",
@@ -125,9 +145,13 @@ YOUTUBE_TOOLS = [
         "parameters": {
             "type": "object",
             "properties": {
-                "video_id":     {"type": "string"},
+                "video_id": {"type": "string"},
                 "max_comments": {"type": "integer", "default": 20, "maximum": 20},
-                "sort":         {"type": "string", "enum": ["newest", "top"], "default": "newest"},
+                "sort": {
+                    "type": "string",
+                    "enum": ["newest", "top"],
+                    "default": "newest",
+                },
             },
             "required": ["video_id"],
         },
@@ -146,10 +170,13 @@ YOUTUBE_TOOLS = [
         "parameters": {
             "type": "object",
             "properties": {
-                "video_ids":     {"type": "array", "items": {"type": "string"},
-                                  "description": "3-5 video_id, ưu tiên view cao nhất"},
+                "video_ids": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "3-5 video_id, ưu tiên view cao nhất",
+                },
                 "max_per_video": {"type": "integer", "default": 20, "maximum": 30},
-                "sort":          {"type": "string", "enum": ["top", "newest"], "default": "top"},
+                "sort": {"type": "string", "enum": ["top", "newest"], "default": "top"},
             },
             "required": ["video_ids"],
         },
@@ -184,8 +211,11 @@ YOUTUBE_TOOLS = [
         "parameters": {
             "type": "object",
             "properties": {
-                "video_ids": {"type": "array", "items": {"type": "string"},
-                              "description": "3-5 video_id cần lấy transcript"},
+                "video_ids": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "3-5 video_id cần lấy transcript",
+                },
             },
             "required": ["video_ids"],
         },
@@ -200,12 +230,14 @@ YOUTUBE_TOOLS = [
         "parameters": {
             "type": "object",
             "properties": {
-                "channel_id": {"type": "string", "description": "Channel ID (UCxxxx) hoặc @handle"},
+                "channel_id": {
+                    "type": "string",
+                    "description": "Channel ID (UCxxxx) hoặc @handle",
+                },
             },
             "required": ["channel_id"],
         },
     },
-
     {
         "type": "function",
         "name": "youtube_get_channel_videos",
@@ -216,13 +248,12 @@ YOUTUBE_TOOLS = [
         "parameters": {
             "type": "object",
             "properties": {
-                "channel_id":  {"type": "string"},
+                "channel_id": {"type": "string"},
                 "max_results": {"type": "integer", "default": 30, "maximum": 50},
             },
             "required": ["channel_id"],
         },
     },
-
     {
         "type": "function",
         "name": "youtube_get_channel_playlists",
@@ -249,7 +280,10 @@ YOUTUBE_TOOLS = [
         "parameters": {
             "type": "object",
             "properties": {
-                "playlist_id": {"type": "string", "description": "Playlist ID (PLxxxx)"},
+                "playlist_id": {
+                    "type": "string",
+                    "description": "Playlist ID (PLxxxx)",
+                },
                 "max_results": {"type": "integer", "default": 30, "maximum": 50},
             },
             "required": ["playlist_id"],
@@ -291,16 +325,29 @@ TIKTOK_TOOLS = [
         "parameters": {
             "type": "object",
             "properties": {
-                "keyword":     {"type": "string", "description": "Từ khóa tìm kiếm"},
-                "cursor":      {"type": "integer", "default": 0},
-                "sort_by":     {"type": "string", "enum": ["most-liked", "most-viewed", "most-recent", "most-relevant"]},
-                "date_posted": {"type": "string", "enum": ["today", "this-week", "this-month", "this-year"]},
-                "region":      {"type": "string", "description": "Mã quốc gia proxy (US, VN...)"},
+                "keyword": {"type": "string", "description": "Từ khóa tìm kiếm"},
+                "cursor": {"type": "integer", "default": 0},
+                "sort_by": {
+                    "type": "string",
+                    "enum": [
+                        "most-liked",
+                        "most-viewed",
+                        "most-recent",
+                        "most-relevant",
+                    ],
+                },
+                "date_posted": {
+                    "type": "string",
+                    "enum": ["today", "this-week", "this-month", "this-year"],
+                },
+                "region": {
+                    "type": "string",
+                    "description": "Mã quốc gia proxy (US, VN...)",
+                },
             },
             "required": ["keyword"],
         },
     },
-
     {
         "type": "function",
         "name": "tiktok_video_info",
@@ -316,7 +363,6 @@ TIKTOK_TOOLS = [
             "required": ["url"],
         },
     },
-
     {
         "type": "function",
         "name": "tiktok_comments",
@@ -329,13 +375,12 @@ TIKTOK_TOOLS = [
             "type": "object",
             "properties": {
                 "aweme_id": {"type": "string", "description": "TikTok video ID (số)"},
-                "cursor":   {"type": "integer", "default": 0},
-                "count":    {"type": "integer", "default": 20, "maximum": 50},
+                "cursor": {"type": "integer", "default": 0},
+                "count": {"type": "integer", "default": 20, "maximum": 50},
             },
             "required": ["aweme_id"],
         },
     },
-
     {
         "type": "function",
         "name": "tiktok_profile",
@@ -347,7 +392,10 @@ TIKTOK_TOOLS = [
         "parameters": {
             "type": "object",
             "properties": {
-                "handle": {"type": "string", "description": "TikTok handle (không cần @)"},
+                "handle": {
+                    "type": "string",
+                    "description": "TikTok handle (không cần @)",
+                },
             },
             "required": ["handle"],
         },
@@ -373,10 +421,17 @@ TIKTOK_TOOLS = [
 
 _RAG_TOOLS = RAG_TOOLS
 
-ALL_TOOLS = (_RAG_TOOLS if _settings.RAG_ENABLED else []) + YOUTUBE_TOOLS + TIKTOK_TOOLS + UTIL_TOOLS
+ALL_TOOLS = (
+    (_RAG_TOOLS if settings.RAG_ENABLED else [])
+    + YOUTUBE_TOOLS
+    + TIKTOK_TOOLS
+    + UTIL_TOOLS
+)
 
 TOOL_SETS = {
-    "youtube": (_RAG_TOOLS if _settings.RAG_ENABLED else []) + YOUTUBE_TOOLS + UTIL_TOOLS,
-    "tiktok":  (_RAG_TOOLS if _settings.RAG_ENABLED else []) + TIKTOK_TOOLS  + UTIL_TOOLS,
-    "all":     ALL_TOOLS,
+    "youtube": (_RAG_TOOLS if settings.RAG_ENABLED else [])
+    + YOUTUBE_TOOLS
+    + UTIL_TOOLS,
+    "tiktok": (_RAG_TOOLS if settings.RAG_ENABLED else []) + TIKTOK_TOOLS + UTIL_TOOLS,
+    "all": ALL_TOOLS,
 }

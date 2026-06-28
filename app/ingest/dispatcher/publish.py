@@ -2,25 +2,24 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.ingest.mappers import (
-    extract_search_query,
-    map_comment,
-    map_tiktok_video,
-    map_youtube_video,
-    video_list,
-)
+from app.ingest.mappers import (extract_search_query, map_comment,
+                                map_tiktok_video, map_youtube_video,
+                                video_list)
 from app.ingest.producer import publish
-from app.ingest.schemas import ROUTING_COMMENTS, ROUTING_TRANSCRIPT, ROUTING_VIDEO
+from app.ingest.schemas import (ROUTING_COMMENTS, ROUTING_TRANSCRIPT,
+                                ROUTING_VIDEO)
 
-SEARCH_TOOLS = frozenset({
-    "youtube_search",
-    "youtube_get_by_topic",
-    "youtube_get_shorts",
-    "youtube_get_live",
-    "youtube_get_by_region",
-    "youtube_get_channel_videos",
-    "tiktok_search",
-})
+SEARCH_TOOLS = frozenset(
+    {
+        "youtube_search",
+        "youtube_get_by_topic",
+        "youtube_get_shorts",
+        "youtube_get_live",
+        "youtube_get_by_region",
+        "youtube_get_channel_videos",
+        "tiktok_search",
+    }
+)
 
 
 def _map_video(raw: dict, platform: str) -> dict | None:
@@ -54,7 +53,9 @@ async def publish_videos(
         )
 
 
-async def publish_search(inputs: dict, data: dict, platform: str, product_hint: str) -> None:
+async def publish_search(
+    inputs: dict, data: dict, platform: str, product_hint: str
+) -> None:
     """Sau tool search — lưu video và cache video_ids theo từ khóa."""
     videos = video_list(data)
     if not videos:
@@ -71,7 +72,9 @@ async def publish_search(inputs: dict, data: dict, platform: str, product_hint: 
         if ids:
             search_cache = {"query": query, "platform": platform, "video_ids": ids}
 
-    await publish_videos(videos, platform=platform, product_hint=product_hint, search_cache=search_cache)
+    await publish_videos(
+        videos, platform=platform, product_hint=product_hint, search_cache=search_cache
+    )
 
 
 async def publish_comments(
@@ -91,7 +94,12 @@ async def publish_comments(
         platform=platform,
         video_id=video_id,
         product_hint=product_hint,
-        payload={"video_id": video_id, "platform": platform, "comments": mapped, "url": url},
+        payload={
+            "video_id": video_id,
+            "platform": platform,
+            "comments": mapped,
+            "url": url,
+        },
     )
 
 

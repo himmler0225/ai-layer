@@ -8,7 +8,7 @@ from typing import Any, AsyncIterator, Dict, List, Optional
 
 from openai import AsyncOpenAI
 
-import app.config.settings as _cfg
+import app.config.settings as settings
 from app.ai.base import BaseLLM
 from app.config.logger import Logger
 from app.utils.openai_errors import log_error, should_retry
@@ -20,10 +20,10 @@ _client: AsyncOpenAI | None = None
 
 def _get_client() -> AsyncOpenAI:
     global _client
-    if not _cfg.OPENAI_API_KEY:
+    if not settings.OPENAI_API_KEY:
         raise RuntimeError("OPENAI_API_KEY is not configured")
     if _client is None:
-        _client = AsyncOpenAI(api_key=_cfg.OPENAI_API_KEY)
+        _client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
     return _client
 
 
@@ -31,10 +31,10 @@ class OpenAIProvider(BaseLLM):
     name = "openai"
 
     def default_model(self) -> str:
-        return _cfg.OPENAI_MODEL
+        return settings.OPENAI_MODEL
 
     def default_max_tokens(self) -> int:
-        return _cfg.OPENAI_MAX_TOKENS or 4096
+        return settings.OPENAI_MAX_TOKENS or 4096
 
     async def complete(
         self,
@@ -100,7 +100,11 @@ class OpenAIProvider(BaseLLM):
         if tool_choice is not None:
             kwargs["tool_choice"] = tool_choice
 
-        logger.info("[llm:openai] responses.create model=%s tools=%s", resolved_model, len(tools or []))
+        logger.info(
+            "[llm:openai] responses.create model=%s tools=%s",
+            resolved_model,
+            len(tools or []),
+        )
 
         last_exc: Exception | None = None
         for attempt in (1, 2):
@@ -108,7 +112,9 @@ class OpenAIProvider(BaseLLM):
                 return await _get_client().responses.create(**kwargs)
             except Exception as exc:
                 last_exc = exc
-                log_error(logger, exc, where=f"openai.responses.create attempt={attempt}")
+                log_error(
+                    logger, exc, where=f"openai.responses.create attempt={attempt}"
+                )
                 if attempt == 1 and should_retry(exc):
                     await asyncio.sleep(2)
                     continue
@@ -125,7 +131,9 @@ class OpenAIProvider(BaseLLM):
                     return
             except Exception as exc:
                 last_exc = exc
-                log_error(logger, exc, where=f"openai.responses.stream attempt={attempt}")
+                log_error(
+                    logger, exc, where=f"openai.responses.stream attempt={attempt}"
+                )
                 if attempt == 1 and should_retry(exc):
                     await asyncio.sleep(2)
                     continue
@@ -142,9 +150,9 @@ class OpenAIProvider(BaseLLM):
         if not texts:
             return []
         response = await _get_client().embeddings.create(
-            model=model or _cfg.EMBEDDING_MODEL,
+            model=model or settings.EMBEDDING_MODEL,
             input=texts,
-            dimensions=dimensions or _cfg.EMBEDDING_DIM,
+            dimensions=dimensions or settings.EMBEDDING_DIM,
         )
         ordered = sorted(response.data, key=lambda row: row.index)
         return [row.embedding for row in ordered]

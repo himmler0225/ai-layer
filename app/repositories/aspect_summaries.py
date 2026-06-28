@@ -95,7 +95,8 @@ async def search_similar_summaries(
 ) -> list[dict]:
     """Vector cosine search trên aspect_summaries (L1)."""
     vec = vector_literal(query_vector)
-    sql = text("""
+    sql = text(
+        """
         SELECT aspect, summary, pros, cons, positive_percent,
                1 - (embedding <=> CAST(:vec AS vector)) AS score
         FROM aspect_summaries
@@ -104,12 +105,17 @@ async def search_similar_summaries(
           AND (CAST(:aspect AS text) IS NULL OR aspect = :aspect)
         ORDER BY embedding <=> CAST(:vec AS vector)
         LIMIT :k
-    """)
+    """
+    )
     factory = await get_session_factory()
     async with factory() as session:
         rows = (
-            await session.execute(
-                sql, {"vec": vec, "pid": product_id, "aspect": aspect, "k": limit}
+            (
+                await session.execute(
+                    sql, {"vec": vec, "pid": product_id, "aspect": aspect, "k": limit}
+                )
             )
-        ).mappings().all()
+            .mappings()
+            .all()
+        )
         return [dict(r) for r in rows]

@@ -42,13 +42,17 @@ async def get_curated_reviews(product_id: str, *, limit: int = 300) -> list[dict
     factory = await get_session_factory()
     async with factory() as session:
         rows = (
-            await session.execute(
-                select(CuratedReview)
-                .where(CuratedReview.product_id == product_id)
-                .order_by(CuratedReview.rank)
-                .limit(limit)
+            (
+                await session.execute(
+                    select(CuratedReview)
+                    .where(CuratedReview.product_id == product_id)
+                    .order_by(CuratedReview.rank)
+                    .limit(limit)
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         return [model_to_dict(row) for row in rows]
 
 
@@ -59,7 +63,9 @@ async def count_curated_reviews(product_id: str) -> int:
         return len(
             (
                 await session.execute(
-                    select(CuratedReview.id).where(CuratedReview.product_id == product_id)
+                    select(CuratedReview.id).where(
+                        CuratedReview.product_id == product_id
+                    )
                 )
             ).all()
         )

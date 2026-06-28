@@ -11,11 +11,15 @@ _OVERLAP_WORDS = 50
 
 def make_chunk_id(video_id: str, chunk_type: str, content: str) -> str:
     """ID ổn định từ video + nội dung chunk."""
-    digest = hashlib.sha256(f"{video_id}:{chunk_type}:{content}".encode()).hexdigest()[:20]
+    digest = hashlib.sha256(f"{video_id}:{chunk_type}:{content}".encode()).hexdigest()[
+        :20
+    ]
     return f"{video_id}:{digest}"
 
 
-def chunk_transcript(video_id: str, text: str, *, language: str = "") -> list[ChunkItem]:
+def chunk_transcript(
+    video_id: str, text: str, *, language: str = ""
+) -> list[ChunkItem]:
     """Chia transcript thành các đoạn ~400 từ, overlap 50."""
     words = (text or "").split()
     if not words:

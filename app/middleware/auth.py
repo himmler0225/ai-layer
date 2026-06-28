@@ -1,7 +1,9 @@
 """Xác thực X-API-Key."""
 
 from fastapi import Header, HTTPException
+
 from app.config.settings import API_KEYS
+
 
 async def verify_api_key(x_api_key: str = Header(...)):
     """Kiểm tra header X-API-Key."""

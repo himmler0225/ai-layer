@@ -20,7 +20,9 @@ def slugify_product_id(hint: str) -> str:
     return s[:80] or "unknown-product"
 
 
-def map_social_raw_review(product_id: str, platform: str, video_id: str, raw: dict) -> dict | None:
+def map_social_raw_review(
+    product_id: str, platform: str, video_id: str, raw: dict
+) -> dict | None:
     """
     Một comment crawl (dict từ data-miner) → một row L3 (raw_reviews).
 

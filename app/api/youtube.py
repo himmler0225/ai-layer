@@ -1,6 +1,7 @@
 """API YouTube AI — tóm tắt video, phân tích comment, trending."""
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+
 from app.middleware.auth import verify_api_key
 from app.processors import youtube as processor
 from app.schemas.response import ApiResponse

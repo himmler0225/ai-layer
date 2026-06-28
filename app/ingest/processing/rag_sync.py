@@ -1,13 +1,15 @@
 from __future__ import annotations
 
-import app.config.settings as _cfg
+import app.config.settings as settings
 from app.config.logger import Logger
-from app.ingest.mappers.social_review import map_social_raw_review, slugify_product_id
+from app.ingest.mappers.social_review import (map_social_raw_review,
+                                              slugify_product_id)
 from app.ingest.processing.curate import merge_curated
 from app.ingest.producer import publish
 from app.ingest.schemas import ROUTING_SUMMARIZE
 from app.repositories.aspect_summaries import get_aspect_summaries
-from app.repositories.curated_reviews import get_curated_reviews, replace_curated_reviews
+from app.repositories.curated_reviews import (get_curated_reviews,
+                                              replace_curated_reviews)
 from app.repositories.products import get_product, upsert_product
 from app.repositories.raw_reviews import count_raw_reviews, upsert_raw_reviews
 
@@ -62,7 +64,7 @@ async def sync_comments_to_product_rag(
 
     await upsert_raw_reviews(rows)
 
-    existing = await get_curated_reviews(product_id, limit=_cfg.CURATED_TOP_N)
+    existing = await get_curated_reviews(product_id, limit=settings.CURATED_TOP_N)
     curated = merge_curated(existing, rows)
     await replace_curated_reviews(product_id, curated)
 

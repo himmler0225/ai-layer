@@ -56,7 +56,9 @@ async def count_comments(video_id: str) -> int:
     async with factory() as session:
         return int(
             await session.scalar(
-                select(func.count()).select_from(Comment).where(Comment.video_id == video_id)
+                select(func.count())
+                .select_from(Comment)
+                .where(Comment.video_id == video_id)
             )
             or 0
         )

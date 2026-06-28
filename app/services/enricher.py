@@ -73,7 +73,9 @@ def _detect_source_label(tool_calls: List[Dict]) -> str:
     return "đa nguồn"
 
 
-def _review_entry(content: str, *, platform: str, source_url: Optional[str] = None) -> Dict:
+def _review_entry(
+    content: str, *, platform: str, source_url: Optional[str] = None
+) -> Dict:
     return {"content": content, "source_url": source_url, "platform": platform}
 
 
@@ -121,7 +123,9 @@ def _collect_all(tool_calls: List[Dict]) -> Tuple[List[Dict], List[Dict], List[D
 
         if tool == "youtube_search":
             q = inputs.get("keyword") or inputs.get("query", "")
-            _add_source(f'YouTube: "{q}"', _youtube_search_url(q), "search", platform="youtube")
+            _add_source(
+                f'YouTube: "{q}"', _youtube_search_url(q), "search", platform="youtube"
+            )
             video_list = (
                 result.get("_list")
                 or result.get("results")
@@ -136,30 +140,40 @@ def _collect_all(tool_calls: List[Dict]) -> Tuple[List[Dict], List[Dict], List[D
         elif tool == "youtube_get_detail":
             vid = result.get("video_id") or inputs.get("video_id")
             if vid:
-                entry = _youtube_video_entry({
-                    "title": result.get("title"),
-                    "channel": result.get("author") or result.get("channel"),
-                    "view_count": result.get("views") or result.get("view_count"),
-                    "thumbnails": result.get("thumbnails", []) or result.get("thumbnail", []),
-                }, vid)
+                entry = _youtube_video_entry(
+                    {
+                        "title": result.get("title"),
+                        "channel": result.get("author") or result.get("channel"),
+                        "view_count": result.get("views") or result.get("view_count"),
+                        "thumbnails": result.get("thumbnails", [])
+                        or result.get("thumbnail", []),
+                    },
+                    vid,
+                )
                 entry["duration"] = result.get("length_seconds")
                 entry["description"] = (result.get("description") or "")[:300]
                 _mark_analyzed(entry, f"yt:{vid}")
                 _add_source(
-                    (result.get("title") or vid)[:80], _youtube_url(vid), "video",
-                    thumbnail=entry.get("thumbnail"), channel=entry.get("channel"),
-                    views=_fmt_views(entry.get("views")), platform="youtube",
+                    (result.get("title") or vid)[:80],
+                    _youtube_url(vid),
+                    "video",
+                    thumbnail=entry.get("thumbnail"),
+                    channel=entry.get("channel"),
+                    views=_fmt_views(entry.get("views")),
+                    platform="youtube",
                 )
 
         elif tool in ("youtube_get_comments", "youtube_get_transcript"):
             vid = inputs.get("video_id")
             url = _youtube_url(vid) if vid else None
-            for raw_c in (result.get("comments") or result.get("_list") or []):
+            for raw_c in result.get("comments") or result.get("_list") or []:
                 c = _safe(raw_c)
                 if c:
                     text = c.get("content") or c.get("text") or ""
                     if text:
-                        all_reviews.append(_review_entry(text, platform="youtube", source_url=url))
+                        all_reviews.append(
+                            _review_entry(text, platform="youtube", source_url=url)
+                        )
             if vid:
                 cat = search_catalog.get(vid, {})
                 _mark_analyzed(_youtube_video_entry(cat, vid), f"yt:{vid}")
@@ -167,34 +181,53 @@ def _collect_all(tool_calls: List[Dict]) -> Tuple[List[Dict], List[Dict], List[D
                     _add_source(f"YouTube: {vid}", url, "reviews", platform="youtube")
 
         elif tool in ("youtube_get_comments_batch", "youtube_get_transcript_batch"):
-            for raw_vr in (result.get("results") or result.get("_list") or []):
+            for raw_vr in result.get("results") or result.get("_list") or []:
                 vid_result = _safe(raw_vr)
                 if not vid_result:
                     continue
                 vid = vid_result.get("video_id")
                 url = _youtube_url(vid) if vid else None
-                for raw_c in (vid_result.get("comments") or vid_result.get("segments") or []):
+                for raw_c in (
+                    vid_result.get("comments") or vid_result.get("segments") or []
+                ):
                     c = _safe(raw_c)
                     if c:
                         text = c.get("content") or c.get("text") or ""
                         if text:
-                            all_reviews.append(_review_entry(text, platform="youtube", source_url=url))
+                            all_reviews.append(
+                                _review_entry(text, platform="youtube", source_url=url)
+                            )
                 if vid:
                     cat = search_catalog.get(vid, {})
-                    entry = _youtube_video_entry({
-                        **cat,
-                        "title": cat.get("title") or vid_result.get("title"),
-                        "channel": cat.get("channel") or vid_result.get("channel"),
-                        "view_count": cat.get("view_count") or vid_result.get("view_count"),
-                    }, vid)
+                    entry = _youtube_video_entry(
+                        {
+                            **cat,
+                            "title": cat.get("title") or vid_result.get("title"),
+                            "channel": cat.get("channel") or vid_result.get("channel"),
+                            "view_count": cat.get("view_count")
+                            or vid_result.get("view_count"),
+                        },
+                        vid,
+                    )
                     _mark_analyzed(entry, f"yt:{vid}")
-                    if url and (vid_result.get("comments") or vid_result.get("segments")):
-                        _add_source(f"YouTube: {vid}", url, "reviews", platform="youtube")
+                    if url and (
+                        vid_result.get("comments") or vid_result.get("segments")
+                    ):
+                        _add_source(
+                            f"YouTube: {vid}", url, "reviews", platform="youtube"
+                        )
 
         elif tool == "tiktok_search":
             q = inputs.get("keyword", "")
-            _add_source(f'TikTok: "{q}"', f"https://www.tiktok.com/search?q={quote(q)}", "search", platform="tiktok")
-            for raw_v in (result.get("videos") or result.get("items") or result.get("_list") or []):
+            _add_source(
+                f'TikTok: "{q}"',
+                f"https://www.tiktok.com/search?q={quote(q)}",
+                "search",
+                platform="tiktok",
+            )
+            for raw_v in (
+                result.get("videos") or result.get("items") or result.get("_list") or []
+            ):
                 v = _safe(raw_v)
                 if v:
                     aweme = str(v.get("aweme_id") or v.get("id") or "")
@@ -214,20 +247,36 @@ def _collect_all(tool_calls: List[Dict]) -> Tuple[List[Dict], List[Dict], List[D
                 else:
                     continue
                 if text:
-                    all_reviews.append(_review_entry(text, platform="tiktok", source_url=url))
+                    all_reviews.append(
+                        _review_entry(text, platform="tiktok", source_url=url)
+                    )
             if aweme_id:
                 cat = search_catalog.get(f"tt:{aweme_id}", {})
                 title = cat.get("desc") or cat.get("title") or aweme_id
-                author = (cat.get("author") or {}).get("nickname") or cat.get("author_name", "")
-                plays = (cat.get("statistics") or {}).get("play_count") or cat.get("play_count")
+                author = (cat.get("author") or {}).get("nickname") or cat.get(
+                    "author_name", ""
+                )
+                plays = (cat.get("statistics") or {}).get("play_count") or cat.get(
+                    "play_count"
+                )
                 cover = cat.get("video", {}).get("cover", {}).get("url_list", [])
                 thumb = cover[0] if cover else None
-                _mark_analyzed({
-                    "video_id": aweme_id, "title": title, "channel": author,
-                    "views": plays, "thumbnail": thumb, "source_url": url, "platform": "tiktok",
-                }, f"tt:{aweme_id}")
+                _mark_analyzed(
+                    {
+                        "video_id": aweme_id,
+                        "title": title,
+                        "channel": author,
+                        "views": plays,
+                        "thumbnail": thumb,
+                        "source_url": url,
+                        "platform": "tiktok",
+                    },
+                    f"tt:{aweme_id}",
+                )
                 if url:
-                    _add_source(f"TikTok: {url[-20:]}", url, "reviews", platform="tiktok")
+                    _add_source(
+                        f"TikTok: {url[-20:]}", url, "reviews", platform="tiktok"
+                    )
 
         elif tool == "tiktok_video_info":
             url = inputs.get("url", "")
@@ -239,12 +288,28 @@ def _collect_all(tool_calls: List[Dict]) -> Tuple[List[Dict], List[Dict], List[D
             cover = v.get("video", {}).get("cover", {}).get("url_list", [])
             thumb = cover[0] if cover else None
             if aweme:
-                _mark_analyzed({
-                    "video_id": aweme, "title": title, "channel": author,
-                    "views": plays, "thumbnail": thumb, "source_url": url, "platform": "tiktok",
-                }, f"tt:{aweme}")
+                _mark_analyzed(
+                    {
+                        "video_id": aweme,
+                        "title": title,
+                        "channel": author,
+                        "views": plays,
+                        "thumbnail": thumb,
+                        "source_url": url,
+                        "platform": "tiktok",
+                    },
+                    f"tt:{aweme}",
+                )
             if url:
-                _add_source(title[:80], url, "video", thumbnail=thumb, channel=author, views=_fmt_views(plays), platform="tiktok")
+                _add_source(
+                    title[:80],
+                    url,
+                    "video",
+                    thumbnail=thumb,
+                    channel=author,
+                    views=_fmt_views(plays),
+                    platform="tiktok",
+                )
 
     all_videos = [video_by_key[k] for k in analyzed_keys if k in video_by_key]
     all_videos.sort(key=lambda v: int(v.get("views") or 0), reverse=True)
@@ -260,7 +325,7 @@ def _product_name(task: str, videos: List[Dict]) -> str:
     question = task.split(_HISTORY_MARKER)[-1].strip() if task else ""
     for prefix in ("review ", "đánh giá ", "tìm hiểu ", "phân tích "):
         if question.lower().startswith(prefix):
-            question = question[len(prefix):].strip()
+            question = question[len(prefix) :].strip()
     if question and len(question) <= 80:
         return question
     if videos:
@@ -301,5 +366,3 @@ async def enrich_agent_result(
         "tool_calls": [{"tool": c["tool"], "inputs": c["inputs"]} for c in tool_calls],
         "iterations": iterations,
     }
-
-

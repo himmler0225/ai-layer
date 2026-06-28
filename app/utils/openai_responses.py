@@ -118,7 +118,9 @@ async def create_response(
 
 
 @asynccontextmanager
-async def response_stream_with_retry(*, task: str = TASK_DEFAULT, **kwargs: Any) -> AsyncIterator[Any]:
+async def response_stream_with_retry(
+    *, task: str = TASK_DEFAULT, **kwargs: Any
+) -> AsyncIterator[Any]:
     """LLM stream — retry một lần khi 429/5xx/timeout (trong provider)."""
     async with get_router().response_stream(task, **kwargs) as stream:
         yield stream

@@ -83,7 +83,9 @@ SUPABASE_SERVICE_KEY: str = os.getenv("SUPABASE_SERVICE_KEY", "")
 SUPABASE_TOKEN_TTL: int = 3600
 HISTORY_SESSIONS_TTL: int = 300
 HISTORY_MESSAGES_TTL: int = 600
-REMOTE_CONFIG_TTL: int = int(os.getenv("REMOTE_CONFIG_TTL", "5"))  # phút — refresh Supabase config
+REMOTE_CONFIG_TTL: int = int(
+    os.getenv("REMOTE_CONFIG_TTL", "5")
+)  # phút — refresh Supabase config
 
 RABBITMQ_URL: str = os.getenv("RABBITMQ_URL", "")
 RABBITMQ_EXCHANGE: str = os.getenv("RABBITMQ_EXCHANGE", "knowledge.ingest")

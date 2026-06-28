@@ -2,23 +2,31 @@ from __future__ import annotations
 
 import json
 
-import app.config.settings as _cfg
+import app.config.settings as settings
 from app.ai.router import TASK_ASPECT_GROUP, TASK_ASPECT_SUMMARY
 from app.config.logger import Logger
 from app.ingest.processing.embeddings import embed_texts
-from app.repositories.aspect_chunks import delete_aspect_chunks_for_product, upsert_aspect_chunks
+from app.repositories.aspect_chunks import (delete_aspect_chunks_for_product,
+                                            upsert_aspect_chunks)
 from app.repositories.aspect_summaries import upsert_aspect_summary
-from app.repositories.raw_reviews import count_raw_reviews
 from app.repositories.curated_reviews import get_curated_reviews
 from app.repositories.products import get_product, upsert_product
+from app.repositories.raw_reviews import count_raw_reviews
 from app.services import prompts as rag_prompts
 from app.services.chatgpt import complete_json
 
 logger = Logger.get(__name__)
 
 ASPECTS = [
-    "battery", "camera", "screen", "performance",
-    "design", "price", "software", "durability", "other",
+    "battery",
+    "camera",
+    "screen",
+    "performance",
+    "design",
+    "price",
+    "software",
+    "durability",
+    "other",
 ]
 
 _MAX_CURATED_FOR_LLM = 200
@@ -36,13 +44,15 @@ def _parse_json(raw: str) -> dict | list | None:
 
 def _fallback_group(curated: list[dict]) -> list[dict]:
     texts = [c["content"] for c in curated[:50]]
-    return [{
-        "aspect": "other",
-        "review_ids": [c.get("raw_review_id") for c in curated[:50]],
-        "content": "\n".join(texts),
-        "positive_percent": 70.0,
-        "negative_percent": 30.0,
-    }]
+    return [
+        {
+            "aspect": "other",
+            "review_ids": [c.get("raw_review_id") for c in curated[:50]],
+            "content": "\n".join(texts),
+            "positive_percent": 70.0,
+            "negative_percent": 30.0,
+        }
+    ]
 
 
 async def _llm_group_aspects(curated: list[dict], *, product_name: str) -> list[dict]:
@@ -67,7 +77,7 @@ async def _llm_group_aspects(curated: list[dict], *, product_name: str) -> list[
         raw = await complete_json(
             prompt,
             rag_prompts.ASPECT_GROUP_SYSTEM,
-            max_tokens=_cfg.OPENAI_TOOL_MAX_TOKENS,
+            max_tokens=settings.OPENAI_TOOL_MAX_TOKENS,
             task=TASK_ASPECT_GROUP,
         )
         parsed = _parse_json(raw)
@@ -79,18 +89,24 @@ async def _llm_group_aspects(curated: list[dict], *, product_name: str) -> list[
         if groups:
             valid = []
             for g in groups:
-                if not isinstance(g, dict) or not g.get("aspect") or not g.get("content"):
+                if (
+                    not isinstance(g, dict)
+                    or not g.get("aspect")
+                    or not g.get("content")
+                ):
                     continue
                 aspect = str(g["aspect"]).lower().strip()
                 if aspect not in ASPECTS:
                     aspect = "other"
-                valid.append({
-                    "aspect": aspect,
-                    "review_ids": g.get("review_ids") or [],
-                    "content": str(g["content"])[:8000],
-                    "positive_percent": g.get("positive_percent"),
-                    "negative_percent": g.get("negative_percent"),
-                })
+                valid.append(
+                    {
+                        "aspect": aspect,
+                        "review_ids": g.get("review_ids") or [],
+                        "content": str(g["content"])[:8000],
+                        "positive_percent": g.get("positive_percent"),
+                        "negative_percent": g.get("negative_percent"),
+                    }
+                )
             if valid:
                 return valid
     except Exception as exc:
@@ -99,7 +115,9 @@ async def _llm_group_aspects(curated: list[dict], *, product_name: str) -> list[
     return _fallback_group(curated)
 
 
-async def _llm_summarize_aspect(aspect: str, chunk_content: str, *, product_name: str) -> dict:
+async def _llm_summarize_aspect(
+    aspect: str, chunk_content: str, *, product_name: str
+) -> dict:
     """LLM tóm tắt một aspect → row aspect_summaries (L1)."""
     prompt = rag_prompts.ASPECT_SUMMARY_PROMPT.format(
         product=product_name,
@@ -110,7 +128,7 @@ async def _llm_summarize_aspect(aspect: str, chunk_content: str, *, product_name
         raw = await complete_json(
             prompt,
             rag_prompts.ASPECT_SUMMARY_SYSTEM,
-            max_tokens=_cfg.OPENAI_TOOL_MAX_TOKENS,
+            max_tokens=settings.OPENAI_TOOL_MAX_TOKENS,
             task=TASK_ASPECT_SUMMARY,
         )
         parsed = _parse_json(raw)
@@ -122,7 +140,9 @@ async def _llm_summarize_aspect(aspect: str, chunk_content: str, *, product_name
                 "positive_percent": parsed.get("positive_percent"),
             }
     except Exception as exc:
-        logger.warning("[summarize] summarize_aspect LLM failed aspect=%s: %s", aspect, exc)
+        logger.warning(
+            "[summarize] summarize_aspect LLM failed aspect=%s: %s", aspect, exc
+        )
 
     return {
         "summary": f"Tóm tắt {aspect} cho {product_name}: {chunk_content[:300]}...",
@@ -142,7 +162,7 @@ async def handle_product_summarize(envelope: dict) -> None:
     product = await get_product(product_id)
     product_name = (product or {}).get("name") or product_id
 
-    curated = await get_curated_reviews(product_id, limit=_cfg.CURATED_TOP_N)
+    curated = await get_curated_reviews(product_id, limit=settings.CURATED_TOP_N)
     if not curated:
         logger.warning("[summarize] no curated product=%s", product_id)
         return
@@ -152,15 +172,17 @@ async def handle_product_summarize(envelope: dict) -> None:
 
     chunk_rows = []
     for g in groups:
-        chunk_rows.append({
-            "id": f"chk:{product_id}:{g['aspect']}",
-            "product_id": product_id,
-            "aspect": g["aspect"],
-            "content": g["content"],
-            "review_ids": g.get("review_ids") or [],
-            "positive_percent": g.get("positive_percent"),
-            "negative_percent": g.get("negative_percent"),
-        })
+        chunk_rows.append(
+            {
+                "id": f"chk:{product_id}:{g['aspect']}",
+                "product_id": product_id,
+                "aspect": g["aspect"],
+                "content": g["content"],
+                "review_ids": g.get("review_ids") or [],
+                "positive_percent": g.get("positive_percent"),
+                "negative_percent": g.get("negative_percent"),
+            }
+        )
 
     await delete_aspect_chunks_for_product(product_id, keep_aspects=aspects)
 
@@ -171,7 +193,9 @@ async def handle_product_summarize(envelope: dict) -> None:
 
     for row in chunk_rows:
         aspect = row["aspect"]
-        meta = await _llm_summarize_aspect(aspect, row["content"], product_name=product_name)
+        meta = await _llm_summarize_aspect(
+            aspect, row["content"], product_name=product_name
+        )
         summary_vec = (await embed_texts([meta["summary"]]))[0]
         await upsert_aspect_summary(
             id=f"sum:{product_id}:{aspect}",
@@ -188,6 +212,16 @@ async def handle_product_summarize(envelope: dict) -> None:
     meta = dict((product or {}).get("metadata") or {})
     meta["last_summarize_raw_count"] = await count_raw_reviews(product_id)
     meta["summarized_at"] = envelope.get("fetched_at") or ""
-    await upsert_product(id=product_id, name=product_name, platform=(product or {}).get("platform") or "mixed", metadata=meta)
+    await upsert_product(
+        id=product_id,
+        name=product_name,
+        platform=(product or {}).get("platform") or "mixed",
+        metadata=meta,
+    )
 
-    logger.info("[summarize] done product=%s chunks=%d aspects=%s", product_id, len(chunk_rows), aspects)
+    logger.info(
+        "[summarize] done product=%s chunks=%d aspects=%s",
+        product_id,
+        len(chunk_rows),
+        aspects,
+    )

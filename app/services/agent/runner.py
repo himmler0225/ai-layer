@@ -2,19 +2,15 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
+from app.ai.router import TASK_AGENT_TOOL
 from app.config.logger import Logger
 from app.services.agent import config
-from app.services.agent.loop import (
-    bootstrap_agent,
-    finish_agent,
-    handle_incomplete_sync,
-    is_max_tokens_incomplete,
-    resolve_final_text,
-    run_tool_round,
-)
+from app.services.agent.loop import (bootstrap_agent, finish_agent,
+                                     handle_incomplete_sync,
+                                     is_max_tokens_incomplete,
+                                     resolve_final_text, run_tool_round)
 from app.utils.openai_errors import log_error, user_message
 from app.utils.openai_responses import create_response, status_error
-from app.ai.router import TASK_AGENT_TOOL
 
 logger = Logger.get(__name__)
 
@@ -31,7 +27,12 @@ async def run_agent(
         raise RuntimeError(str(exc)) from exc
 
     for iteration in range(1, ctx["max_iter"] + 1):
-        logger.info("[agent] iteration=%d/%d model=%s", iteration, ctx["max_iter"], config.tool_model())
+        logger.info(
+            "[agent] iteration=%d/%d model=%s",
+            iteration,
+            ctx["max_iter"],
+            config.tool_model(),
+        )
 
         try:
             response = await create_response(

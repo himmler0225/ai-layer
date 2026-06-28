@@ -5,10 +5,10 @@ Revises:
 Create Date: 2026-06-25 10:57:54.720374
 
 """
+
 from typing import Sequence, Union
 
 from alembic import op
-
 from app.db.models import Base
 
 revision: str = "90c66f03b10a"

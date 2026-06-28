@@ -27,13 +27,15 @@ async def handle_chunks_embed(envelope: dict) -> None:
         metadata["chunk_type"] = item.get("chunk_type", "text")
         if product_hint:
             metadata["product_hint"] = product_hint
-        rows.append({
-            "id": item["id"],
-            "video_id": video_id,
-            "platform": platform,
-            "content": text,
-            "embedding": vector,
-            "metadata": metadata,
-        })
+        rows.append(
+            {
+                "id": item["id"],
+                "video_id": video_id,
+                "platform": platform,
+                "content": text,
+                "embedding": vector,
+                "metadata": metadata,
+            }
+        )
 
     await upsert_chunks(rows)

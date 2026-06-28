@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from app.ingest.mappers.social_review import slugify_product_id
+
 # Tên SP → slug; có trong DB thì trả slug, không thì None.
 
-from app.ingest.mappers.social_review import slugify_product_id
 
 __all__ = ["slugify_product_id", "resolve_product_id"]
 

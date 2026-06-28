@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import app.config.settings as _cfg
+import app.config.settings as settings
 from app.ai.router import get_router
 
 _BATCH_SIZE = 64

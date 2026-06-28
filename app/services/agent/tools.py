@@ -39,7 +39,9 @@ async def execute_parallel(
         try:
             args = json.loads(item.arguments) if item.arguments else {}
         except json.JSONDecodeError:
-            logger.error("[agent] invalid tool args tool=%s raw=%r", item.name, item.arguments)
+            logger.error(
+                "[agent] invalid tool args tool=%s raw=%r", item.name, item.arguments
+            )
             args = {}
         result = await execute_tool(item.name, args)
         await schedule_tool_ingest(item.name, args, result, task=task)
@@ -50,9 +52,11 @@ async def execute_parallel(
     outputs, log_entries = [], []
     for item, args, result in triples:
         log_entries.append({"tool": item.name, "inputs": args, "result": result})
-        outputs.append({
-            "type": "function_call_output",
-            "call_id": item.call_id,
-            "output": serialize_result(result),
-        })
+        outputs.append(
+            {
+                "type": "function_call_output",
+                "call_id": item.call_id,
+                "output": serialize_result(result),
+            }
+        )
     return outputs, log_entries

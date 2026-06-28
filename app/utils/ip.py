@@ -3,6 +3,7 @@
 from fastapi import Request
 from slowapi import Limiter
 
+
 def get_client_ip(request: Request) -> str:
     """Lấy IP thật của client (ưu tiên X-Forwarded-For)."""
     if cf_ip := request.headers.get("cf-connecting-ip"):
@@ -12,5 +13,6 @@ def get_client_ip(request: Request) -> str:
         return forwarded.split(",")[0].strip()
 
     return request.client.host
+
 
 limiter = Limiter(key_func=get_client_ip)

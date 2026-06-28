@@ -6,16 +6,8 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import (
-    BigInteger,
-    CheckConstraint,
-    DateTime,
-    ForeignKey,
-    Index,
-    Integer,
-    Text,
-    func,
-)
+from sqlalchemy import (BigInteger, CheckConstraint, DateTime, ForeignKey,
+                        Index, Integer, Text, func)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 

@@ -1,9 +1,10 @@
 """Xử lý YouTube qua LLM (summary, comments, trending)."""
 
 import json
-from app.config.logger import Logger
 from typing import Dict, List
+
 from app.clients import data_miner
+from app.config.logger import Logger
 from app.services.chatgpt import complete_json
 
 logger = Logger.get(__name__)
@@ -11,13 +12,20 @@ logger = Logger.get(__name__)
 _SYSTEM = """You are an AI assistant analyzing YouTube content.
 Be concise. Always respond in the same language as the video content when possible."""
 
+
 def _parse_json(raw: str, context: str) -> Dict:
     """Parse JSON từ LLM, báo lỗi rõ ngữ cảnh."""
     try:
         return json.loads(raw)
     except (json.JSONDecodeError, TypeError) as e:
-        logger.error("[youtube] json parse failed context=%s error=%s raw=%s", context, e, raw[:200])
+        logger.error(
+            "[youtube] json parse failed context=%s error=%s raw=%s",
+            context,
+            e,
+            raw[:200],
+        )
         raise ValueError(f"ChatGPT returned invalid JSON in {context}: {e}") from e
+
 
 async def summarize_video(video_id: str) -> Dict:
     """Tóm tắt nội dung video bằng LLM."""
@@ -38,17 +46,14 @@ Return JSON: {{"summary": "...", "key_points": ["..."], "tags": ["..."], "sentim
     result["title"] = detail.get("title")
     return result
 
+
 async def analyze_comments(video_id: str) -> Dict:
-    """Phân tích sentiment và chủ đề comment bằng LLM."""
     data = await data_miner.get_video_comments(video_id, max_comments=100)
     comments = data.get("comments", [])
     if not comments:
         return {"video_id": video_id, "total": 0, "insights": None}
 
-    sample = "\n".join(
-        f"- {c.get('content', '')[:200]}"
-        for c in comments[:50]
-    )
+    sample = "\n".join(f"- {c.get('content', '')[:200]}" for c in comments[:50])
 
     prompt = f"""Analyze these YouTube comments for video_id={video_id}:
 {sample}
@@ -65,6 +70,7 @@ Return JSON: {{
     result["video_id"] = video_id
     result["total_analyzed"] = len(comments)
     return result
+
 
 async def analyze_trends(limit: int = 20) -> Dict:
     """Phân tích xu hướng từ video trending."""

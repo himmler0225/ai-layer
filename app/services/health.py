@@ -5,7 +5,7 @@ from __future__ import annotations
 import httpx
 
 import app.config.settings as settings
-from app.constants import HEALTH_CHECK_TIMEOUT
+from app.config.constants import HEALTH_CHECK_TIMEOUT
 
 
 async def check_postgres() -> str:
@@ -14,6 +14,7 @@ async def check_postgres() -> str:
         return "missing DATABASE_URL"
     try:
         from sqlalchemy import text
+
         from app.db.session import get_session_factory
 
         factory = await get_session_factory()

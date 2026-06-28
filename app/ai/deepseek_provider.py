@@ -8,13 +8,11 @@ from typing import Any, AsyncIterator, Dict, List, Optional
 
 from openai import AsyncOpenAI
 
-import app.config.settings as _cfg
-from app.ai.adapters import (
-    ChatCompletionStreamAdapter,
-    chat_completion_to_llm_response,
-    responses_input_to_chat_messages,
-    responses_tools_to_chat,
-)
+import app.config.settings as settings
+from app.ai.adapters import (ChatCompletionStreamAdapter,
+                             chat_completion_to_llm_response,
+                             responses_input_to_chat_messages,
+                             responses_tools_to_chat)
 from app.ai.base import BaseLLM
 from app.config.logger import Logger
 from app.utils.openai_errors import log_error, should_retry
@@ -27,10 +25,10 @@ _client: AsyncOpenAI | None = None
 
 def _get_client() -> AsyncOpenAI:
     global _client
-    if not _cfg.DEEP_SEEK_API_KEY:
+    if not settings.DEEP_SEEK_API_KEY:
         raise RuntimeError("DEEP_SEEK_API_KEY is not configured")
     if _client is None:
-        _client = AsyncOpenAI(api_key=_cfg.DEEP_SEEK_API_KEY, base_url=_BASE_URL)
+        _client = AsyncOpenAI(api_key=settings.DEEP_SEEK_API_KEY, base_url=_BASE_URL)
     return _client
 
 
@@ -38,10 +36,10 @@ class DeepSeekProvider(BaseLLM):
     name = "deepseek"
 
     def default_model(self) -> str:
-        return _cfg.DEEP_SEEK_MODEL or "deepseek-chat"
+        return settings.DEEP_SEEK_MODEL or "deepseek-chat"
 
     def default_max_tokens(self) -> int:
-        return _cfg.OPENAI_TOOL_MAX_TOKENS or _cfg.OPENAI_MAX_TOKENS or 4096
+        return settings.OPENAI_TOOL_MAX_TOKENS or settings.OPENAI_MAX_TOKENS or 4096
 
     async def complete(
         self,
@@ -93,7 +91,7 @@ class DeepSeekProvider(BaseLLM):
         tools: Optional[List[Dict]] = None,
         tool_choice: Optional[str] = None,
     ) -> Any:
-        resolved_model = model or _cfg.DEEP_SEEK_TOOL_MODEL or self.default_model()
+        resolved_model = model or settings.DEEP_SEEK_TOOL_MODEL or self.default_model()
         messages = responses_input_to_chat_messages(input, instructions=instructions)
         chat_tools = responses_tools_to_chat(tools)
 
@@ -106,7 +104,11 @@ class DeepSeekProvider(BaseLLM):
             kwargs["tools"] = chat_tools
             kwargs["tool_choice"] = tool_choice or "auto"
 
-        logger.info("[llm:deepseek] chat.completions model=%s tools=%s", resolved_model, len(chat_tools))
+        logger.info(
+            "[llm:deepseek] chat.completions model=%s tools=%s",
+            resolved_model,
+            len(chat_tools),
+        )
 
         last_exc: Exception | None = None
         for attempt in (1, 2):
@@ -115,7 +117,9 @@ class DeepSeekProvider(BaseLLM):
                 return chat_completion_to_llm_response(completion)
             except Exception as exc:
                 last_exc = exc
-                log_error(logger, exc, where=f"deepseek.chat.completions attempt={attempt}")
+                log_error(
+                    logger, exc, where=f"deepseek.chat.completions attempt={attempt}"
+                )
                 if attempt == 1 and should_retry(exc):
                     await asyncio.sleep(2)
                     continue
@@ -124,14 +128,22 @@ class DeepSeekProvider(BaseLLM):
 
     @asynccontextmanager
     async def response_stream(self, **kwargs: Any) -> AsyncIterator[Any]:
-        model = kwargs.pop("model", None) or _cfg.DEEP_SEEK_TOOL_MODEL or self.default_model()
+        model = (
+            kwargs.pop("model", None)
+            or settings.DEEP_SEEK_TOOL_MODEL
+            or self.default_model()
+        )
         instructions = kwargs.pop("instructions", None)
         input_items = kwargs.pop("input", None)
-        max_output_tokens = kwargs.pop("max_output_tokens", None) or self.default_max_tokens()
+        max_output_tokens = (
+            kwargs.pop("max_output_tokens", None) or self.default_max_tokens()
+        )
         tools = kwargs.pop("tools", None)
         tool_choice = kwargs.pop("tool_choice", None)
 
-        messages = responses_input_to_chat_messages(input_items, instructions=instructions)
+        messages = responses_input_to_chat_messages(
+            input_items, instructions=instructions
+        )
         chat_tools = responses_tools_to_chat(tools)
         req: Dict[str, Any] = {
             "model": model,
@@ -167,4 +179,6 @@ class DeepSeekProvider(BaseLLM):
         model: Optional[str] = None,
         dimensions: Optional[int] = None,
     ) -> List[List[float]]:
-        raise RuntimeError("DeepSeek provider does not support embeddings — use task=embedding (OpenAI)")
+        raise RuntimeError(
+            "DeepSeek provider does not support embeddings — use task=embedding (OpenAI)"
+        )

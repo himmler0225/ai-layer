@@ -1,11 +1,7 @@
 from __future__ import annotations
 
-from app.ingest.dispatcher.publish import (
-    publish_comments,
-    publish_search,
-    publish_transcript,
-    SEARCH_TOOLS,
-)
+from app.ingest.dispatcher.publish import (SEARCH_TOOLS, publish_comments,
+                                           publish_search, publish_transcript)
 from app.ingest.mappers import map_tiktok_video, map_youtube_video
 from app.ingest.producer import publish
 from app.ingest.schemas import ROUTING_VIDEO
@@ -25,7 +21,9 @@ async def route_tool(
         return
 
     if tool_name in ("youtube_get_detail", "tiktok_video_info"):
-        mapped = map_youtube_video(data) if platform == "youtube" else map_tiktok_video(data)
+        mapped = (
+            map_youtube_video(data) if platform == "youtube" else map_tiktok_video(data)
+        )
         if mapped:
             await publish(
                 ROUTING_VIDEO,
@@ -38,7 +36,11 @@ async def route_tool(
 
     if tool_name == "youtube_get_comments":
         video_id = inputs.get("video_id", "")
-        comments = data if isinstance(data, list) else data.get("comments") or data.get("_list") or []
+        comments = (
+            data
+            if isinstance(data, list)
+            else data.get("comments") or data.get("_list") or []
+        )
         await publish_comments(video_id, "youtube", comments, product_hint)
         return
 
@@ -57,7 +59,9 @@ async def route_tool(
         video_id = inputs.get("video_id") or data.get("video_id", "")
         text = data.get("text") or ""
         if video_id and text and data.get("available", True):
-            await publish_transcript(video_id, "youtube", text, product_hint, data.get("language", ""))
+            await publish_transcript(
+                video_id, "youtube", text, product_hint, data.get("language", "")
+            )
         return
 
     if tool_name == "youtube_get_transcript_batch":
@@ -66,7 +70,11 @@ async def route_tool(
             for video_id, entry in results.items():
                 if entry and isinstance(entry, dict) and entry.get("text"):
                     await publish_transcript(
-                        str(video_id), "youtube", entry["text"], product_hint, entry.get("language", "")
+                        str(video_id),
+                        "youtube",
+                        entry["text"],
+                        product_hint,
+                        entry.get("language", ""),
                     )
         return
 
@@ -74,7 +82,9 @@ async def route_tool(
         aweme_id = str(inputs.get("aweme_id") or "")
         comments = data.get("comments") or data.get("_list") or []
         if aweme_id and comments:
-            await publish_comments(aweme_id, "tiktok", comments, product_hint, url=inputs.get("url", ""))
+            await publish_comments(
+                aweme_id, "tiktok", comments, product_hint, url=inputs.get("url", "")
+            )
         return
 
     if tool_name == "tiktok_transcript":
@@ -86,4 +96,6 @@ async def route_tool(
                 for seg in data["segments"]
             ).strip()
         if aweme_id and text:
-            await publish_transcript(aweme_id, "tiktok", text, product_hint, data.get("language", ""))
+            await publish_transcript(
+                aweme_id, "tiktok", text, product_hint, data.get("language", "")
+            )

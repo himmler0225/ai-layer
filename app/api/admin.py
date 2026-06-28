@@ -14,11 +14,13 @@ router = APIRouter(prefix="/admin", dependencies=[Depends(verify_api_key)])
 async def health_detail():
     """Health đầy đủ — giống /health nhưng cần API key."""
     checks = await collect_checks()
-    return ApiResponse.ok({
-        "service": "ai-layer",
-        "healthy": is_healthy(checks),
-        "checks": checks,
-    })
+    return ApiResponse.ok(
+        {
+            "service": "ai-layer",
+            "healthy": is_healthy(checks),
+            "checks": checks,
+        }
+    )
 
 
 @router.get("/ingest/queues")

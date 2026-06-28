@@ -1,13 +1,9 @@
 from __future__ import annotations
 
-from app.ingest.handlers import comments, embed, transcript, video, summarize
-from app.ingest.schemas import (
-    ROUTING_COMMENTS,
-    ROUTING_EMBED,
-    ROUTING_TRANSCRIPT,
-    ROUTING_VIDEO,
-    ROUTING_SUMMARIZE,
-)
+from app.ingest.handlers import comments, embed, summarize, transcript, video
+from app.ingest.schemas import (ROUTING_COMMENTS, ROUTING_EMBED,
+                                ROUTING_SUMMARIZE, ROUTING_TRANSCRIPT,
+                                ROUTING_VIDEO)
 
 _HANDLERS = {
     ROUTING_VIDEO: video.handle_video_upsert,

@@ -5,15 +5,17 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
+
 from pydantic import BaseModel, Field
+
 
 class ApiResponse(BaseModel):
     """Envelope JSON chuẩn {success, data, error, meta}."""
 
     success: bool
-    data:    Any                    = None
-    error:   Optional[str]          = None
-    meta:    Dict[str, Any]         = Field(default_factory=dict)
+    data: Any = None
+    error: Optional[str] = None
+    meta: Dict[str, Any] = Field(default_factory=dict)
 
     @classmethod
     def ok(cls, data: Any = None, **meta: Any) -> ApiResponse:
@@ -32,6 +34,7 @@ class ApiResponse(BaseModel):
             error=error,
             meta={"timestamp": _ts(), **meta},
         )
+
 
 def _ts() -> str:
     """Thời điểm UTC dạng ISO cho trường meta."""

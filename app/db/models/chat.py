@@ -17,9 +17,7 @@ class ChatSession(Base):
     """Phiên chat của user."""
 
     __tablename__ = "chat_sessions"
-    __table_args__ = (
-        Index("chat_sessions_user_updated", "user_id", "updated_at"),
-    )
+    __table_args__ = (Index("chat_sessions_user_updated", "user_id", "updated_at"),)
 
     id: Mapped[str] = mapped_column(Text, primary_key=True)
     user_id: Mapped[str] = mapped_column(Text, nullable=False)
@@ -43,7 +41,9 @@ class ChatMessage(Base):
 
     __tablename__ = "chat_messages"
     __table_args__ = (
-        CheckConstraint("role IN ('user', 'assistant')", name="chat_messages_role_check"),
+        CheckConstraint(
+            "role IN ('user', 'assistant')", name="chat_messages_role_check"
+        ),
         Index("chat_messages_session_created", "session_id", "created_at"),
     )
 

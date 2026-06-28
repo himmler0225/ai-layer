@@ -3,16 +3,13 @@ from __future__ import annotations
 from typing import AsyncGenerator, Dict, List
 
 import app.services.prompts as _prompts
+from app.ai.router import TASK_AGENT_SYNTH
 from app.config.logger import Logger
 from app.services.agent import config
-from app.ai.router import TASK_AGENT_SYNTH
 from app.utils.openai_errors import log_error, user_message
-from app.utils.openai_responses import (
-    create_response,
-    extract_response_text,
-    response_stream_with_retry,
-    status_error,
-)
+from app.utils.openai_responses import (create_response, extract_response_text,
+                                        response_stream_with_retry,
+                                        status_error)
 
 logger = Logger.get(__name__)
 

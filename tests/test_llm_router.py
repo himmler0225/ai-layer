@@ -1,12 +1,7 @@
 import app.config.settings as settings
-from app.ai.router import (
-    TASK_AGENT_SYNTH,
-    TASK_AGENT_TOOL,
-    TASK_ASPECT_GROUP,
-    TASK_ASPECT_SUMMARY,
-    TASK_EMBEDDING,
-    resolve,
-)
+from app.ai.router import (TASK_AGENT_SYNTH, TASK_AGENT_TOOL,
+                           TASK_ASPECT_GROUP, TASK_ASPECT_SUMMARY,
+                           TASK_EMBEDDING, resolve)
 from app.services.agent import config
 
 

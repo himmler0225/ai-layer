@@ -2,34 +2,39 @@ from __future__ import annotations
 
 from typing import Dict, List
 
-import app.config.settings as _cfg
+import app.config.settings as settings
 from app.config.logger import Logger
 from app.ingest.mappers.social_review import slugify_product_id
 from app.rag.knowledge import is_product_fresh, product_has_knowledge
-from app.rag.product_hint import PRODUCT_BLOCK_MARKER, current_question, extract_product_name
+from app.rag.product_hint import (PRODUCT_BLOCK_MARKER, current_question,
+                                  extract_product_name)
 from app.services.agent.constants import _TIKTOK, _YOUTUBE
 
 logger = Logger.get(__name__)
 
 # Review SP từ panel — chỉ gửi tool cần thiết, tránh OpenAI 500 vì list tool quá dài
-_PRODUCT_CORE = frozenset({
-    "search_product_summary",
-    "search_aspect_evidence",
-    "get_raw_reviews",
-    "youtube_search",
-    "youtube_get_comments_batch",
-    "youtube_get_transcript_batch",
-    "youtube_get_detail",
-    "youtube_get_comments",
-    "extract_id_from_url",
-})
+_PRODUCT_CORE = frozenset(
+    {
+        "search_product_summary",
+        "search_aspect_evidence",
+        "get_raw_reviews",
+        "youtube_search",
+        "youtube_get_comments_batch",
+        "youtube_get_transcript_batch",
+        "youtube_get_detail",
+        "youtube_get_comments",
+        "extract_id_from_url",
+    }
+)
 
-_RAG_CACHE_TOOLS = frozenset({
-    "search_product_summary",
-    "search_aspect_evidence",
-    "get_raw_reviews",
-    "extract_id_from_url",
-})
+_RAG_CACHE_TOOLS = frozenset(
+    {
+        "search_product_summary",
+        "search_aspect_evidence",
+        "get_raw_reviews",
+        "extract_id_from_url",
+    }
+)
 
 
 def detect_platform(task: str) -> str | None:
@@ -55,7 +60,10 @@ def filter_tools_by_platform(tools: List[Dict], task: str) -> List[Dict]:
     if len(filtered) != len(tools):
         logger.info(
             "[agent] platform=%s blocked=%s* tools=%d/%d",
-            platform, blocked, len(filtered), len(tools),
+            platform,
+            blocked,
+            len(filtered),
+            len(tools),
         )
     return filtered
 
@@ -75,7 +83,7 @@ def _narrow_for_product_context(tools: List[Dict], task: str) -> List[Dict]:
 
 async def _narrow_for_rag_cache(tools: List[Dict], task: str) -> List[Dict]:
     """RAG đủ + còn fresh → chỉ gửi tool đọc RAG, bỏ crawl."""
-    if not _cfg.RAG_ENABLED:
+    if not settings.RAG_ENABLED:
         return tools
 
     product_name = extract_product_name(task)
@@ -92,7 +100,9 @@ async def _narrow_for_rag_cache(tools: List[Dict], task: str) -> List[Dict]:
     if rag_tools and len(rag_tools) < len(tools):
         logger.info(
             "[agent] RAG cache hit product=%s tools=%d → %d",
-            product_id, len(tools), len(rag_tools),
+            product_id,
+            len(tools),
+            len(rag_tools),
         )
         return rag_tools
     return tools

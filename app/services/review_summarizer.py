@@ -3,10 +3,10 @@
 import re
 from typing import Dict, List, Optional
 
-import app.config.settings as _cfg
+import app.config.settings as settings
 import app.services.prompts as _prompts
-from app.rag.product_hint import extract_product_name
 from app.ai.router import TASK_REVIEW_SUMMARY
+from app.rag.product_hint import extract_product_name
 from app.utils.openai_responses import create_response, extract_response_text
 
 _HISTORY_MARKER = "\n[Câu hỏi hiện tại]\n"
@@ -25,10 +25,30 @@ _FOREIGN_RE = re.compile(
     r"\b(perai|mesmo|tamanho|gimana|bagus|sangat|kenapa|kak|anh|bro)\b",
     re.IGNORECASE,
 )
-_PRODUCT_STOPWORDS = frozenset({
-    "review", "cho", "mình", "biết", "về", "của", "the", "người", "dùng",
-    "nói", "gì", "là", "có", "không", "như", "thế", "nào", "bao", "nhiêu",
-})
+_PRODUCT_STOPWORDS = frozenset(
+    {
+        "review",
+        "cho",
+        "mình",
+        "biết",
+        "về",
+        "của",
+        "the",
+        "người",
+        "dùng",
+        "nói",
+        "gì",
+        "là",
+        "có",
+        "không",
+        "như",
+        "thế",
+        "nào",
+        "bao",
+        "nhiêu",
+    }
+)
+
 
 def _clean_summary(text: str) -> str:
     """Bỏ quote/blockquote/emoji header nếu model vẫn trả template cũ."""
@@ -69,7 +89,7 @@ def _product_hint(task: str, fallback: str) -> str:
                 return hint
     for prefix in ("review ", "đánh giá ", "tìm hiểu ", "phân tích "):
         if question.lower().startswith(prefix):
-            question = question[len(prefix):].strip()
+            question = question[len(prefix) :].strip()
     if question and len(question) <= 120:
         return question
     return fallback or "sản phẩm"
@@ -105,7 +125,9 @@ def filter_reviews(reviews: List[Dict], product: str) -> List[Dict]:
     filtered: List[Dict] = []
 
     for review in reviews:
-        text = (review.get("content") or review.get("comment") or review.get("text") or "").strip()
+        text = (
+            review.get("content") or review.get("comment") or review.get("text") or ""
+        ).strip()
         if not text or _is_noise(text):
             continue
         if not _is_viet_or_english(text):
@@ -129,7 +151,9 @@ def _format_reviews(reviews: List[Dict]) -> str:
     """Ghép review thành block text gửi LLM."""
     lines = []
     for i, review in enumerate(reviews[:120], 1):
-        text = review.get("content") or review.get("comment") or review.get("text") or ""
+        text = (
+            review.get("content") or review.get("comment") or review.get("text") or ""
+        )
         platform = review.get("platform", "")
         rating = review.get("rating") or review.get("stars")
         if not text:
@@ -169,10 +193,10 @@ async def summarize_reviews(
 
     response = await create_response(
         task=TASK_REVIEW_SUMMARY,
-        model=_cfg.OPENAI_MODEL,
+        model=settings.OPENAI_MODEL,
         instructions=_prompts.REVIEW_SUMMARY_SYSTEM,
         input=prompt,
-        max_output_tokens=_cfg.OPENAI_MAX_TOKENS,
+        max_output_tokens=settings.OPENAI_MAX_TOKENS,
     )
     raw = extract_response_text(response)
     if not raw:

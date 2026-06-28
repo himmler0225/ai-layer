@@ -5,14 +5,14 @@ from __future__ import annotations
 import asyncio
 from logging.config import fileConfig
 
-from alembic import context
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 import app.config.settings as settings
-from app.db.models import Base  # noqa: F401 — registers all tables on metadata
 import app.db.models  # noqa: F401
+from alembic import context
+from app.db.models import Base  # noqa: F401 — registers all tables on metadata
 
 config = context.config
 if config.config_file_name is not None:

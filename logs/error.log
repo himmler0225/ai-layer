@@ -1,2 +1,4 @@
 {"timestamp": "2026-06-10T08:05:52.804051", "level": "ERROR", "logger": "ai_layer.clients.data_miner", "message": "data-miner GET /api/videos/search — all 3 attempts failed", "module": "data_miner", "function": "_get", "line": 45}
 {"timestamp": "2026-06-26T00:55:42.501063", "level": "ERROR", "logger": "ai_layer.main", "message": "[db] init failed: password authentication failed for user \"postgres\"", "module": "main", "function": "lifespan", "line": 116}
+{"timestamp": "2026-06-27T08:35:08.187274", "level": "ERROR", "logger": "ai_layer.main", "message": "[db] init failed: [Errno 61] Connection refused", "module": "main", "function": "lifespan", "line": 116}
+{"timestamp": "2026-06-28T07:58:46.692460", "level": "ERROR", "logger": "ai_layer.main", "message": "[db] init failed: password authentication failed for user \"postgres\"", "module": "main", "function": "lifespan", "line": 121}

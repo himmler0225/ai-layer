@@ -5,14 +5,9 @@ from __future__ import annotations
 import uuid
 from typing import Any, Dict, List
 
-from app.ai.types import (
-    FunctionCallItem,
-    IncompleteDetails,
-    LLMResponse,
-    MessageOutputItem,
-    OutputTextContent,
-    StreamTextDelta,
-)
+from app.ai.types import (FunctionCallItem, IncompleteDetails, LLMResponse,
+                          MessageOutputItem, OutputTextContent,
+                          StreamTextDelta)
 
 
 def responses_tools_to_chat(tools: List[Dict] | None) -> List[Dict]:
@@ -22,25 +17,34 @@ def responses_tools_to_chat(tools: List[Dict] | None) -> List[Dict]:
     for tool in tools:
         if tool.get("type") != "function":
             continue
-        out.append({
-            "type": "function",
-            "function": {
-                "name": tool["name"],
-                "description": tool.get("description", ""),
-                "parameters": tool.get("parameters") or {"type": "object", "properties": {}},
-            },
-        })
+        out.append(
+            {
+                "type": "function",
+                "function": {
+                    "name": tool["name"],
+                    "description": tool.get("description", ""),
+                    "parameters": tool.get("parameters")
+                    or {"type": "object", "properties": {}},
+                },
+            }
+        )
     return out
 
 
 def _append_user_message(messages: List[Dict], content: str) -> None:
-    if messages and messages[-1].get("role") == "user" and isinstance(messages[-1].get("content"), str):
+    if (
+        messages
+        and messages[-1].get("role") == "user"
+        and isinstance(messages[-1].get("content"), str)
+    ):
         messages[-1]["content"] = f"{messages[-1]['content']}\n{content}"
     else:
         messages.append({"role": "user", "content": content})
 
 
-def responses_input_to_chat_messages(input_items: Any, *, instructions: str | None = None) -> List[Dict]:
+def responses_input_to_chat_messages(
+    input_items: Any, *, instructions: str | None = None
+) -> List[Dict]:
     """Chuyển input Responses API sang messages cho chat.completions."""
     messages: List[Dict] = []
     if instructions:
@@ -68,23 +72,27 @@ def responses_input_to_chat_messages(input_items: Any, *, instructions: str | No
                 continue
             if item_type == "function_call":
                 call_id = item.get("call_id") or f"call_{uuid.uuid4().hex[:12]}"
-                pending_tool_calls.append({
-                    "id": call_id,
-                    "type": "function",
-                    "function": {
-                        "name": item.get("name", ""),
-                        "arguments": item.get("arguments") or "{}",
-                    },
-                })
+                pending_tool_calls.append(
+                    {
+                        "id": call_id,
+                        "type": "function",
+                        "function": {
+                            "name": item.get("name", ""),
+                            "arguments": item.get("arguments") or "{}",
+                        },
+                    }
+                )
                 pending_call_ids.append(call_id)
                 continue
             if item_type == "function_call_output":
                 flush_assistant_tool_calls()
-                messages.append({
-                    "role": "tool",
-                    "tool_call_id": item.get("call_id", ""),
-                    "content": str(item.get("output", "")),
-                })
+                messages.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": item.get("call_id", ""),
+                        "content": str(item.get("output", "")),
+                    }
+                )
                 continue
             if item_type == "message":
                 flush_assistant_tool_calls()
@@ -93,7 +101,12 @@ def responses_input_to_chat_messages(input_items: Any, *, instructions: str | No
                     if isinstance(block, dict) and block.get("type") == "output_text":
                         text_parts.append(block.get("text", ""))
                 if text_parts:
-                    messages.append({"role": item.get("role", "assistant"), "content": "".join(text_parts)})
+                    messages.append(
+                        {
+                            "role": item.get("role", "assistant"),
+                            "content": "".join(text_parts),
+                        }
+                    )
                 continue
 
         role = getattr(item, "role", None)
@@ -114,16 +127,20 @@ def chat_completion_to_llm_response(completion: Any) -> LLMResponse:
 
     if message.tool_calls:
         for call in message.tool_calls:
-            output.append(FunctionCallItem(
-                call_id=call.id,
-                name=call.function.name,
-                arguments=call.function.arguments or "{}",
-            ))
+            output.append(
+                FunctionCallItem(
+                    call_id=call.id,
+                    name=call.function.name,
+                    arguments=call.function.arguments or "{}",
+                )
+            )
     elif text:
-        output.append(MessageOutputItem(
-            role="assistant",
-            content=[OutputTextContent(text=text)],
-        ))
+        output.append(
+            MessageOutputItem(
+                role="assistant",
+                content=[OutputTextContent(text=text)],
+            )
+        )
 
     status = "completed"
     incomplete = None
@@ -175,7 +192,9 @@ class ChatCompletionStreamAdapter:
             if delta.tool_calls:
                 for tc in delta.tool_calls:
                     idx = tc.index
-                    slot = self._tool_calls.setdefault(idx, {"id": "", "name": "", "arguments": ""})
+                    slot = self._tool_calls.setdefault(
+                        idx, {"id": "", "name": "", "arguments": ""}
+                    )
                     if tc.id:
                         slot["id"] = tc.id
                     if tc.function and tc.function.name:
@@ -195,15 +214,19 @@ class ChatCompletionStreamAdapter:
         if self._tool_calls:
             for idx in sorted(self._tool_calls):
                 slot = self._tool_calls[idx]
-                output.append(FunctionCallItem(
-                    call_id=slot["id"] or f"call_{uuid.uuid4().hex[:12]}",
-                    name=slot["name"],
-                    arguments=slot["arguments"] or "{}",
-                ))
+                output.append(
+                    FunctionCallItem(
+                        call_id=slot["id"] or f"call_{uuid.uuid4().hex[:12]}",
+                        name=slot["name"],
+                        arguments=slot["arguments"] or "{}",
+                    )
+                )
         elif self._text:
-            output.append(MessageOutputItem(
-                content=[OutputTextContent(text=self._text)],
-            ))
+            output.append(
+                MessageOutputItem(
+                    content=[OutputTextContent(text=self._text)],
+                )
+            )
 
         status = "completed"
         incomplete = None

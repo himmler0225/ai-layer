@@ -52,10 +52,17 @@ def user_message(exc: Exception) -> str:
 def should_retry(exc: Exception) -> bool:
     if isinstance(exc, (RateLimitError, APITimeoutError)):
         return True
-    if isinstance(exc, APIStatusError) and getattr(exc, "status_code", 0) in (500, 502, 503, 504):
+    if isinstance(exc, APIStatusError) and getattr(exc, "status_code", 0) in (
+        500,
+        502,
+        503,
+        504,
+    ):
         return True
     return False
 
 
 def log_error(logger: logging.Logger, exc: Exception, *, where: str = "") -> None:
-    logger.error("[openai] %s err=%s request_id=%s", where or "call", exc, request_id(exc))
+    logger.error(
+        "[openai] %s err=%s request_id=%s", where or "call", exc, request_id(exc)
+    )

@@ -8,16 +8,17 @@ from aio_pika.abc import AbstractIncomingMessage
 from app.config.logger import Logger
 from app.ingest.broker import declare_topology, get_channel
 from app.ingest.handlers.router import dispatch
-from app.ingest.schemas import (
-    QUEUE_COMMENTS,
-    QUEUE_EMBED,
-    QUEUE_TRANSCRIPT,
-    QUEUE_VIDEO,
-    QUEUE_SUMMARIZE,
-)
+from app.ingest.schemas import (QUEUE_COMMENTS, QUEUE_EMBED, QUEUE_SUMMARIZE,
+                                QUEUE_TRANSCRIPT, QUEUE_VIDEO)
 
 logger = Logger.get(__name__)
-_QUEUES = (QUEUE_VIDEO, QUEUE_COMMENTS, QUEUE_TRANSCRIPT, QUEUE_EMBED, QUEUE_SUMMARIZE,)
+_QUEUES = (
+    QUEUE_VIDEO,
+    QUEUE_COMMENTS,
+    QUEUE_TRANSCRIPT,
+    QUEUE_EMBED,
+    QUEUE_SUMMARIZE,
+)
 _MAX_RETRIES = 3
 
 
