@@ -61,11 +61,17 @@ app/
 ├── rag/                   # vector search, product_id, product_hint
 ├── ingest/                # RabbitMQ consumer, handlers, RAG sync, summarize
 ├── repositories/          # SQLAlchemy data access
-├── db/models/             # chat, video, product RAG tables
+├── config/db/models/      # chat, video, product RAG tables
 ├── clients/data_miner.py
+├── utilities/             # QR code, URL shortener (active)
 ├── config/
 │   ├── settings.py        # env / infra
+│   ├── loader.py          # schema binders
 │   └── remote.py          # Supabase config load + validate
+├── ai/
+│   ├── providers.py       # ConfiguredLLM + PROVIDER_SPECS (openai, deepseek, xah)
+│   ├── factory.py
+│   └── router.py
 └── utils/
     ├── openai_responses.py
     └── openai_errors.py   # user-facing OpenAI error messages

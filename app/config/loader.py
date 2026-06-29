@@ -1,31 +1,19 @@
 from __future__ import annotations
 
-import json
-import sys
 from dataclasses import dataclass, field, fields
-from pathlib import Path
 from typing import Any, Callable
 
 import app.config.settings as settings
 import app.services.prompts as prompts
+from app.config.defaults import (
+    apply_env_fallbacks,
+    build_prompt_defaults,
+    build_settings_defaults,
+    load_schema as _load_schema,
+)
 from app.config.logger import Logger
 
 logger = Logger.get(__name__)
-
-_SCHEMA_PATH = Path(__file__).resolve().parent / "json" / "remote-schema.json"
-
-_PROMPT_MAP: dict[tuple[str, str], tuple[str, str]] = {
-    ("agent", "system"): ("AGENT_SYSTEM", "settings"),
-    ("agent", "synth_system"): ("AGENT_SYNTH_SYSTEM", "prompts"),
-    ("review_summary", "system"): ("REVIEW_SUMMARY_SYSTEM", "prompts"),
-    ("review_summary", "prompt"): ("REVIEW_SUMMARY_PROMPT", "prompts"),
-    ("aspect_group", "system"): ("ASPECT_GROUP_SYSTEM", "prompts"),
-    ("aspect_group", "prompt"): ("ASPECT_GROUP_PROMPT", "prompts"),
-    ("aspect_summary", "system"): ("ASPECT_SUMMARY_SYSTEM", "prompts"),
-    ("aspect_summary", "prompt"): ("ASPECT_SUMMARY_PROMPT", "prompts"),
-}
-
-_PROMPT_KEYS = frozenset(attr for attr, _ in _PROMPT_MAP.values())
 
 
 @dataclass
@@ -50,11 +38,12 @@ runtime = RuntimeConfig()
 
 
 def load_schema() -> dict[str, Any]:
-    with _SCHEMA_PATH.open(encoding="utf-8") as fh:
-        return json.load(fh)
+    return _load_schema()
 
 
 def parse_remote(raw: dict[str, str]) -> dict[str, Any]:
+    import json
+
     parsed: dict[str, Any] = {}
     for key, value in raw.items():
         if value is None:
@@ -66,36 +55,34 @@ def parse_remote(raw: dict[str, str]) -> dict[str, Any]:
     return parsed
 
 
-def _module(name: str):
-    if name == "settings":
-        return sys.modules["app.config.settings"]
-    if name == "prompts":
-        return sys.modules["app.services.prompts"]
-    raise ValueError(f"unknown module: {name}")
-
-
 def _screaming(value: str) -> str:
     return value.upper()
 
 
-def _apply_flat_prefix(data: dict, bind: dict) -> None:
-    target = _module(bind["module"])
+def _set_module_value(module: str, attr: str, value: Any) -> None:
+    if module == "settings":
+        settings.set_remote(attr, value)
+    elif module == "prompts":
+        prompts.set_prompt(attr, str(value))
+    else:
+        raise ValueError(f"unknown module: {module}")
+
+
+def _apply_flat_prefix(data: dict, bind: dict, key_schema: dict) -> None:
     prefix = bind["prefix"]
     cast = bind.get("cast")
-    for field_name, value in data.items():
-        if value is None:
+    field_names = key_schema.get("fields") or list(data.keys())
+    for field_name in field_names:
+        if field_name not in data or data[field_name] is None:
             continue
         try:
-            val = int(value) if cast == "int" else value
-            setattr(target, f"{prefix}{_screaming(field_name)}", val)
+            val = int(data[field_name]) if cast == "int" else data[field_name]
+            _set_module_value(bind["module"], f"{prefix}{_screaming(field_name)}", val)
         except (TypeError, ValueError):
-            logger.warning(
-                "[remote_config] invalid int %s.%s", bind.get("prefix"), field_name
-            )
+            logger.warning("[remote_config] invalid int %s.%s", prefix, field_name)
 
 
 def _apply_group_field(data: dict, bind: dict) -> None:
-    target = _module(bind["module"])
     for group, group_data in data.items():
         if not isinstance(group_data, dict):
             continue
@@ -103,11 +90,14 @@ def _apply_group_field(data: dict, bind: dict) -> None:
         for field_name, value in group_data.items():
             if value is None:
                 continue
-            setattr(target, f"{group_key}_{_screaming(field_name)}", value)
+            _set_module_value(
+                bind["module"],
+                f"{group_key}_{_screaming(field_name)}",
+                value,
+            )
 
 
 def _apply_provider(data: dict, bind: dict) -> None:
-    target = _module(bind["module"])
     providers = bind.get("providers") or {}
     int_fields = set(bind.get("int_fields") or [])
     for provider, provider_data in data.items():
@@ -119,28 +109,40 @@ def _apply_provider(data: dict, bind: dict) -> None:
                 continue
             attr = f"{prefix}_{_screaming(field_name)}"
             try:
-                setattr(target, attr, int(value) if field_name in int_fields else value)
+                val = int(value) if field_name in int_fields else value
+                _set_module_value(bind["module"], attr, val)
             except (TypeError, ValueError):
                 pass
 
 
 def _apply_service(data: dict, bind: dict) -> None:
-    target = _module(bind["module"])
+    service_types = bind.get("services") or {}
     for service, service_data in data.items():
         if not isinstance(service_data, dict):
             continue
         prefix = _screaming(service)
+        types = service_types.get(service) or {}
         for field_name, value in service_data.items():
             if value is None:
                 continue
-            setattr(target, f"{prefix}_{_screaming(field_name)}", value)
+            attr = f"{prefix}_{_screaming(field_name)}"
+            type_name = types.get(field_name, "str")
+            if type_name == "bool" and isinstance(value, str):
+                value = value.lower() in {"1", "true", "yes", "on"}
+            elif type_name == "int":
+                value = int(value)
+            elif type_name == "float":
+                value = float(value)
+            _set_module_value(bind["module"], attr, value)
 
 
 def _apply_rate_limit_apis(data: dict, bind: dict) -> None:
-    target = _module(bind["module"])
-    for name, value in (data.get("apis") or {}).items():
-        if value:
-            setattr(target, f"{_screaming(name)}_RATE_LIMIT", value)
+    apis = bind.get("apis") or list((data.get("apis") or {}).keys())
+    source = data.get("apis") or data
+    for name in apis:
+        val = source.get(name)
+        if val:
+            _set_module_value(bind["module"], f"{_screaming(name)}_RATE_LIMIT", val)
 
 
 def _apply_mirror(data: dict, mirror: list[dict]) -> None:
@@ -149,7 +151,7 @@ def _apply_mirror(data: dict, mirror: list[dict]) -> None:
         value = group_data.get(rule["field"]) if isinstance(group_data, dict) else None
         if value is None:
             continue
-        setattr(_module(rule["module"]), rule["attr"], value)
+        _set_module_value(rule["module"], rule["attr"], value)
 
 
 def _store_runtime(key: str, data: Any, key_schema: dict) -> None:
@@ -157,9 +159,13 @@ def _store_runtime(key: str, data: Any, key_schema: dict) -> None:
     if not store or data is None:
         return
     if store == "agent" and isinstance(data, dict):
-        known = {item.name for item in fields(AgentConfig)}
+        known = {f.name for f in fields(AgentConfig)}
         runtime.agent = AgentConfig(
-            **{k: int(v) for k, v in data.items() if k in known and v is not None}
+            **{
+                k: int(data[k])
+                for k in (key_schema.get("fields") or [])
+                if k in known and k in data and data[k] is not None
+            }
         )
     elif store in {"models", "prompts", "services", "rate_limit"} and isinstance(
         data, dict
@@ -168,7 +174,6 @@ def _store_runtime(key: str, data: Any, key_schema: dict) -> None:
 
 
 _BINDERS: dict[str, Callable[..., None]] = {
-    "flat_prefix": _apply_flat_prefix,
     "group_field": _apply_group_field,
     "provider": _apply_provider,
     "service": _apply_service,
@@ -176,23 +181,40 @@ _BINDERS: dict[str, Callable[..., None]] = {
 }
 
 
+def _prompt_keys(schema: dict[str, Any]) -> frozenset[str]:
+    prompt_cfg = schema.get("keys", {}).get("PROMPTS") or {}
+    keys: set[str] = set()
+    for group, field_list in (prompt_cfg.get("groups") or {}).items():
+        group_key = _screaming(group)
+        for field_name in field_list:
+            keys.add(f"{group_key}_{_screaming(field_name)}")
+    return frozenset(keys)
+
+
 def apply_schema(parsed: dict[str, Any], schema: dict[str, Any]) -> None:
+    settings.ensure_remote_defaults()
+    prompts.init_defaults(build_prompt_defaults(schema))
+
     for key, key_schema in schema.get("keys", {}).items():
         data = parsed.get(key)
         if data is None:
             continue
         bind = key_schema.get("bind") or {}
         bind_type = bind.get("type")
-        if bind_type in _BINDERS and isinstance(data, dict):
+        if bind_type == "flat_prefix" and isinstance(data, dict):
+            _apply_flat_prefix(data, bind, key_schema)
+        elif bind_type in _BINDERS and isinstance(data, dict):
             _BINDERS[bind_type](data, bind)
         mirror = key_schema.get("mirror")
         if mirror and isinstance(data, dict):
             _apply_mirror(data, mirror)
         _store_runtime(key, data, key_schema)
 
+    apply_env_fallbacks(settings._REMOTE, schema)
 
-def value_for_required(key: str) -> str | int:
-    if key in _PROMPT_KEYS and key != "AGENT_SYSTEM":
+
+def value_for_required(key: str, schema: dict[str, Any]) -> str | int:
+    if key in _prompt_keys(schema) and key != "AGENT_SYSTEM":
         return getattr(prompts, key, "")
     return getattr(settings, key, "")
 
@@ -200,7 +222,7 @@ def value_for_required(key: str) -> str | int:
 def validate_required(schema: dict[str, Any]) -> None:
     missing: list[str] = []
     for key in schema.get("required") or []:
-        val = value_for_required(key)
+        val = value_for_required(key, schema)
         if isinstance(val, int):
             if val <= 0 and key in {"AGENT_MAX_ITER", "OPENAI_MAX_TOKENS"}:
                 missing.append(key)
@@ -208,5 +230,5 @@ def validate_required(schema: dict[str, Any]) -> None:
             missing.append(key)
     if missing:
         raise RuntimeError(
-            "Thiếu config trên Supabase (bảng config): " + ", ".join(sorted(missing))
+            "Missing Supabase config keys: " + ", ".join(sorted(missing))
         )

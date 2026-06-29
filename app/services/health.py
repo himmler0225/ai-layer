@@ -1,15 +1,13 @@
-"""Health check các dependency của ai-layer."""
-
 from __future__ import annotations
 
 import httpx
 
 import app.config.settings as settings
 from app.config.constants import HEALTH_CHECK_TIMEOUT
+from app.config.headers import get_data_miner_headers
 
 
 async def check_postgres() -> str:
-    """Ping Postgres qua SELECT 1."""
     if not settings.DATABASE_URL:
         return "missing DATABASE_URL"
     try:
@@ -26,7 +24,6 @@ async def check_postgres() -> str:
 
 
 async def check_redis() -> str:
-    """Ping Redis."""
     try:
         from app.cache.client import get_redis
 
@@ -40,7 +37,6 @@ async def check_redis() -> str:
 
 
 async def check_rabbitmq() -> str:
-    """Ping RabbitMQ — skipped nếu ingest tắt hoặc chưa cấu hình URL."""
     if not settings.INGEST_ENABLED:
         return "skipped"
     if not settings.RABBITMQ_URL:
@@ -61,22 +57,32 @@ async def check_rabbitmq() -> str:
 
 
 async def check_data_miner() -> str:
-    """GET /health của data-miner."""
+    if not settings.DATA_MINER_KEY:
+        return "missing DATA_MINER_KEY"
     try:
         async with httpx.AsyncClient(timeout=HEALTH_CHECK_TIMEOUT) as client:
-            r = await client.get(f"{settings.DATA_MINER_URL}/health")
+            r = await client.get(
+                f"{settings.DATA_MINER_URL}/api/videos/search",
+                params={"q": "_health", "max_results": 1},
+                headers=get_data_miner_headers(
+                    settings.DATA_MINER_KEY,
+                    settings.DATA_MINER_SERVICE_TOKEN,
+                ),
+            )
+        if r.status_code == 401:
+            return "auth: missing key"
+        if r.status_code == 403:
+            return "auth: invalid key or service token"
         return "ok" if r.is_success else f"status {r.status_code}"
     except Exception as exc:
         return f"unreachable: {exc}"
 
 
 def check_openai_key() -> str:
-    """Kiểm tra OPENAI_API_KEY đã load (thường từ Supabase config)."""
     return "set" if settings.OPENAI_API_KEY else "missing"
 
 
 async def collect_checks() -> dict[str, str]:
-    """Chạy tất cả check và trả map tên → trạng thái."""
     return {
         "postgres": await check_postgres(),
         "redis": await check_redis(),
@@ -87,7 +93,6 @@ async def collect_checks() -> dict[str, str]:
 
 
 def is_healthy(checks: dict[str, str]) -> bool:
-    """True khi các dependency bắt buộc đều ok."""
     if checks.get("postgres") != "ok":
         return False
     if checks.get("redis") != "ok":

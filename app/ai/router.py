@@ -1,14 +1,12 @@
-"""Router — map task → provider + model."""
-
 from __future__ import annotations
 
-from typing import Optional, Tuple
+from typing import Any, Optional, Tuple
 
 import app.config.settings as settings
 from app.ai.base import BaseLLM
 from app.ai.factory import LLMFactory
+from app.ai.providers import get_provider_spec
 
-# Task names — dùng xuyên suốt app thay vì hardcode provider
 TASK_AGENT_TOOL = "agent_tool"
 TASK_AGENT_SYNTH = "agent_synth"
 TASK_ASPECT_GROUP = "aspect_group"
@@ -17,7 +15,6 @@ TASK_REVIEW_SUMMARY = "review_summary"
 TASK_EMBEDDING = "embedding"
 TASK_DEFAULT = "default"
 
-# (provider, model_override) — model None → lấy từ settings
 TASK_ROUTES: dict[str, Tuple[str, Optional[str]]] = {
     TASK_AGENT_TOOL: ("deepseek", None),
     TASK_AGENT_SYNTH: ("openai", None),
@@ -29,43 +26,41 @@ TASK_ROUTES: dict[str, Tuple[str, Optional[str]]] = {
 }
 
 
+def _setting(prefix: str, field: str, default: Any = None) -> Any:
+    value = getattr(settings, f"{prefix}_{field}", None)
+    return value if value not in (None, "", 0) else default
+
+
 def resolve(task: str) -> Tuple[str, str]:
-    """Trả (provider_name, model) cho task."""
     provider, model_override = TASK_ROUTES.get(task, TASK_ROUTES[TASK_DEFAULT])
     model = model_override or _model_for_task(task, provider)
-    return provider, model
+    return (provider, model)
 
 
 def _model_for_task(task: str, provider: str) -> str:
-    if provider == "deepseek":
-        if task == TASK_AGENT_TOOL:
-            return (
-                settings.DEEP_SEEK_TOOL_MODEL
-                or settings.DEEP_SEEK_MODEL
-                or "deepseek-chat"
-            )
-        return (
-            settings.DEEP_SEEK_TOOL_MODEL or settings.DEEP_SEEK_MODEL or "deepseek-chat"
-        )
-
+    spec = get_provider_spec(provider)
+    tool_model = _setting(spec.settings_prefix, "TOOL_MODEL")
+    model = _setting(spec.settings_prefix, "MODEL", spec.fallback_model)
+    if task == TASK_AGENT_TOOL:
+        return tool_model or model
     if task == TASK_AGENT_SYNTH:
-        return settings.OPENAI_MODEL
+        return model
     if task in (TASK_ASPECT_GROUP, TASK_ASPECT_SUMMARY):
-        return settings.OPENAI_TOOL_MODEL or settings.OPENAI_MODEL
-    return settings.OPENAI_MODEL
+        return tool_model or model
+    return model
 
 
 def max_tokens_for_task(task: str) -> int:
-    if task == TASK_AGENT_TOOL:
-        return settings.OPENAI_TOOL_MAX_TOKENS or settings.OPENAI_MAX_TOKENS or 4096
-    if task in (TASK_ASPECT_GROUP, TASK_ASPECT_SUMMARY):
-        return settings.OPENAI_TOOL_MAX_TOKENS or settings.OPENAI_MAX_TOKENS or 4096
-    return settings.OPENAI_MAX_TOKENS or 4096
+    provider, _ = resolve(task)
+    spec = get_provider_spec(provider)
+    tool_max = _setting(spec.settings_prefix, "TOOL_MAX_TOKENS")
+    max_tokens = _setting(spec.settings_prefix, "MAX_TOKENS")
+    if task in (TASK_AGENT_TOOL, TASK_ASPECT_GROUP, TASK_ASPECT_SUMMARY):
+        return tool_max or max_tokens or 4096
+    return max_tokens or 4096
 
 
 class LLMRouter:
-    """Điểm gọi LLM duy nhất — chọn provider theo task."""
-
     def provider_for(self, task: str) -> BaseLLM:
         provider_name, _ = resolve(task)
         return LLMFactory.get(provider_name)

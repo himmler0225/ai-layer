@@ -2,7 +2,7 @@ import app.config.settings as settings
 from app.ai.router import (TASK_AGENT_SYNTH, TASK_AGENT_TOOL,
                            TASK_ASPECT_GROUP, TASK_ASPECT_SUMMARY,
                            TASK_EMBEDDING, resolve)
-from app.services.agent import config
+import app.services.agent.config as config
 
 
 def test_router_agent_tool_uses_deepseek():
@@ -34,14 +34,16 @@ def test_dual_mode_when_providers_differ(monkeypatch):
 
 
 def test_dual_mode_off_when_same_provider(monkeypatch):
-    monkeypatch.setattr(settings, "DEEP_SEEK_MODEL", "deepseek-chat")
-    monkeypatch.setattr(settings, "DEEP_SEEK_TOOL_MODEL", "deepseek-chat")
-    # Giả lập route synth cũng deepseek — override TASK_ROUTES tạm
+    monkeypatch.setattr(settings, "XAH_MODEL", "deepseek-chat")
+    monkeypatch.setattr(settings, "XAH_TOOL_MODEL", "deepseek-chat")
     import app.ai.router as router_mod
 
-    original = router_mod.TASK_ROUTES[TASK_AGENT_SYNTH]
-    router_mod.TASK_ROUTES[TASK_AGENT_SYNTH] = ("deepseek", None)
+    original_tool = router_mod.TASK_ROUTES[TASK_AGENT_TOOL]
+    original_synth = router_mod.TASK_ROUTES[TASK_AGENT_SYNTH]
+    router_mod.TASK_ROUTES[TASK_AGENT_TOOL] = ("xah", None)
+    router_mod.TASK_ROUTES[TASK_AGENT_SYNTH] = ("xah", None)
     try:
         assert config.dual_mode() is False
     finally:
-        router_mod.TASK_ROUTES[TASK_AGENT_SYNTH] = original
+        router_mod.TASK_ROUTES[TASK_AGENT_TOOL] = original_tool
+        router_mod.TASK_ROUTES[TASK_AGENT_SYNTH] = original_synth
