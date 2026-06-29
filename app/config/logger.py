@@ -29,10 +29,25 @@ _EMOJI_RE = re.compile(
 
 
 def _strip_emoji(text: str) -> str:
+    """(Nội bộ) Strip emoji.
+
+    Args:
+        text: (str) Tham số `text`.
+
+    Returns:
+        (str) Kết quả trả về."""
     return _EMOJI_RE.sub("", text).strip()
 
 
 def _display_logger(name: str, root: str) -> str:
+    """(Nội bộ) Display logger.
+
+    Args:
+        name: (str) Tham số `name`.
+        root: (str) Tham số `root`.
+
+    Returns:
+        (str) Kết quả trả về."""
     prefix = f"{root}."
     if name.startswith(prefix):
         return name[len(prefix) :]
@@ -42,9 +57,17 @@ def _display_logger(name: str, root: str) -> str:
 
 
 class _ColorFormatter(logging.Formatter):
+    """    Lớp `_ColorFormatter` (kế thừa logging.Formatter)."""
     root_name: str = "ai_layer"
 
     def format(self, record: logging.LogRecord) -> str:
+        """Định dạng `format`.
+
+    Args:
+        record: (logging.LogRecord) Tham số `record`.
+
+    Returns:
+        (str) Kết quả trả về."""
         ts = datetime.fromtimestamp(record.created).strftime("%Y-%m-%d %H:%M:%S")
         color = _LEVEL_COLOR.get(record.levelname, "\x1b[37m")
         short = _display_logger(record.name, self.root_name)
@@ -58,7 +81,15 @@ class _ColorFormatter(logging.Formatter):
 
 
 class _JSONFormatter(logging.Formatter):
+    """    Lớp `_JSONFormatter` (kế thừa logging.Formatter)."""
     def format(self, record: logging.LogRecord) -> str:
+        """Định dạng `format`.
+
+    Args:
+        record: (logging.LogRecord) Tham số `record`.
+
+    Returns:
+        (str) Kết quả trả về."""
         data: Dict[str, Any] = {
             "timestamp": datetime.utcnow().isoformat(),
             "level": record.levelname,
@@ -74,6 +105,7 @@ class _JSONFormatter(logging.Formatter):
 
 
 class Logger:
+    """    Lớp `Logger` (kế thừa object)."""
     _root: str = "ai_layer"
     _configured: bool = False
 
@@ -85,6 +117,16 @@ class Logger:
         max_bytes: int = 10 * 1024 * 1024,
         backup_count: int = 5,
     ) -> None:
+        """Cấu hình `setup`.
+
+    Args:
+        level: (str, mặc định 'INFO') Tham số `level`.
+        log_dir: (str, mặc định 'logs') Tham số `log_dir`.
+        max_bytes: (int, mặc định 10 * 1024 * 1024) Tham số `max_bytes`.
+        backup_count: (int, mặc định 5) Tham số `backup_count`.
+
+    Returns:
+        (None) Kết quả trả về."""
         if cls._configured:
             return
         log_path = Path(log_dir)
@@ -122,10 +164,24 @@ class Logger:
 
     @classmethod
     def sync_uvicorn(cls, level: str = "INFO") -> None:
+        """Đồng bộ uvicorn.
+
+    Args:
+        level: (str, mặc định 'INFO') Tham số `level`.
+
+    Returns:
+        (None) Kết quả trả về."""
         cls._configure_uvicorn(level)
 
     @classmethod
     def _configure_uvicorn(cls, level: str) -> None:
+        """(Nội bộ) Cấu hình uvicorn.
+
+    Args:
+        level: (str) Tham số `level`.
+
+    Returns:
+        (None) Kết quả trả về."""
         log_level = getattr(logging, level.upper(), logging.INFO)
         formatter = _ColorFormatter()
         formatter.root_name = cls._root
@@ -145,5 +201,12 @@ class Logger:
 
     @classmethod
     def get(cls, name: str) -> logging.Logger:
+        """Lấy `get`.
+
+    Args:
+        name: (str) Tham số `name`.
+
+    Returns:
+        (logging.Logger) Kết quả trả về."""
         short = name.removeprefix("app.")
         return logging.getLogger(f"{cls._root}.{short}")

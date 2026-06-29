@@ -433,7 +433,7 @@ Hiện `ASPECT_GROUP_*` / `ASPECT_SUMMARY_*` trong `services/prompts.py`. Patter
 
 ### LangGraph / checkpoint (roadmap)
 
-Loop hiện tại: `services/agent/runner.py` + `stream.py` dùng chung `loop.py`. Khi cần branching phức tạp → xem README mục LangGraph.
+Loop hiện tại: `services/agent/runner.py` + `stream.py` dùng chung `loop.py`. Khi cần branching phức tạp → [LANGGRAPH-GUIDE.md](./LANGGRAPH-GUIDE.md).
 
 ---
 

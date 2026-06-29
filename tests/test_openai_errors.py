@@ -18,5 +18,5 @@ def test_should_retry_on_503():
 def test_user_message_400_vietnamese():
     exc = APIStatusError("bad", response=_FakeResponse(400), body={})
     msg = user_message(exc)
-    assert "OpenAI" in msg
+    assert "LLM" in msg
     assert "prompt" in msg.lower() or "tool" in msg.lower()

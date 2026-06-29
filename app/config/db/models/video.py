@@ -8,6 +8,7 @@ from app.config.db.models.base import Base
 from app.config.db.models.vector_dim import embedding_vector
 
 class Video(Base):
+    """    Lớp `Video` (kế thừa Base)."""
     __tablename__ = 'videos'
     __table_args__ = (CheckConstraint("platform IN ('youtube', 'tiktok')", name='videos_platform_check'), Index('videos_platform', 'platform'))
     id: Mapped[str] = mapped_column(Text, primary_key=True)
@@ -24,6 +25,7 @@ class Video(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
 class Comment(Base):
+    """    Lớp `Comment` (kế thừa Base)."""
     __tablename__ = 'comments'
     __table_args__ = (Index('comments_video_id', 'video_id'),)
     id: Mapped[str] = mapped_column(Text, primary_key=True)
@@ -35,6 +37,7 @@ class Comment(Base):
     metadata_: Mapped[dict] = mapped_column('metadata', JSONB, nullable=False, server_default='{}')
 
 class VideoChunk(Base):
+    """    Lớp `VideoChunk` (kế thừa Base)."""
     __tablename__ = 'video_chunks'
     __table_args__ = (CheckConstraint("platform IN ('youtube', 'tiktok')", name='video_chunks_platform_check'), Index('video_chunks_video_id', 'video_id'), Index('video_chunks_embedding_idx', 'embedding', postgresql_using='hnsw', postgresql_ops={'embedding': 'vector_cosine_ops'}))
     id: Mapped[str] = mapped_column(Text, primary_key=True)

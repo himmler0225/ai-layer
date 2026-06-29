@@ -5,6 +5,17 @@ from app.ingest.producer.publisher import publish
 from app.ingest.schemas import ROUTING_VIDEO
 
 async def route_tool(tool_name: str, inputs: dict, data: dict, *, product_hint: str, platform: str) -> None:
+    """Route tool (async).
+
+    Args:
+        tool_name: (str) Tham số `tool_name`.
+        inputs: (dict) Tham số `inputs`.
+        data: (dict) Tham số `data`.
+        product_hint: (str) Tham số `product_hint`.
+        platform: (str) Tham số `platform`.
+
+    Returns:
+        (None) Kết quả trả về."""
     if tool_name in SEARCH_TOOLS:
         await publish_search(inputs, data, platform, product_hint)
         return

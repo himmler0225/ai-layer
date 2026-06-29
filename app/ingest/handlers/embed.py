@@ -3,6 +3,13 @@ from app.ingest.processing.embeddings import embed_texts
 from app.repositories.chunks import upsert_chunks
 
 async def handle_chunks_embed(envelope: dict) -> None:
+    """Xử lý chunks embed (async).
+
+    Args:
+        envelope: (dict) Tham số `envelope`.
+
+    Returns:
+        (None) Kết quả trả về."""
     payload = envelope.get('payload') or {}
     video_id = envelope.get('video_id') or payload.get('video_id')
     platform = envelope.get('platform') or payload.get('platform') or 'youtube'

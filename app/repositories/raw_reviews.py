@@ -6,6 +6,13 @@ from app.config.db.session import get_session_factory
 from app.config.db.utils import model_to_dict
 
 async def upsert_raw_reviews(rows: list[dict]) -> int:
+    """Upsert raw reviews (async).
+
+    Args:
+        rows: (list[dict]) Tham số `rows`.
+
+    Returns:
+        (int) Kết quả trả về."""
     if not rows:
         return 0
     factory = await get_session_factory()
@@ -18,6 +25,15 @@ async def upsert_raw_reviews(rows: list[dict]) -> int:
     return len(rows)
 
 async def get_raw_reviews(product_id: str, *, limit: int=100, sort_by_likes: bool=True) -> list[dict]:
+    """Lấy raw reviews (async).
+
+    Args:
+        product_id: (str) Tham số `product_id`.
+        limit: (int, mặc định 100) Tham số `limit`.
+        sort_by_likes: (bool, mặc định True) Tham số `sort_by_likes`.
+
+    Returns:
+        (list[dict]) Kết quả trả về."""
     factory = await get_session_factory()
     async with factory() as session:
         q = select(RawReview).where(RawReview.product_id == product_id)
@@ -30,6 +46,13 @@ async def get_raw_reviews(product_id: str, *, limit: int=100, sort_by_likes: boo
         return [model_to_dict(row) for row in rows]
 
 async def count_raw_reviews(product_id: str) -> int:
+    """Count raw reviews (async).
+
+    Args:
+        product_id: (str) Tham số `product_id`.
+
+    Returns:
+        (int) Kết quả trả về."""
     factory = await get_session_factory()
     async with factory() as session:
         return int(await session.scalar(select(func.count()).select_from(RawReview).where(RawReview.product_id == product_id)) or 0)

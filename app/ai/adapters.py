@@ -4,6 +4,13 @@ from typing import Any, Dict, List
 from app.ai.types import FunctionCallItem, IncompleteDetails, LLMResponse, MessageOutputItem, OutputTextContent, StreamTextDelta
 
 def responses_tools_to_chat(tools: List[Dict] | None) -> List[Dict]:
+    """Responses tools to chat.
+
+    Args:
+        tools: (List[Dict] | None) Tham số `tools`.
+
+    Returns:
+        (List[Dict]) Kết quả trả về."""
     if not tools:
         return []
     out: List[Dict] = []
@@ -14,12 +21,28 @@ def responses_tools_to_chat(tools: List[Dict] | None) -> List[Dict]:
     return out
 
 def _append_user_message(messages: List[Dict], content: str) -> None:
+    """(Nội bộ) Append user message.
+
+    Args:
+        messages: (List[Dict]) Tham số `messages`.
+        content: (str) Tham số `content`.
+
+    Returns:
+        (None) Kết quả trả về."""
     if messages and messages[-1].get('role') == 'user' and isinstance(messages[-1].get('content'), str):
         messages[-1]['content'] = f"{messages[-1]['content']}\n{content}"
     else:
         messages.append({'role': 'user', 'content': content})
 
 def responses_input_to_chat_messages(input_items: Any, *, instructions: str | None=None) -> List[Dict]:
+    """Responses input to chat messages.
+
+    Args:
+        input_items: (Any) Tham số `input_items`.
+        instructions: (str | None, mặc định None) Tham số `instructions`.
+
+    Returns:
+        (List[Dict]) Kết quả trả về."""
     messages: List[Dict] = []
     if instructions:
         messages.append({'role': 'system', 'content': instructions})
@@ -28,6 +51,10 @@ def responses_input_to_chat_messages(input_items: Any, *, instructions: str | No
     pending_call_ids: List[str] = []
 
     def flush_assistant_tool_calls() -> None:
+        """Flush assistant tool calls.
+
+    Returns:
+        (None) Kết quả trả về."""
         nonlocal pending_tool_calls, pending_call_ids
         if not pending_tool_calls:
             return
@@ -69,6 +96,13 @@ def responses_input_to_chat_messages(input_items: Any, *, instructions: str | No
     return messages
 
 def chat_completion_to_llm_response(completion: Any) -> LLMResponse:
+    """Chat completion to llm response.
+
+    Args:
+        completion: (Any) Tham số `completion`.
+
+    Returns:
+        (LLMResponse) Kết quả trả về."""
     choice = completion.choices[0]
     message = choice.message
     output: List[Any] = []
@@ -88,7 +122,12 @@ def chat_completion_to_llm_response(completion: Any) -> LLMResponse:
 
 class ChatCompletionStreamAdapter:
 
+    """    Lớp `ChatCompletionStreamAdapter` (kế thừa object)."""
     def __init__(self, stream: Any):
+        """Khởi tạo instance.
+
+    Args:
+        stream: (Any) Tham số `stream`."""
         self._stream = stream
         self._final: LLMResponse | None = None
         self._text = ''
@@ -96,17 +135,30 @@ class ChatCompletionStreamAdapter:
         self._finish_reason: str | None = None
 
     async def __aenter__(self) -> ChatCompletionStreamAdapter:
+        """Vào async context manager (async).
+
+    Returns:
+        (ChatCompletionStreamAdapter) Kết quả trả về."""
         return self
 
     async def __aexit__(self, *args: Any) -> None:
+        """Thoát async context manager (async).
+
+    Args:
+        args: (Any) Tham số `args`.
+
+    Returns:
+        (None) Kết quả trả về."""
         close = getattr(self._stream, 'close', None)
         if close:
             await close()
 
     def __aiter__(self):
+        """    Trả về async iterator."""
         return self._event_iter()
 
     async def _event_iter(self):
+        """    (Nội bộ) Event iter (async)."""
         async for chunk in self._stream:
             if not chunk.choices:
                 continue
@@ -130,6 +182,10 @@ class ChatCompletionStreamAdapter:
         self._build_final()
 
     def _build_final(self) -> None:
+        """(Nội bộ) Xây dựng final.
+
+    Returns:
+        (None) Kết quả trả về."""
         if self._final is not None:
             return
         output: List[Any] = []
@@ -147,6 +203,10 @@ class ChatCompletionStreamAdapter:
         self._final = LLMResponse(status=status, output=output, output_text=self._text, incomplete_details=incomplete)
 
     async def get_final_response(self) -> LLMResponse:
+        """Lấy final response (async).
+
+    Returns:
+        (LLMResponse) Kết quả trả về."""
         if self._final is None:
             self._build_final()
         return self._final

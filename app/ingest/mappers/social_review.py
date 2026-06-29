@@ -3,12 +3,29 @@ import re
 from app.ingest.mappers.comment import _comment_id
 
 def slugify_product_id(hint: str) -> str:
+    """Slugify product id.
+
+    Args:
+        hint: (str) Tham số `hint`.
+
+    Returns:
+        (str) Kết quả trả về."""
     s = (hint or '').lower().strip()
     s = re.sub('[^a-z0-9\\s-]', '', s)
     s = re.sub('\\s+', '-', s).strip('-')
     return s[:80] or 'unknown-product'
 
 def map_social_raw_review(product_id: str, platform: str, video_id: str, raw: dict) -> dict | None:
+    """Map social raw review.
+
+    Args:
+        product_id: (str) Tham số `product_id`.
+        platform: (str) Tham số `platform`.
+        video_id: (str) Tham số `video_id`.
+        raw: (dict) Tham số `raw`.
+
+    Returns:
+        (dict | None) Kết quả trả về."""
     content = (raw.get('content') or raw.get('text') or '').strip()
     if not content:
         return None

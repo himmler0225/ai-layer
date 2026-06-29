@@ -5,6 +5,13 @@ from app.config.db.models import VideoChunk
 from app.config.db.session import get_session_factory
 
 async def upsert_chunks(rows: list[dict]) -> None:
+    """Upsert chunks (async).
+
+    Args:
+        rows: (list[dict]) Tham số `rows`.
+
+    Returns:
+        (None) Kết quả trả về."""
     if not rows:
         return
     factory = await get_session_factory()

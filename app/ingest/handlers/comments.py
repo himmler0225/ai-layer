@@ -7,6 +7,13 @@ from app.repositories.comments import insert_comments
 from app.repositories.videos import exists_video, upsert_video
 
 async def handle_comments_upsert(envelope: dict) -> None:
+    """Xử lý comments upsert (async).
+
+    Args:
+        envelope: (dict) Tham số `envelope`.
+
+    Returns:
+        (None) Kết quả trả về."""
     payload = envelope.get('payload') or {}
     video_id = envelope.get('video_id') or payload.get('video_id')
     platform = envelope.get('platform') or payload.get('platform') or 'youtube'

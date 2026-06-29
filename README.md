@@ -16,14 +16,14 @@ Built on the **OpenAI Responses API** (tool calling). The model plans tool use; 
         └─ Supabase             Auth, profiles, runtime config table only
 ```
 
-Further reading: [docs/FLOW.md](docs/FLOW.md) (end-to-end flow) · [docs/RAG-GUIDE.md](docs/RAG-GUIDE.md) (RAG pipeline chi tiết — đọc/ghi/nâng cấp)
+Further reading: [docs/FLOW.md](docs/FLOW.md) (luồng end-to-end) · [docs/RAG-GUIDE.md](docs/RAG-GUIDE.md) (pipeline RAG) · [docs/LANGGRAPH-GUIDE.md](docs/LANGGRAPH-GUIDE.md) (migrate LangGraph, tự làm)
 
 ---
 
 ## Highlights
 
-- **Agent loop** — OpenAI tool calling with YouTube, TikTok, RAG, and URL-parse tools; platform-aware tool filtering; max iteration budget from config.
-- **Dual-model mode** — optional `OPENAI_TOOL_MODEL` for tool rounds + `OPENAI_MODEL` for final synthesis when they differ.
+- **Agent loop** — LLM tool calling (YouTube, TikTok, RAG); platform-aware filtering; guards (search budget, force synthesis). Shared logic: `services/agent/engine.py`.
+- **Dual-model mode** — optional different `tool_model` vs `model` on the same provider (e.g. XAH); synthesis streams separately when they differ.
 - **SSE streaming** — token-by-token `text_delta` (including live synthesis in dual-mode); tool progress events; metadata without blocking the text stream.
 - **Enrichment** — derives `sources`, analyzed `videos` (only videos actually crawled, not full search pages); narrative answer lives in the agent bubble only.
 - **3-tier RAG** — L1 `aspect_summaries` → L2 `aspect_chunks` → L3 `raw_reviews`; vector search via pgvector; ingest worker on RabbitMQ.
@@ -49,8 +49,9 @@ app/
 │   ├── utilities.py       # URL shortener, QR
 │   └── admin.py           # health detail, ingest queue stats
 ├── services/
-│   ├── agent/             # runner, stream, synthesis, tools, platform filter
-│   ├── enricher.py        # sources / videos / review summary
+│   ├── agent/             # runner, stream, engine, synthesis, tools, platform filter
+│   ├── enricher.py        # orchestrate UI metadata
+│   ├── enricher_collect.py # parse tool_call_log → reviews/videos/sources
 │   ├── review_summarizer.py
 │   ├── prompts.py         # ASPECT_* for ingest LLM; agent prompts from Supabase
 │   └── health.py
@@ -73,8 +74,10 @@ app/
 │   ├── factory.py
 │   └── router.py
 └── utils/
-    ├── openai_responses.py
-    └── openai_errors.py   # user-facing OpenAI error messages
+    ├── llm_responses.py   # LLM response helpers (stream, create_response)
+    ├── llm_errors.py      # user-facing LLM error messages
+    ├── openai_responses.py  # deprecated alias
+    └── openai_errors.py     # deprecated alias
 ```
 
 ---
@@ -214,6 +217,8 @@ Docs UI: `http://localhost:8001/docs`
 ## Roadmap: LangGraph
 
 The agent loop today is a **custom while-loop** around OpenAI Responses API (`services/agent/runner.py`, `stream.py`). That is enough for the current flow: tool rounds → optional synthesis → enrich.
+
+**Hướng dẫn migrate đầy đủ (tiếng Việt):** [docs/LANGGRAPH-GUIDE.md](docs/LANGGRAPH-GUIDE.md) — map state, graph mục tiêu, từng bước PR, streaming, flag `AGENT_BACKEND`.
 
 **LangGraph is a reasonable next step**, but not urgent. Consider migrating when you need several of these:
 

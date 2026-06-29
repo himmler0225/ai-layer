@@ -11,6 +11,10 @@ _INT_FIELD_DEFAULTS: dict[str, int] = {
     "curated_top_n": 300,
 }
 
+_BOOL_FIELD_DEFAULTS: dict[str, bool] = {
+    "include_review_summary": True,
+}
+
 _TYPE_DEFAULTS: dict[str, Any] = {
     "str": "",
     "int": 0,
@@ -20,19 +24,44 @@ _TYPE_DEFAULTS: dict[str, Any] = {
 
 
 def load_schema() -> dict[str, Any]:
+    """Tải schema.
+
+    Returns:
+        (dict[str, Any]) Kết quả trả về."""
     with _SCHEMA_PATH.open(encoding="utf-8") as fh:
         return json.load(fh)
 
 
 def _screaming(value: str) -> str:
+    """(Nội bộ) Screaming `_screaming`.
+
+    Args:
+        value: (str) Tham số `value`.
+
+    Returns:
+        (str) Kết quả trả về."""
     return value.upper()
 
 
 def _default_for(type_name: str) -> Any:
+    """(Nội bộ) Default for.
+
+    Args:
+        type_name: (str) Tham số `type_name`.
+
+    Returns:
+        (Any) Kết quả trả về."""
     return _TYPE_DEFAULTS.get(type_name, "")
 
 
 def build_settings_defaults(schema: dict[str, Any]) -> dict[str, Any]:
+    """Xây dựng settings defaults.
+
+    Args:
+        schema: (dict[str, Any]) Tham số `schema`.
+
+    Returns:
+        (dict[str, Any]) Kết quả trả về."""
     defaults: dict[str, Any] = {}
 
     for key_schema in schema.get("keys", {}).values():
@@ -50,6 +79,10 @@ def build_settings_defaults(schema: dict[str, Any]) -> dict[str, Any]:
                     ]
                 else:
                     defaults[f"{prefix}{_screaming(field_name)}"] = empty
+            for field_name in key_schema.get("bool_fields") or []:
+                defaults[f"{prefix}{_screaming(field_name)}"] = _BOOL_FIELD_DEFAULTS.get(
+                    field_name, False
+                )
 
         elif bind_type == "provider" and bind.get("module") == "settings":
             providers = bind.get("providers") or {}
@@ -79,6 +112,13 @@ def build_settings_defaults(schema: dict[str, Any]) -> dict[str, Any]:
 
 
 def build_prompt_defaults(schema: dict[str, Any]) -> dict[str, str]:
+    """Xây dựng prompt defaults.
+
+    Args:
+        schema: (dict[str, Any]) Tham số `schema`.
+
+    Returns:
+        (dict[str, str]) Kết quả trả về."""
     defaults: dict[str, str] = {}
     prompts = schema.get("keys", {}).get("PROMPTS") or {}
     for group, fields in (prompts.get("groups") or {}).items():
@@ -89,6 +129,14 @@ def build_prompt_defaults(schema: dict[str, Any]) -> dict[str, str]:
 
 
 def env_override(name: str, type_name: str = "str") -> Optional[Any]:
+    """Env override.
+
+    Args:
+        name: (str) Tham số `name`.
+        type_name: (str, mặc định 'str') Tham số `type_name`.
+
+    Returns:
+        (Optional[Any]) Kết quả trả về."""
     raw = os.getenv(name)
     if raw is None:
         return None
@@ -111,6 +159,14 @@ def apply_env_fallbacks(
     remote: dict[str, Any],
     schema: dict[str, Any],
 ) -> dict[str, Any]:
+    """Áp dụng env fallbacks.
+
+    Args:
+        remote: (dict[str, Any]) Tham số `remote`.
+        schema: (dict[str, Any]) Tham số `schema`.
+
+    Returns:
+        (dict[str, Any]) Kết quả trả về."""
     services = (schema.get("keys", {}).get("SERVICES") or {}).get("bind", {}).get("services") or {}
     for service, fields in services.items():
         prefix = _screaming(service)

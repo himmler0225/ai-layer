@@ -6,11 +6,25 @@ _REVIEW_QUOTED = re.compile('Review (?:the )?sản phẩm ["\\u201c]([^"\\u201d]
 _NAME_LINE = re.compile('^Tên:\\s*(.+)$', re.MULTILINE | re.IGNORECASE)
 
 def current_question(task: str) -> str:
+    """Current question.
+
+    Args:
+        task: (str) Tham số `task`.
+
+    Returns:
+        (str) Kết quả trả về."""
     if HISTORY_MARKER in task:
         return task.split(HISTORY_MARKER)[-1].strip()
     return (task or '').strip()
 
 def extract_product_name(task: str) -> str:
+    """Trích xuất product name.
+
+    Args:
+        task: (str) Tham số `task`.
+
+    Returns:
+        (str) Kết quả trả về."""
     text = task or ''
     if PRODUCT_BLOCK_MARKER in text:
         block = text.split(PRODUCT_BLOCK_MARKER, 1)[1]

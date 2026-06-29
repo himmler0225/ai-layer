@@ -3,6 +3,13 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
 def _key_by_api_key(request: Request) -> str:
+    """(Nội bộ) Key by api key.
+
+    Args:
+        request: (Request) Tham số `request`.
+
+    Returns:
+        (str) Kết quả trả về."""
     return request.headers.get('X-API-Key') or request.client.host or 'unknown'
 limiter = Limiter(key_func=_key_by_api_key)
 rate_limit_exceeded_handler = _rate_limit_exceeded_handler

@@ -3,10 +3,25 @@ import json
 from typing import Any
 
 def _clip(text: str, n: int=48) -> str:
+    """(Nội bộ) Clip `_clip`.
+
+    Args:
+        text: (str) Tham số `text`.
+        n: (int, mặc định 48) Tham số `n`.
+
+    Returns:
+        (str) Kết quả trả về."""
     s = (text or '').strip()
     return s if len(s) <= n else s[:n - 1] + '…'
 
 def _ids(raw: Any) -> list[str]:
+    """(Nội bộ) Ids `_ids`.
+
+    Args:
+        raw: (Any) Tham số `raw`.
+
+    Returns:
+        (list[str]) Kết quả trả về."""
     if isinstance(raw, list):
         return [str(x).strip() for x in raw if str(x).strip()]
     if isinstance(raw, str):
@@ -14,6 +29,13 @@ def _ids(raw: Any) -> list[str]:
     return []
 
 def _parse_args(arguments: str | None) -> dict:
+    """(Nội bộ) Phân tích args.
+
+    Args:
+        arguments: (str | None) Tham số `arguments`.
+
+    Returns:
+        (dict) Kết quả trả về."""
     if not arguments:
         return {}
     try:
@@ -23,6 +45,14 @@ def _parse_args(arguments: str | None) -> dict:
         return {}
 
 def tool_status(tool: str, args: dict) -> tuple[str, str]:
+    """Tool status.
+
+    Args:
+        tool: (str) Tham số `tool`.
+        args: (dict) Tham số `args`.
+
+    Returns:
+        (tuple[str, str]) Kết quả trả về."""
     a = args or {}
     if tool == 'youtube_search':
         q = _clip(a.get('keyword') or a.get('query') or '')

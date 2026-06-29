@@ -6,6 +6,13 @@ from app.repositories.curated_reviews import count_curated_reviews
 from app.repositories.products import exists_product
 
 async def product_has_knowledge(product_id: str) -> bool:
+    """Product has knowledge (async).
+
+    Args:
+        product_id: (str) Tham số `product_id`.
+
+    Returns:
+        (bool) Kết quả trả về."""
     if not product_id or not await exists_product(product_id):
         return False
     summaries = await get_aspect_summaries(product_id)
@@ -14,6 +21,14 @@ async def product_has_knowledge(product_id: str) -> bool:
     return await count_curated_reviews(product_id) >= 20
 
 async def is_product_fresh(product_id: str, days: int | None=None) -> bool:
+    """Is product fresh (async).
+
+    Args:
+        product_id: (str) Tham số `product_id`.
+        days: (int | None, mặc định None) Tham số `days`.
+
+    Returns:
+        (bool) Kết quả trả về."""
     ttl_days = days if days is not None else settings.CACHE_TTL_DAYS
     summaries = await get_aspect_summaries(product_id)
     if not summaries:

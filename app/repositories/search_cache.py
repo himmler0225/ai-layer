@@ -7,11 +7,28 @@ from app.config.db.models import SearchCache
 from app.config.db.session import get_session_factory
 
 async def get_search_cache(query: str, platform: str) -> Optional[list[str]]:
+    """Lấy search cache (async).
+
+    Args:
+        query: (str) Tham số `query`.
+        platform: (str) Tham số `platform`.
+
+    Returns:
+        (Optional[list[str]]) Kết quả trả về."""
     factory = await get_session_factory()
     async with factory() as session:
         return await session.scalar(select(SearchCache.video_ids).where(SearchCache.query == query, SearchCache.platform == platform))
 
 async def upsert_search_cache(query: str, platform: str, video_ids: list[str]) -> None:
+    """Upsert search cache (async).
+
+    Args:
+        query: (str) Tham số `query`.
+        platform: (str) Tham số `platform`.
+        video_ids: (list[str]) Tham số `video_ids`.
+
+    Returns:
+        (None) Kết quả trả về."""
     factory = await get_session_factory()
     async with factory() as session:
         stmt = insert(SearchCache).values(query=query, platform=platform, video_ids=video_ids, updated_at=func.now())
@@ -20,12 +37,27 @@ async def upsert_search_cache(query: str, platform: str, video_ids: list[str]) -
         await session.commit()
 
 async def delete_search_cache(query: str, platform: str) -> None:
+    """Delete search cache (async).
+
+    Args:
+        query: (str) Tham số `query`.
+        platform: (str) Tham số `platform`.
+
+    Returns:
+        (None) Kết quả trả về."""
     factory = await get_session_factory()
     async with factory() as session:
         await session.execute(delete(SearchCache).where(SearchCache.query == query, SearchCache.platform == platform))
         await session.commit()
 
 async def clear_expired_cache(days: int=7) -> None:
+    """Clear expired cache (async).
+
+    Args:
+        days: (int, mặc định 7) Tham số `days`.
+
+    Returns:
+        (None) Kết quả trả về."""
     cutoff = datetime.now(timezone.utc) - timedelta(days=days)
     factory = await get_session_factory()
     async with factory() as session:

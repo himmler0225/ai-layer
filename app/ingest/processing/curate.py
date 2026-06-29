@@ -3,7 +3,15 @@ import app.config.settings as settings
 from app.ingest.processing.quality import is_indexable_comment
 
 def curate_review_rows(rows: list[dict], *, top_n: int | None=None) -> list[dict]:
-    limit = top_n if top_n is not None else settings.CURATED_TOP_N
+    """Curate review rows.
+
+    Args:
+        rows: (list[dict]) Tham số `rows`.
+        top_n: (int | None, mặc định None) Tham số `top_n`.
+
+    Returns:
+        (list[dict]) Kết quả trả về."""
+    limit = top_n if top_n is not None else getattr(settings, "AGENT_CURATED_TOP_N", 300)
     filtered = [r for r in rows if is_indexable_comment(r.get('content', ''))]
     filtered.sort(key=lambda r: int(r.get('likes') or 0), reverse=True)
     curated: list[dict] = []
@@ -15,7 +23,16 @@ def curate_review_rows(rows: list[dict], *, top_n: int | None=None) -> list[dict
     return curated
 
 def merge_curated(existing: list[dict], new_rows: list[dict], *, top_n: int | None=None) -> list[dict]:
-    limit = top_n if top_n is not None else settings.CURATED_TOP_N
+    """Merge curated.
+
+    Args:
+        existing: (list[dict]) Tham số `existing`.
+        new_rows: (list[dict]) Tham số `new_rows`.
+        top_n: (int | None, mặc định None) Tham số `top_n`.
+
+    Returns:
+        (list[dict]) Kết quả trả về."""
+    limit = top_n if top_n is not None else getattr(settings, "AGENT_CURATED_TOP_N", 300)
     pool: list[dict] = []
     for row in existing:
         raw_id = row.get('raw_review_id') or row.get('id')

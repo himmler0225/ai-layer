@@ -6,6 +6,14 @@ from app.config.db.session import get_session_factory
 from app.config.db.utils import model_to_dict
 
 async def insert_comments(video_id: str, comments: list[dict]) -> None:
+    """Insert comments (async).
+
+    Args:
+        video_id: (str) Tham số `video_id`.
+        comments: (list[dict]) Tham số `comments`.
+
+    Returns:
+        (None) Kết quả trả về."""
     if not comments:
         return
     factory = await get_session_factory()
@@ -15,17 +23,39 @@ async def insert_comments(video_id: str, comments: list[dict]) -> None:
         await session.commit()
 
 async def get_comments(video_id: str, limit: int=100) -> list[dict]:
+    """Lấy comments (async).
+
+    Args:
+        video_id: (str) Tham số `video_id`.
+        limit: (int, mặc định 100) Tham số `limit`.
+
+    Returns:
+        (list[dict]) Kết quả trả về."""
     factory = await get_session_factory()
     async with factory() as session:
         result = await session.execute(select(Comment).where(Comment.video_id == video_id).order_by(Comment.likes.desc()).limit(limit))
         return [model_to_dict(row) for row in result.scalars().all()]
 
 async def count_comments(video_id: str) -> int:
+    """Count comments (async).
+
+    Args:
+        video_id: (str) Tham số `video_id`.
+
+    Returns:
+        (int) Kết quả trả về."""
     factory = await get_session_factory()
     async with factory() as session:
         return int(await session.scalar(select(func.count()).select_from(Comment).where(Comment.video_id == video_id)) or 0)
 
 async def delete_comments(video_id: str) -> None:
+    """Delete comments (async).
+
+    Args:
+        video_id: (str) Tham số `video_id`.
+
+    Returns:
+        (None) Kết quả trả về."""
     factory = await get_session_factory()
     async with factory() as session:
         await session.execute(delete(Comment).where(Comment.video_id == video_id))

@@ -2,6 +2,13 @@ from __future__ import annotations
 from typing import Any
 
 def unwrap_result(result: Any) -> dict | None:
+    """Unwrap result.
+
+    Args:
+        result: (Any) Tham số `result`.
+
+    Returns:
+        (dict | None) Kết quả trả về."""
     if not isinstance(result, dict):
         return None
     if result.get('success') is False:
@@ -18,9 +25,23 @@ def unwrap_result(result: Any) -> dict | None:
     return result
 
 def extract_search_query(inputs: dict) -> str:
+    """Trích xuất search query.
+
+    Args:
+        inputs: (dict) Tham số `inputs`.
+
+    Returns:
+        (str) Kết quả trả về."""
     return (inputs.get('keyword') or inputs.get('query') or inputs.get('topic') or '').strip()
 
 def video_list(data: dict) -> list[dict]:
+    """Video list.
+
+    Args:
+        data: (dict) Tham số `data`.
+
+    Returns:
+        (list[dict]) Kết quả trả về."""
     for key in ('_list', 'results', 'videos', 'items'):
         value = data.get(key)
         if isinstance(value, list):

@@ -7,6 +7,14 @@ logger = Logger.get(__name__)
 _SYSTEM = 'You are an AI assistant analyzing YouTube content.\nBe concise. Always respond in the same language as the video content when possible.'
 
 def _parse_json(raw: str, context: str) -> Dict:
+    """(Nội bộ) Phân tích json.
+
+    Args:
+        raw: (str) Tham số `raw`.
+        context: (str) Tham số `context`.
+
+    Returns:
+        (Dict) Kết quả trả về."""
     try:
         return json.loads(raw)
     except (json.JSONDecodeError, TypeError) as e:
@@ -14,6 +22,13 @@ def _parse_json(raw: str, context: str) -> Dict:
         raise ValueError(f'ChatGPT returned invalid JSON in {context}: {e}') from e
 
 async def summarize_video(video_id: str) -> Dict:
+    """Tóm tắt video (async).
+
+    Args:
+        video_id: (str) Tham số `video_id`.
+
+    Returns:
+        (Dict) Kết quả trả về."""
     detail = await data_miner.get_video_detail(video_id)
     prompt = f"""Summarize this YouTube video:\nTitle: {detail.get('title')}\nChannel: {detail.get('author')}\nDescription: {(detail.get('description') or '')[:1000]}\nDuration: {detail.get('length_seconds')}s\nViews: {detail.get('views')}\n\nReturn JSON: {{"summary": "...", "key_points": ["..."], "tags": ["..."], "sentiment": "positive|neutral|negative"}}"""
     raw = await complete_json(prompt, _SYSTEM)
@@ -23,6 +38,13 @@ async def summarize_video(video_id: str) -> Dict:
     return result
 
 async def analyze_comments(video_id: str) -> Dict:
+    """Analyze comments (async).
+
+    Args:
+        video_id: (str) Tham số `video_id`.
+
+    Returns:
+        (Dict) Kết quả trả về."""
     data = await data_miner.get_video_comments(video_id, max_comments=100)
     comments = data.get('comments', [])
     if not comments:
@@ -36,6 +58,13 @@ async def analyze_comments(video_id: str) -> Dict:
     return result
 
 async def analyze_trends(limit: int=20) -> Dict:
+    """Analyze trends (async).
+
+    Args:
+        limit: (int, mặc định 20) Tham số `limit`.
+
+    Returns:
+        (Dict) Kết quả trả về."""
     data = await data_miner.get_trending(max_results=limit)
     videos: List[Dict] = data.get('videos', data) if isinstance(data, dict) else data
     titles = '\n'.join((f"{i + 1}. [{v.get('channel', '')}] {v.get('title', '')}" for i, v in enumerate(videos[:limit])))

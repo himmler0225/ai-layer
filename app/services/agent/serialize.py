@@ -4,6 +4,13 @@ from typing import Any, Dict
 from app.services.agent import config
 
 def serialize_result(result: Any) -> str:
+    """Serialize result.
+
+    Args:
+        result: (Any) Tham số `result`.
+
+    Returns:
+        (str) Kết quả trả về."""
     if not isinstance(result, dict):
         return json.dumps(result, ensure_ascii=False, default=str)[:config.max_result_chars()]
     data = dict(result)

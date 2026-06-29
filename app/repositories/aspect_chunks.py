@@ -8,6 +8,13 @@ from app.config.db.utils import model_to_dict
 from app.repositories.pgvector import vector_literal
 
 async def upsert_aspect_chunks(rows: list[dict]) -> int:
+    """Upsert aspect chunks (async).
+
+    Args:
+        rows: (list[dict]) Tham số `rows`.
+
+    Returns:
+        (int) Kết quả trả về."""
     if not rows:
         return 0
     factory = await get_session_factory()
@@ -20,6 +27,15 @@ async def upsert_aspect_chunks(rows: list[dict]) -> int:
     return len(rows)
 
 async def get_aspect_chunks(product_id: str, *, aspect: str | None=None, limit: int=50) -> list[dict]:
+    """Lấy aspect chunks (async).
+
+    Args:
+        product_id: (str) Tham số `product_id`.
+        aspect: (str | None, mặc định None) Tham số `aspect`.
+        limit: (int, mặc định 50) Tham số `limit`.
+
+    Returns:
+        (list[dict]) Kết quả trả về."""
     factory = await get_session_factory()
     async with factory() as session:
         q = select(AspectChunk).where(AspectChunk.product_id == product_id)
@@ -30,12 +46,27 @@ async def get_aspect_chunks(product_id: str, *, aspect: str | None=None, limit: 
         return [model_to_dict(row) for row in rows]
 
 async def get_aspect_chunk(chunk_id: str) -> Optional[dict]:
+    """Lấy aspect chunk (async).
+
+    Args:
+        chunk_id: (str) Tham số `chunk_id`.
+
+    Returns:
+        (Optional[dict]) Kết quả trả về."""
     factory = await get_session_factory()
     async with factory() as session:
         row = await session.scalar(select(AspectChunk).where(AspectChunk.id == chunk_id))
         return model_to_dict(row) if row else None
 
 async def delete_aspect_chunks_for_product(product_id: str, *, keep_aspects: list[str]) -> int:
+    """Delete aspect chunks for product (async).
+
+    Args:
+        product_id: (str) Tham số `product_id`.
+        keep_aspects: (list[str]) Tham số `keep_aspects`.
+
+    Returns:
+        (int) Kết quả trả về."""
     factory = await get_session_factory()
     async with factory() as session:
         q = delete(AspectChunk).where(AspectChunk.product_id == product_id)
@@ -46,6 +77,16 @@ async def delete_aspect_chunks_for_product(product_id: str, *, keep_aspects: lis
         return result.rowcount or 0
 
 async def search_similar_chunks(product_id: str, query_vector: list[float], *, aspect: str | None=None, limit: int=8) -> list[dict]:
+    """Tìm kiếm similar chunks (async).
+
+    Args:
+        product_id: (str) Tham số `product_id`.
+        query_vector: (list[float]) Tham số `query_vector`.
+        aspect: (str | None, mặc định None) Tham số `aspect`.
+        limit: (int, mặc định 8) Tham số `limit`.
+
+    Returns:
+        (list[dict]) Kết quả trả về."""
     vec = vector_literal(query_vector)
     sql = text('\n        SELECT aspect, content, review_ids, positive_percent,\n               1 - (embedding <=> CAST(:vec AS vector)) AS score\n        FROM aspect_chunks\n        WHERE product_id = :pid\n          AND embedding IS NOT NULL\n          AND (CAST(:aspect AS text) IS NULL OR aspect = :aspect)\n        ORDER BY embedding <=> CAST(:vec AS vector)\n        LIMIT :k\n    ')
     factory = await get_session_factory()

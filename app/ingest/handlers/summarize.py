@@ -1,7 +1,7 @@
 from __future__ import annotations
 import json
 import app.config.settings as settings
-from app.ai.router import TASK_ASPECT_GROUP, TASK_ASPECT_SUMMARY
+from app.ai.router import TASK_ASPECT_GROUP, TASK_ASPECT_SUMMARY, max_tokens_for_task
 from app.config.logger import Logger
 from app.ingest.processing.embeddings import embed_texts
 from app.repositories.aspect_chunks import delete_aspect_chunks_for_product, upsert_aspect_chunks
@@ -16,6 +16,13 @@ ASPECTS = ['battery', 'camera', 'screen', 'performance', 'design', 'price', 'sof
 _MAX_CURATED_FOR_LLM = 200
 
 def _parse_json(raw: str) -> dict | list | None:
+    """(Nội bộ) Phân tích json.
+
+    Args:
+        raw: (str) Tham số `raw`.
+
+    Returns:
+        (dict | list | None) Kết quả trả về."""
     text = (raw or '').strip()
     if text.startswith('```'):
         text = text.split('\n', 1)[-1].rsplit('```', 1)[0].strip()
@@ -25,10 +32,25 @@ def _parse_json(raw: str) -> dict | list | None:
         return None
 
 def _fallback_group(curated: list[dict]) -> list[dict]:
+    """(Nội bộ) Fallback group.
+
+    Args:
+        curated: (list[dict]) Tham số `curated`.
+
+    Returns:
+        (list[dict]) Kết quả trả về."""
     texts = [c['content'] for c in curated[:50]]
     return [{'aspect': 'other', 'review_ids': [c.get('raw_review_id') for c in curated[:50]], 'content': '\n'.join(texts), 'positive_percent': 70.0, 'negative_percent': 30.0}]
 
 async def _llm_group_aspects(curated: list[dict], *, product_name: str) -> list[dict]:
+    """(Nội bộ) Llm group aspects (async).
+
+    Args:
+        curated: (list[dict]) Tham số `curated`.
+        product_name: (str) Tham số `product_name`.
+
+    Returns:
+        (list[dict]) Kết quả trả về."""
     if not curated:
         return []
     lines = []
@@ -39,7 +61,7 @@ async def _llm_group_aspects(curated: list[dict], *, product_name: str) -> list[
         lines.append(f'- id={rid} likes={likes}: {content}')
     prompt = rag_prompts.ASPECT_GROUP_PROMPT.format(product=product_name, aspects=', '.join(ASPECTS), reviews='\n'.join(lines))
     try:
-        raw = await complete_json(prompt, rag_prompts.ASPECT_GROUP_SYSTEM, max_tokens=settings.OPENAI_TOOL_MAX_TOKENS, task=TASK_ASPECT_GROUP)
+        raw = await complete_json(prompt, rag_prompts.ASPECT_GROUP_SYSTEM, max_tokens=max_tokens_for_task(TASK_ASPECT_GROUP), task=TASK_ASPECT_GROUP)
         parsed = _parse_json(raw)
         groups = None
         if isinstance(parsed, dict):
@@ -62,9 +84,18 @@ async def _llm_group_aspects(curated: list[dict], *, product_name: str) -> list[
     return _fallback_group(curated)
 
 async def _llm_summarize_aspect(aspect: str, chunk_content: str, *, product_name: str) -> dict:
+    """(Nội bộ) Llm summarize aspect (async).
+
+    Args:
+        aspect: (str) Tham số `aspect`.
+        chunk_content: (str) Tham số `chunk_content`.
+        product_name: (str) Tham số `product_name`.
+
+    Returns:
+        (dict) Kết quả trả về."""
     prompt = rag_prompts.ASPECT_SUMMARY_PROMPT.format(product=product_name, aspect=aspect, content=chunk_content[:6000])
     try:
-        raw = await complete_json(prompt, rag_prompts.ASPECT_SUMMARY_SYSTEM, max_tokens=settings.OPENAI_TOOL_MAX_TOKENS, task=TASK_ASPECT_SUMMARY)
+        raw = await complete_json(prompt, rag_prompts.ASPECT_SUMMARY_SYSTEM, max_tokens=max_tokens_for_task(TASK_ASPECT_SUMMARY), task=TASK_ASPECT_SUMMARY)
         parsed = _parse_json(raw)
         if isinstance(parsed, dict) and parsed.get('summary'):
             return {'summary': str(parsed['summary'])[:2000], 'pros': parsed.get('pros') or [], 'cons': parsed.get('cons') or [], 'positive_percent': parsed.get('positive_percent')}
@@ -73,13 +104,20 @@ async def _llm_summarize_aspect(aspect: str, chunk_content: str, *, product_name
     return {'summary': f'Tóm tắt {aspect} cho {product_name}: {chunk_content[:300]}...', 'pros': [], 'cons': [], 'positive_percent': None}
 
 async def handle_product_summarize(envelope: dict) -> None:
+    """Xử lý product summarize (async).
+
+    Args:
+        envelope: (dict) Tham số `envelope`.
+
+    Returns:
+        (None) Kết quả trả về."""
     payload = envelope.get('payload') or {}
     product_id = payload.get('product_id') or envelope.get('video_id')
     if not product_id:
         return
     product = await get_product(product_id)
     product_name = (product or {}).get('name') or product_id
-    curated = await get_curated_reviews(product_id, limit=settings.CURATED_TOP_N)
+    curated = await get_curated_reviews(product_id, limit=getattr(settings, "AGENT_CURATED_TOP_N", 300))
     if not curated:
         logger.warning('[summarize] no curated product=%s', product_id)
         return

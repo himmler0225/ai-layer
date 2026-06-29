@@ -12,12 +12,26 @@ _QUEUES = (QUEUE_VIDEO, QUEUE_COMMENTS, QUEUE_TRANSCRIPT, QUEUE_EMBED, QUEUE_SUM
 _MAX_RETRIES = 3
 
 def _retry_count(message: AbstractIncomingMessage) -> int:
+    """(Nội bộ) Retry count.
+
+    Args:
+        message: (AbstractIncomingMessage) Tham số `message`.
+
+    Returns:
+        (int) Kết quả trả về."""
     deaths = message.headers.get('x-death') if message.headers else None
     if not deaths:
         return 0
     return sum((int(d.get('count', 0)) for d in deaths if isinstance(d, dict)))
 
 async def _on_message(message: AbstractIncomingMessage) -> None:
+    """(Nội bộ) On message (async).
+
+    Args:
+        message: (AbstractIncomingMessage) Tham số `message`.
+
+    Returns:
+        (None) Kết quả trả về."""
     envelope: dict | None = None
     try:
         envelope = json.loads(message.body.decode())
@@ -35,12 +49,23 @@ async def _on_message(message: AbstractIncomingMessage) -> None:
         logger.debug('[ingest] handled key=%s video=%s', envelope.get('routing_key'), envelope.get('video_id') or '-')
 
 async def _consume_queue(queue_name: str) -> None:
+    """(Nội bộ) Tiêu thụ queue (async).
+
+    Args:
+        queue_name: (str) Tham số `queue_name`.
+
+    Returns:
+        (None) Kết quả trả về."""
     channel = await get_channel()
     queue = await channel.get_queue(queue_name)
     await queue.consume(_on_message)
     logger.info('[ingest] consuming queue=%s', queue_name)
 
 async def run_consumer() -> None:
+    """Chạy consumer (async).
+
+    Returns:
+        (None) Kết quả trả về."""
     await declare_topology()
     await asyncio.gather(*[_consume_queue(name) for name in _QUEUES])
     logger.info('[ingest] consumer running on %d queues', len(_QUEUES))

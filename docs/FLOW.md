@@ -1,6 +1,7 @@
 # Flow ai-layer (tóm tắt)
 
-**RAG chi tiết (đọc khi nâng cấp):** [RAG-GUIDE.md](./RAG-GUIDE.md)
+**RAG chi tiết (đọc khi nâng cấp):** [RAG-GUIDE.md](./RAG-GUIDE.md)  
+**LangGraph (thay agent loop):** [LANGGRAPH-GUIDE.md](./LANGGRAPH-GUIDE.md)
 
 ## Stack
 
@@ -89,7 +90,7 @@ Consumer retry 3 lần → DLQ. Chi tiết: [RAG-GUIDE §6](./RAG-GUIDE.md#6-ghi
 | Việc | File |
 |------|------|
 | API stream | `app/api/agent.py` |
-| Agent loop | `app/services/agent/loop.py`, `runner.py`, `stream.py` |
+| Agent loop + guards | `app/services/agent/engine.py`, `loop.py`, `stream.py`, `runner.py` |
 | Lọc tool + cache-first | `app/services/agent/platform.py` |
 | RAG đủ/fresh? | `app/rag/knowledge.py` |
 | Product name từ task | `app/rag/product_hint.py` |
@@ -100,7 +101,7 @@ Consumer retry 3 lần → DLQ. Chi tiết: [RAG-GUIDE §6](./RAG-GUIDE.md#6-ghi
 | RAG sync | `ingest/processing/rag_sync.py` |
 | Summarize | `ingest/handlers/summarize.py` |
 | Curate | `ingest/processing/curate.py`, `quality.py` |
-| Lỗi OpenAI | `app/utils/openai_errors.py` |
+| Lỗi LLM | `app/utils/llm_errors.py` |
 | Prompt agent | Supabase `config` · ingest LLM: `services/prompts.py` |
 
 ---

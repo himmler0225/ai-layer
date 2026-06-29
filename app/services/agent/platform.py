@@ -1,4 +1,5 @@
 from __future__ import annotations
+import re
 from typing import Dict, List
 import app.config.settings as settings
 from app.config.logger import Logger
@@ -9,8 +10,19 @@ from app.services.agent.constants import _TIKTOK, _YOUTUBE
 logger = Logger.get(__name__)
 _PRODUCT_CORE = frozenset({'search_product_summary', 'search_aspect_evidence', 'get_raw_reviews', 'youtube_search', 'youtube_get_comments_batch', 'youtube_get_transcript_batch', 'youtube_get_detail', 'youtube_get_comments', 'extract_id_from_url'})
 _RAG_CACHE_TOOLS = frozenset({'search_product_summary', 'search_aspect_evidence', 'get_raw_reviews', 'extract_id_from_url'})
+_REVIEW_QUERY = re.compile(
+    r'\b(review|users?\s+say|đánh\s+giá|người\s+dùng|nên\s+mua|worth\s+it)\b',
+    re.IGNORECASE,
+)
 
 def detect_platform(task: str) -> str | None:
+    """Phát hiện platform.
+
+    Args:
+        task: (str) Tham số `task`.
+
+    Returns:
+        (str | None) Kết quả trả về."""
     question = current_question(task)
     has_tiktok = bool(_TIKTOK.search(question))
     has_youtube = bool(_YOUTUBE.search(question))
@@ -20,7 +32,16 @@ def detect_platform(task: str) -> str | None:
         return 'youtube'
     return None
 
+
 def filter_tools_by_platform(tools: List[Dict], task: str) -> List[Dict]:
+    """Lọc tools by platform.
+
+    Args:
+        tools: (List[Dict]) Tham số `tools`.
+        task: (str) Tham số `task`.
+
+    Returns:
+        (List[Dict]) Kết quả trả về."""
     platform = detect_platform(task)
     if platform is None:
         return tools
@@ -31,6 +52,14 @@ def filter_tools_by_platform(tools: List[Dict], task: str) -> List[Dict]:
     return filtered
 
 def _narrow_for_product_context(tools: List[Dict], task: str) -> List[Dict]:
+    """(Nội bộ) Narrow for product context.
+
+    Args:
+        tools: (List[Dict]) Tham số `tools`.
+        task: (str) Tham số `task`.
+
+    Returns:
+        (List[Dict]) Kết quả trả về."""
     if PRODUCT_BLOCK_MARKER not in (task or ''):
         return tools
     if detect_platform(task):
@@ -41,7 +70,28 @@ def _narrow_for_product_context(tools: List[Dict], task: str) -> List[Dict]:
         return narrowed
     return tools
 
+def _narrow_for_review_query(tools: List[Dict], task: str) -> List[Dict]:
+    """Thu hẹp tool khi câu hỏi dạng review sản phẩm (không có block sản phẩm)."""
+    if PRODUCT_BLOCK_MARKER in (task or ''):
+        return tools
+    question = current_question(task)
+    if not _REVIEW_QUERY.search(question):
+        return tools
+    narrowed = [t for t in tools if t.get('name') in _PRODUCT_CORE]
+    if narrowed and len(narrowed) < len(tools):
+        logger.info('[agent] review query: tools %d → %d', len(tools), len(narrowed))
+        return narrowed
+    return tools
+
 async def _narrow_for_rag_cache(tools: List[Dict], task: str) -> List[Dict]:
+    """(Nội bộ) Narrow for rag cache (async).
+
+    Args:
+        tools: (List[Dict]) Tham số `tools`.
+        task: (str) Tham số `task`.
+
+    Returns:
+        (List[Dict]) Kết quả trả về."""
     if not settings.RAG_ENABLED:
         return tools
     product_name = extract_product_name(task)
@@ -59,11 +109,28 @@ async def _narrow_for_rag_cache(tools: List[Dict], task: str) -> List[Dict]:
     return tools
 
 async def prepare_tools_for_task(tools: List[Dict], task: str) -> List[Dict]:
+    """Chuẩn bị tools for task (async).
+
+    Args:
+        tools: (List[Dict]) Tham số `tools`.
+        task: (str) Tham số `task`.
+
+    Returns:
+        (List[Dict]) Kết quả trả về."""
     tools = filter_tools_by_platform(tools, task)
+    tools = _narrow_for_review_query(tools, task)
     tools = _narrow_for_product_context(tools, task)
     tools = await _narrow_for_rag_cache(tools, task)
     return tools
 
 def prepare_tools(tools: List[Dict], task: str) -> List[Dict]:
+    """Chuẩn bị tools.
+
+    Args:
+        tools: (List[Dict]) Tham số `tools`.
+        task: (str) Tham số `task`.
+
+    Returns:
+        (List[Dict]) Kết quả trả về."""
     tools = filter_tools_by_platform(tools, task)
     return _narrow_for_product_context(tools, task)

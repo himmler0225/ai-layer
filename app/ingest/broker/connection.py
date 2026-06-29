@@ -10,6 +10,10 @@ _channel: Optional[AbstractChannel] = None
 _exchange: Optional[aio_pika.abc.AbstractExchange] = None
 
 async def get_connection() -> AbstractRobustConnection:
+    """Lấy connection (async).
+
+    Returns:
+        (AbstractRobustConnection) Kết quả trả về."""
     global _connection
     if _connection is None or _connection.is_closed:
         if not settings.RABBITMQ_URL:
@@ -18,6 +22,10 @@ async def get_connection() -> AbstractRobustConnection:
     return _connection
 
 async def get_channel() -> AbstractChannel:
+    """Lấy channel (async).
+
+    Returns:
+        (AbstractChannel) Kết quả trả về."""
     global _channel
     conn = await get_connection()
     if _channel is None or _channel.is_closed:
@@ -26,6 +34,10 @@ async def get_channel() -> AbstractChannel:
     return _channel
 
 async def get_exchange() -> aio_pika.abc.AbstractExchange:
+    """Lấy exchange (async).
+
+    Returns:
+        (aio_pika.abc.AbstractExchange) Kết quả trả về."""
     global _exchange
     if _exchange is None:
         channel = await get_channel()
@@ -33,6 +45,10 @@ async def get_exchange() -> aio_pika.abc.AbstractExchange:
     return _exchange
 
 async def close_broker() -> None:
+    """Đóng broker (async).
+
+    Returns:
+        (None) Kết quả trả về."""
     global _connection, _channel, _exchange
     if _channel and (not _channel.is_closed):
         await _channel.close()

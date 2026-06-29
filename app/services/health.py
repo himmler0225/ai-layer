@@ -8,6 +8,10 @@ from app.config.headers import get_data_miner_headers
 
 
 async def check_postgres() -> str:
+    """Check postgres (async).
+
+    Returns:
+        (str) Kết quả trả về."""
     if not settings.DATABASE_URL:
         return "missing DATABASE_URL"
     try:
@@ -24,6 +28,10 @@ async def check_postgres() -> str:
 
 
 async def check_redis() -> str:
+    """Check redis (async).
+
+    Returns:
+        (str) Kết quả trả về."""
     try:
         from app.cache.client import get_redis
 
@@ -37,6 +45,10 @@ async def check_redis() -> str:
 
 
 async def check_rabbitmq() -> str:
+    """Check rabbitmq (async).
+
+    Returns:
+        (str) Kết quả trả về."""
     if not settings.INGEST_ENABLED:
         return "skipped"
     if not settings.RABBITMQ_URL:
@@ -57,6 +69,10 @@ async def check_rabbitmq() -> str:
 
 
 async def check_data_miner() -> str:
+    """Check data miner (async).
+
+    Returns:
+        (str) Kết quả trả về."""
     if not settings.DATA_MINER_KEY:
         return "missing DATA_MINER_KEY"
     try:
@@ -79,10 +95,18 @@ async def check_data_miner() -> str:
 
 
 def check_openai_key() -> str:
+    """Check openai key.
+
+    Returns:
+        (str) Kết quả trả về."""
     return "set" if settings.OPENAI_API_KEY else "missing"
 
 
 async def collect_checks() -> dict[str, str]:
+    """Thu thập checks (async).
+
+    Returns:
+        (dict[str, str]) Kết quả trả về."""
     return {
         "postgres": await check_postgres(),
         "redis": await check_redis(),
@@ -93,6 +117,13 @@ async def collect_checks() -> dict[str, str]:
 
 
 def is_healthy(checks: dict[str, str]) -> bool:
+    """Is healthy.
+
+    Args:
+        checks: (dict[str, str]) Tham số `checks`.
+
+    Returns:
+        (bool) Kết quả trả về."""
     if checks.get("postgres") != "ok":
         return False
     if checks.get("redis") != "ok":

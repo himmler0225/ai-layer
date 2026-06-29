@@ -14,6 +14,14 @@ _MIN_RAW_FOR_SUMMARIZE = 20
 _RE_SUMMARIZE_DELTA = 50
 
 async def _should_queue_summarize(product_id: str, total_raw: int) -> bool:
+    """(Nội bộ) Should queue summarize (async).
+
+    Args:
+        product_id: (str) Tham số `product_id`.
+        total_raw: (int) Tham số `total_raw`.
+
+    Returns:
+        (bool) Kết quả trả về."""
     if total_raw < _MIN_RAW_FOR_SUMMARIZE:
         return False
     summaries = await get_aspect_summaries(product_id)
@@ -25,6 +33,16 @@ async def _should_queue_summarize(product_id: str, total_raw: int) -> bool:
     return total_raw - last >= _RE_SUMMARIZE_DELTA
 
 async def sync_comments_to_product_rag(*, product_hint: str, platform: str, video_id: str, raw_comments: list[dict]) -> str | None:
+    """Đồng bộ comments to product rag (async).
+
+    Args:
+        product_hint: (str) Tham số `product_hint`.
+        platform: (str) Tham số `platform`.
+        video_id: (str) Tham số `video_id`.
+        raw_comments: (list[dict]) Tham số `raw_comments`.
+
+    Returns:
+        (str | None) Kết quả trả về."""
     hint = (product_hint or '').strip()
     if not hint:
         return None
@@ -40,7 +58,7 @@ async def sync_comments_to_product_rag(*, product_hint: str, platform: str, vide
     if not rows:
         return product_id
     await upsert_raw_reviews(rows)
-    existing = await get_curated_reviews(product_id, limit=settings.CURATED_TOP_N)
+    existing = await get_curated_reviews(product_id, limit=getattr(settings, "AGENT_CURATED_TOP_N", 300))
     curated = merge_curated(existing, rows)
     await replace_curated_reviews(product_id, curated)
     total = await count_raw_reviews(product_id)

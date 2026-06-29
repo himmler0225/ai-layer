@@ -5,6 +5,13 @@ from app.ingest.schemas import ROUTING_EMBED
 from app.repositories.videos import exists_video, update_transcript, upsert_video
 
 async def handle_transcript_upsert(envelope: dict) -> None:
+    """Xử lý transcript upsert (async).
+
+    Args:
+        envelope: (dict) Tham số `envelope`.
+
+    Returns:
+        (None) Kết quả trả về."""
     payload = envelope.get('payload') or {}
     video_id = envelope.get('video_id') or payload.get('video_id')
     platform = envelope.get('platform') or payload.get('platform') or 'youtube'

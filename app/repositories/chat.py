@@ -7,17 +7,42 @@ from app.config.db.models import ChatMessage, ChatSession
 from app.config.db.session import get_session_factory
 
 async def list_sessions(user_id: str) -> list[ChatSession]:
+    """List sessions (async).
+
+    Args:
+        user_id: (str) Tham số `user_id`.
+
+    Returns:
+        (list[ChatSession]) Kết quả trả về."""
     factory = await get_session_factory()
     async with factory() as session:
         result = await session.execute(select(ChatSession).where(ChatSession.user_id == user_id).order_by(ChatSession.updated_at.desc()))
         return list(result.scalars().all())
 
 async def get_session_user_id(session_id: str) -> str | None:
+    """Lấy session user id (async).
+
+    Args:
+        session_id: (str) Tham số `session_id`.
+
+    Returns:
+        (str | None) Kết quả trả về."""
     factory = await get_session_factory()
     async with factory() as session:
         return await session.scalar(select(ChatSession.user_id).where(ChatSession.id == session_id))
 
 async def upsert_session(*, session_id: str, user_id: str, title: str, created_at: datetime, updated_at: datetime) -> None:
+    """Upsert session (async).
+
+    Args:
+        session_id: (str) Tham số `session_id`.
+        user_id: (str) Tham số `user_id`.
+        title: (str) Tham số `title`.
+        created_at: (datetime) Tham số `created_at`.
+        updated_at: (datetime) Tham số `updated_at`.
+
+    Returns:
+        (None) Kết quả trả về."""
     factory = await get_session_factory()
     async with factory() as session:
         stmt = insert(ChatSession).values(id=session_id, user_id=user_id, title=title, created_at=created_at, updated_at=updated_at)
@@ -26,6 +51,14 @@ async def upsert_session(*, session_id: str, user_id: str, title: str, created_a
         await session.commit()
 
 async def patch_session(session_id: str, *, title: Optional[str]=None) -> None:
+    """Patch session (async).
+
+    Args:
+        session_id: (str) Tham số `session_id`.
+        title: (Optional[str], mặc định None) Tham số `title`.
+
+    Returns:
+        (None) Kết quả trả về."""
     values: dict = {'updated_at': datetime.now(timezone.utc)}
     if title is not None:
         values['title'] = title
@@ -35,18 +68,40 @@ async def patch_session(session_id: str, *, title: Optional[str]=None) -> None:
         await session.commit()
 
 async def delete_session(session_id: str) -> None:
+    """Delete session (async).
+
+    Args:
+        session_id: (str) Tham số `session_id`.
+
+    Returns:
+        (None) Kết quả trả về."""
     factory = await get_session_factory()
     async with factory() as session:
         await session.execute(delete(ChatSession).where(ChatSession.id == session_id))
         await session.commit()
 
 async def list_messages(session_id: str) -> list[ChatMessage]:
+    """List messages (async).
+
+    Args:
+        session_id: (str) Tham số `session_id`.
+
+    Returns:
+        (list[ChatMessage]) Kết quả trả về."""
     factory = await get_session_factory()
     async with factory() as session:
         result = await session.execute(select(ChatMessage).where(ChatMessage.session_id == session_id).order_by(ChatMessage.created_at.asc()))
         return list(result.scalars().all())
 
 async def save_messages(session_id: str, messages: list[dict]) -> None:
+    """Save messages (async).
+
+    Args:
+        session_id: (str) Tham số `session_id`.
+        messages: (list[dict]) Tham số `messages`.
+
+    Returns:
+        (None) Kết quả trả về."""
     if not messages:
         return
     factory = await get_session_factory()
@@ -57,6 +112,13 @@ async def save_messages(session_id: str, messages: list[dict]) -> None:
         await session.commit()
 
 async def session_stats(days: int=7) -> dict:
+    """Session stats (async).
+
+    Args:
+        days: (int, mặc định 7) Tham số `days`.
+
+    Returns:
+        (dict) Kết quả trả về."""
     days = max(1, min(int(days), 30))
     now = datetime.now(timezone.utc)
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)

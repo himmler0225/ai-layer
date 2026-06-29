@@ -8,6 +8,13 @@ from app.ingest.schemas import ROUTING_COMMENTS, ROUTING_EMBED, ROUTING_SUMMARIZ
 _HANDLERS = {ROUTING_VIDEO: video.handle_video_upsert, ROUTING_COMMENTS: comments.handle_comments_upsert, ROUTING_TRANSCRIPT: transcript.handle_transcript_upsert, ROUTING_EMBED: embed.handle_chunks_embed, ROUTING_SUMMARIZE: summarize.handle_product_summarize}
 
 async def dispatch(envelope: dict) -> None:
+    """Dispatch `dispatch` (async).
+
+    Args:
+        envelope: (dict) Tham số `envelope`.
+
+    Returns:
+        (None) Kết quả trả về."""
     routing_key = envelope.get('routing_key', '')
     handler = _HANDLERS.get(routing_key)
     if not handler:

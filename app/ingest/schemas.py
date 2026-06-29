@@ -17,6 +17,7 @@ QUEUE_SUMMARIZE = 'ingest.summarize'
 Platform = Literal['youtube', 'tiktok']
 
 class IngestEnvelope(BaseModel):
+    """    Lớp `IngestEnvelope` (kế thừa BaseModel)."""
     job_id: str
     routing_key: str
     platform: Platform
@@ -26,6 +27,7 @@ class IngestEnvelope(BaseModel):
     fetched_at: str = ''
 
 class ChunkItem(BaseModel):
+    """    Lớp `ChunkItem` (kế thừa BaseModel)."""
     id: str
     content: str
     chunk_type: str = 'text'

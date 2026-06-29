@@ -4,6 +4,13 @@ from app.ai.router import get_router
 _BATCH_SIZE = 64
 
 async def embed_texts(texts: list[str]) -> list[list[float]]:
+    """Embed texts (async).
+
+    Args:
+        texts: (list[str]) Tham số `texts`.
+
+    Returns:
+        (list[list[float]]) Kết quả trả về."""
     if not texts:
         return []
     router = get_router()

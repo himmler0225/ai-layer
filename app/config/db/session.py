@@ -10,6 +10,10 @@ _engine: AsyncEngine | None = None
 _session_factory: async_sessionmaker[AsyncSession] | None = None
 
 def _database_url() -> str:
+    """(Nội bộ) Database url.
+
+    Returns:
+        (str) Kết quả trả về."""
     url = settings.DATABASE_URL
     if not url:
         raise RuntimeError('DATABASE_URL is not configured')
@@ -20,6 +24,10 @@ def _database_url() -> str:
     return url
 
 async def get_session_factory() -> async_sessionmaker[AsyncSession]:
+    """Lấy session factory (async).
+
+    Returns:
+        (async_sessionmaker[AsyncSession]) Kết quả trả về."""
     global _engine, _session_factory
     if _session_factory is None:
         _engine = create_async_engine(_database_url(), pool_size=5, max_overflow=15, json_serializer=json.dumps, json_deserializer=json.loads)
@@ -27,6 +35,10 @@ async def get_session_factory() -> async_sessionmaker[AsyncSession]:
     return _session_factory
 
 async def init_db() -> None:
+    """Khởi tạo db (async).
+
+    Returns:
+        (None) Kết quả trả về."""
     await get_session_factory()
     assert _engine is not None
     async with _engine.begin() as conn:
@@ -35,7 +47,7 @@ async def init_db() -> None:
             await conn.execute(text('CREATE EXTENSION IF NOT EXISTS vector'))
             has_vector = True
         except Exception as exc:
-            logger.warning('[db] pgvector unavailable (%s) — video_chunks table skipped; use pgvector/pgvector image or install pgvector on PostgreSQL', exc)
+            logger.warning('[db] pgvector unavailable (%s) - video_chunks table skipped; use pgvector/pgvector image or install pgvector on PostgreSQL', exc)
         tables = list(Base.metadata.sorted_tables)
         if not has_vector:
             tables = [t for t in tables if t.name != 'video_chunks']
@@ -43,6 +55,10 @@ async def init_db() -> None:
     logger.info('[db] tables initialized vector=%s', has_vector)
 
 async def close_engine() -> None:
+    """Đóng engine (async).
+
+    Returns:
+        (None) Kết quả trả về."""
     global _engine, _session_factory
     if _engine is not None:
         await _engine.dispose()

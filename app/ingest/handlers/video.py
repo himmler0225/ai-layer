@@ -3,6 +3,13 @@ from app.repositories.search_cache import upsert_search_cache
 from app.repositories.videos import upsert_video
 
 async def handle_video_upsert(envelope: dict) -> None:
+    """Xử lý video upsert (async).
+
+    Args:
+        envelope: (dict) Tham số `envelope`.
+
+    Returns:
+        (None) Kết quả trả về."""
     payload = envelope.get('payload') or {}
     video = payload.get('video')
     if not video:

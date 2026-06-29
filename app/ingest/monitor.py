@@ -5,11 +5,23 @@ from app.ingest.schemas import DLQ_NAME, EXCHANGE_NAME, QUEUE_COMMENTS, QUEUE_EM
 _INGEST_QUEUES = (QUEUE_VIDEO, QUEUE_COMMENTS, QUEUE_TRANSCRIPT, QUEUE_EMBED)
 
 async def _queue_info(channel, name: str) -> dict:
+    """(Nội bộ) Queue info (async).
+
+    Args:
+        channel: (Any) Tham số `channel`.
+        name: (str) Tham số `name`.
+
+    Returns:
+        (dict) Kết quả trả về."""
     queue = await channel.declare_queue(name, passive=True)
     result = queue.declaration_result
     return {'messages': result.message_count, 'consumers': result.consumer_count}
 
 async def get_ingest_queue_stats() -> dict:
+    """Lấy ingest queue stats (async).
+
+    Returns:
+        (dict) Kết quả trả về."""
     if not settings.RABBITMQ_URL:
         return {'enabled': False, 'ingest_enabled': settings.INGEST_ENABLED, 'reason': 'RABBITMQ_URL chưa cấu hình'}
     conn = await aio_pika.connect_robust(settings.RABBITMQ_URL)

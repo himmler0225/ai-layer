@@ -27,6 +27,10 @@ _ingest_worker_task: Optional[asyncio.Task] = None
 _config_refresh_task: Optional[asyncio.Task] = None
 
 async def _remote_config_refresher() -> None:
+    """(Nội bộ) Remote config refresher (async).
+
+    Returns:
+        (None) Kết quả trả về."""
     from app.config.remote import load_and_apply
     while True:
         await asyncio.sleep(max(settings.REMOTE_CONFIG_TTL, 1) * 60)
@@ -37,12 +41,20 @@ async def _remote_config_refresher() -> None:
             logger.warning('[remote_config] refresh failed: %s', exc)
 
 async def _start_config_refresher() -> None:
+    """(Nội bộ) Bắt đầu config refresher (async).
+
+    Returns:
+        (None) Kết quả trả về."""
     global _config_refresh_task
     if not settings.SUPABASE_URL or not settings.SUPABASE_SERVICE_KEY:
         return
     _config_refresh_task = asyncio.create_task(_remote_config_refresher(), name='config-refresher')
 
 async def _stop_config_refresher() -> None:
+    """(Nội bộ) Dừng config refresher (async).
+
+    Returns:
+        (None) Kết quả trả về."""
     global _config_refresh_task
     if _config_refresh_task is None:
         return
@@ -54,6 +66,10 @@ async def _stop_config_refresher() -> None:
     _config_refresh_task = None
 
 async def _start_inline_ingest_worker() -> None:
+    """(Nội bộ) Bắt đầu inline ingest worker (async).
+
+    Returns:
+        (None) Kết quả trả về."""
     global _ingest_worker_task
     if not settings.INGEST_ENABLED or not settings.RABBITMQ_URL:
         return
@@ -65,6 +81,10 @@ async def _start_inline_ingest_worker() -> None:
     logger.info('[startup] ingest worker inline started')
 
 async def _stop_inline_ingest_worker() -> None:
+    """(Nội bộ) Dừng inline ingest worker (async).
+
+    Returns:
+        (None) Kết quả trả về."""
     global _ingest_worker_task
     if _ingest_worker_task is None:
         return
@@ -78,6 +98,10 @@ async def _stop_inline_ingest_worker() -> None:
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    """Lifespan `lifespan` (async).
+
+    Args:
+        _app: (FastAPI) Tham số `_app`."""
     Logger.sync_uvicorn(settings.LOG_LEVEL)
     logger.info('[startup] loading remote config')
     from app.config.remote import load_and_apply
@@ -117,10 +141,23 @@ app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
 
 @app.exception_handler(HTTPException)
 async def http_exception_handler(_request: Request, exc: HTTPException) -> JSONResponse:
+    """Http exception handler (async).
+
+    Args:
+        _request: (Request) Tham số `_request`.
+        exc: (HTTPException) Tham số `exc`.
+
+    Returns:
+        (JSONResponse) Kết quả trả về."""
     return JSONResponse(status_code=exc.status_code, content=ApiResponse.fail(str(exc.detail)).model_dump())
 
 @app.middleware('http')
 async def add_process_time(request: Request, call_next):
+    """Add process time (async).
+
+    Args:
+        request: (Request) Tham số `request`.
+        call_next: (Any) Tham số `call_next`."""
     start = time.perf_counter()
     response = await call_next(request)
     response.headers['X-Process-Time-Ms'] = str(round((time.perf_counter() - start) * 1000, 2))
@@ -133,5 +170,6 @@ app.include_router(admin_router, prefix='/ai', tags=['Admin'])
 
 @app.get('/health', tags=['Health'])
 async def health():
+    """    Health `health` (async)."""
     checks = await collect_checks()
     return ApiResponse.ok({'service': 'ai-layer', 'healthy': is_healthy(checks), 'checks': checks})

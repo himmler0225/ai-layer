@@ -7,6 +7,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.config.db.models.base import Base
 
 class ChatSession(Base):
+    """    Lớp `ChatSession` (kế thừa Base)."""
     __tablename__ = 'chat_sessions'
     __table_args__ = (Index('chat_sessions_user_updated', 'user_id', 'updated_at'),)
     id: Mapped[str] = mapped_column(Text, primary_key=True)
@@ -17,6 +18,7 @@ class ChatSession(Base):
     messages: Mapped[list['ChatMessage']] = relationship('ChatMessage', back_populates='session', cascade='all, delete-orphan')
 
 class ChatMessage(Base):
+    """    Lớp `ChatMessage` (kế thừa Base)."""
     __tablename__ = 'chat_messages'
     __table_args__ = (CheckConstraint("role IN ('user', 'assistant')", name='chat_messages_role_check'), Index('chat_messages_session_created', 'session_id', 'created_at'))
     id: Mapped[str] = mapped_column(Text, primary_key=True)

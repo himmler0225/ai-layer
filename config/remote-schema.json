@@ -16,6 +16,7 @@
         "max_result_chars",
         "curated_top_n"
       ],
+      "bool_fields": ["include_review_summary"],
       "store": "agent"
     },
     "AI_MODELS": {

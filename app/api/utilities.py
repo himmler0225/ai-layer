@@ -10,10 +10,12 @@ from app.utilities.url_shortener import shorten_url
 router = APIRouter(prefix='/utilities', dependencies=[Depends(verify_api_key)])
 
 class ShortenRequest(BaseModel):
+    """    Lớp `ShortenRequest` (kế thừa BaseModel)."""
     url: HttpUrl
     provider: Literal['tinyurl', 'isgd'] = 'tinyurl'
 
 class QRRequest(BaseModel):
+    """    Lớp `QRRequest` (kế thừa BaseModel)."""
     url: HttpUrl
     size: int = 10
     theme: Literal['default', 'green', 'dark'] = 'default'
@@ -22,6 +24,11 @@ class QRRequest(BaseModel):
 @router.post('/shorten', summary='Rút gọn URL')
 @limiter.limit(shorten_rate_limit)
 async def shorten(request: Request, body: ShortenRequest):
+    """Shorten `shorten` (async).
+
+    Args:
+        request: (Request) Tham số `request`.
+        body: (ShortenRequest) Tham số `body`."""
     result = await shorten_url(str(body.url), provider=body.provider)
     if 'error' in result:
         raise HTTPException(status_code=502, detail=result['error'])
@@ -30,6 +37,11 @@ async def shorten(request: Request, body: ShortenRequest):
 @router.post('/qr', summary='Tạo mã QR từ URL')
 @limiter.limit(qr_rate_limit)
 async def qr_code(request: Request, body: QRRequest):
+    """Qr code (async).
+
+    Args:
+        request: (Request) Tham số `request`.
+        body: (QRRequest) Tham số `body`."""
     try:
         return ApiResponse.ok(await generate_qr(url=str(body.url), size=body.size, theme=body.theme, rounded=body.rounded))
     except Exception as e:

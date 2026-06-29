@@ -8,6 +8,13 @@ from app.config.headers import get_supabase_auth_headers
 from app.config.settings import SUPABASE_ANON_KEY, SUPABASE_TOKEN_TTL, SUPABASE_URL
 
 async def get_user_id(token: str) -> str:
+    """Lấy user id (async).
+
+    Args:
+        token: (str) Tham số `token`.
+
+    Returns:
+        (str) Kết quả trả về."""
     cache_key = f'auth:{hashlib.sha256(token.encode()).hexdigest()[:32]}'
     redis = await get_redis()
     if redis:

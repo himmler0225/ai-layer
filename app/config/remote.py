@@ -12,6 +12,10 @@ logger = Logger.get(__name__)
 
 
 async def load_and_apply() -> None:
+    """Tải and apply (async).
+
+    Returns:
+        (None) Kết quả trả về."""
     schema = load_schema()
 
     if not settings.SUPABASE_URL or not settings.SUPABASE_SERVICE_KEY:

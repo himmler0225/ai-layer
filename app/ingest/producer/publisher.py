@@ -12,6 +12,10 @@ logger = Logger.get(__name__)
 _ready = False
 
 async def init_producer() -> None:
+    """Khởi tạo producer (async).
+
+    Returns:
+        (None) Kết quả trả về."""
     global _ready
     if not settings.INGEST_ENABLED or not settings.RABBITMQ_URL:
         logger.info('[ingest] producer disabled')
@@ -26,14 +30,33 @@ async def init_producer() -> None:
         logger.warning('[ingest] producer init failed: %s', exc)
 
 async def close_producer() -> None:
+    """Đóng producer (async).
+
+    Returns:
+        (None) Kết quả trả về."""
     global _ready
     _ready = False
     await close_broker()
 
 def _enabled() -> bool:
+    """(Nội bộ) Enabled `_enabled`.
+
+    Returns:
+        (bool) Kết quả trả về."""
     return settings.INGEST_ENABLED and bool(settings.RABBITMQ_URL) and _ready
 
 async def publish(routing_key: str, *, platform: str, video_id: str='', product_hint: str='', payload: Optional[dict]=None) -> None:
+    """Xuất bản `publish` (async).
+
+    Args:
+        routing_key: (str) Tham số `routing_key`.
+        platform: (str) Tham số `platform`.
+        video_id: (str, mặc định '') Tham số `video_id`.
+        product_hint: (str, mặc định '') Tham số `product_hint`.
+        payload: (Optional[dict], mặc định None) Tham số `payload`.
+
+    Returns:
+        (None) Kết quả trả về."""
     if not _enabled():
         return
     envelope = IngestEnvelope(job_id=str(uuid.uuid4()), routing_key=routing_key, platform=platform, video_id=video_id, product_hint=product_hint, payload=payload or {}, fetched_at=datetime.now(timezone.utc).isoformat())

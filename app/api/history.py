@@ -15,15 +15,18 @@ logger = Logger.get(__name__)
 router = APIRouter(dependencies=[Depends(verify_api_key)])
 
 class SessionUpsert(BaseModel):
+    """    Lớp `SessionUpsert` (kế thừa BaseModel)."""
     id: str
     title: str
     created_at: str
     updated_at: str
 
 class SessionPatch(BaseModel):
+    """    Lớp `SessionPatch` (kế thừa BaseModel)."""
     title: Optional[str] = None
 
 class MessageSave(BaseModel):
+    """    Lớp `MessageSave` (kế thừa BaseModel)."""
     id: str
     role: str
     content: str
@@ -31,21 +34,55 @@ class MessageSave(BaseModel):
     created_at: str
 
 async def _bust_sessions(redis, user_id: str) -> None:
+    """(Nội bộ) Bust sessions (async).
+
+    Args:
+        redis: (Any) Tham số `redis`.
+        user_id: (str) Tham số `user_id`.
+
+    Returns:
+        (None) Kết quả trả về."""
     if redis:
         await redis.delete(f'history:sessions:{user_id}')
 
 async def _bust_messages(redis, session_id: str) -> None:
+    """(Nội bộ) Bust messages (async).
+
+    Args:
+        redis: (Any) Tham số `redis`.
+        session_id: (str) Tham số `session_id`.
+
+    Returns:
+        (None) Kết quả trả về."""
     if redis:
         await redis.delete(f'history:messages:{session_id}')
 
 def _parse_token(authorization: str) -> str:
+    """(Nội bộ) Phân tích token.
+
+    Args:
+        authorization: (str) Tham số `authorization`.
+
+    Returns:
+        (str) Kết quả trả về."""
     return authorization.removeprefix('Bearer ').strip()
 
 def _parse_dt(s: str) -> datetime:
+    """(Nội bộ) Phân tích dt.
+
+    Args:
+        s: (str) Tham số `s`.
+
+    Returns:
+        (datetime) Kết quả trả về."""
     return datetime.fromisoformat(s.replace('Z', '+00:00'))
 
 @router.get('/history/admin/stats')
 async def admin_session_stats(days: int=7):
+    """Admin session stats (async).
+
+    Args:
+        days: (int, mặc định 7) Tham số `days`."""
     try:
         data = await chat_repo.session_stats(days=days)
     except Exception as e:
@@ -55,6 +92,10 @@ async def admin_session_stats(days: int=7):
 
 @router.get('/history/sessions')
 async def list_sessions(authorization: str=Header(...)):
+    """List sessions (async).
+
+    Args:
+        authorization: (str, mặc định Header(...)) Tham số `authorization`."""
     try:
         user_id = await get_user_id(_parse_token(authorization))
     except HTTPException:
@@ -80,6 +121,11 @@ async def list_sessions(authorization: str=Header(...)):
 
 @router.post('/history/sessions')
 async def upsert_session(body: SessionUpsert, authorization: str=Header(...)):
+    """Upsert session (async).
+
+    Args:
+        body: (SessionUpsert) Tham số `body`.
+        authorization: (str, mặc định Header(...)) Tham số `authorization`."""
     user_id = await get_user_id(_parse_token(authorization))
     await chat_repo.upsert_session(session_id=body.id, user_id=user_id, title=body.title, created_at=_parse_dt(body.created_at), updated_at=_parse_dt(body.updated_at))
     await _bust_sessions(await get_redis(), user_id)
@@ -87,6 +133,12 @@ async def upsert_session(body: SessionUpsert, authorization: str=Header(...)):
 
 @router.patch('/history/sessions/{session_id}')
 async def patch_session(session_id: str, body: SessionPatch, authorization: str=Header(...)):
+    """Patch session (async).
+
+    Args:
+        session_id: (str) Tham số `session_id`.
+        body: (SessionPatch) Tham số `body`.
+        authorization: (str, mặc định Header(...)) Tham số `authorization`."""
     user_id = await get_user_id(_parse_token(authorization))
     owner_id = await chat_repo.get_session_user_id(session_id)
     if owner_id != user_id:
@@ -97,6 +149,11 @@ async def patch_session(session_id: str, body: SessionPatch, authorization: str=
 
 @router.delete('/history/sessions/{session_id}')
 async def delete_session(session_id: str, authorization: str=Header(...)):
+    """Delete session (async).
+
+    Args:
+        session_id: (str) Tham số `session_id`.
+        authorization: (str, mặc định Header(...)) Tham số `authorization`."""
     user_id = await get_user_id(_parse_token(authorization))
     owner_id = await chat_repo.get_session_user_id(session_id)
     if owner_id != user_id:
@@ -109,6 +166,11 @@ async def delete_session(session_id: str, authorization: str=Header(...)):
 
 @router.get('/history/sessions/{session_id}/messages')
 async def get_messages(session_id: str, authorization: str=Header(...)):
+    """Lấy messages (async).
+
+    Args:
+        session_id: (str) Tham số `session_id`.
+        authorization: (str, mặc định Header(...)) Tham số `authorization`."""
     user_id = await get_user_id(_parse_token(authorization))
     redis = await get_redis()
     key = f'history:messages:{session_id}'
@@ -127,6 +189,12 @@ async def get_messages(session_id: str, authorization: str=Header(...)):
 
 @router.post('/history/sessions/{session_id}/messages')
 async def save_messages(session_id: str, body: list[MessageSave], authorization: str=Header(...)):
+    """Save messages (async).
+
+    Args:
+        session_id: (str) Tham số `session_id`.
+        body: (list[MessageSave]) Tham số `body`.
+        authorization: (str, mặc định Header(...)) Tham số `authorization`."""
     user_id = await get_user_id(_parse_token(authorization))
     owner_id = await chat_repo.get_session_user_id(session_id)
     if owner_id != user_id:

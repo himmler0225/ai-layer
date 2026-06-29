@@ -3,6 +3,14 @@ import hashlib
 from typing import Optional
 
 def _comment_id(video_id: str, raw: dict) -> str:
+    """(Nội bộ) Comment id.
+
+    Args:
+        video_id: (str) Tham số `video_id`.
+        raw: (dict) Tham số `raw`.
+
+    Returns:
+        (str) Kết quả trả về."""
     cid = raw.get('comment_id') or raw.get('id')
     if cid:
         return str(cid)
@@ -11,6 +19,14 @@ def _comment_id(video_id: str, raw: dict) -> str:
     return f'{video_id}:{digest}'
 
 def map_comment(video_id: str, raw: dict) -> Optional[dict]:
+    """Map comment.
+
+    Args:
+        video_id: (str) Tham số `video_id`.
+        raw: (dict) Tham số `raw`.
+
+    Returns:
+        (Optional[dict]) Kết quả trả về."""
     content = (raw.get('content') or raw.get('text') or '').strip()
     if not content:
         return None

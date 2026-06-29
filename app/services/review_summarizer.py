@@ -1,10 +1,14 @@
 import re
 from typing import Dict, List, Optional
-import app.config.settings as settings
 import app.services.prompts as _prompts
-from app.ai.router import TASK_REVIEW_SUMMARY
+from app.ai.router import TASK_REVIEW_SUMMARY, max_tokens_for_task, resolve
+from app.services.agent.synthesis import _should_fallback_synth, models_with_fallback
+from app.utils.llm_errors import log_error, user_message
 from app.rag.product_hint import extract_product_name
-from app.utils.openai_responses import create_response, extract_response_text
+from app.config.logger import Logger
+from app.utils.llm_responses import create_response, extract_response_text
+
+logger = Logger.get(__name__)
 _HISTORY_MARKER = '\n[Câu hỏi hiện tại]\n'
 _VIET_RE = re.compile('[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]', re.IGNORECASE)
 _EMOJI_ONLY_RE = re.compile('^[\\s\\U0001F300-\\U0001FAFF\\U00002600-\\U000027BF\\U0000FE00-\\U0000FEFF!?.…,]+$')
@@ -13,6 +17,13 @@ _FOREIGN_RE = re.compile('\\b(perai|mesmo|tamanho|gimana|bagus|sangat|kenapa|kak
 _PRODUCT_STOPWORDS = frozenset({'review', 'cho', 'mình', 'biết', 'về', 'của', 'the', 'người', 'dùng', 'nói', 'gì', 'là', 'có', 'không', 'như', 'thế', 'nào', 'bao', 'nhiêu'})
 
 def _clean_summary(text: str) -> str:
+    """(Nội bộ) Clean summary.
+
+    Args:
+        text: (str) Tham số `text`.
+
+    Returns:
+        (str) Kết quả trả về."""
     lines: list[str] = []
     for line in text.splitlines():
         s = line.strip()
@@ -32,6 +43,14 @@ def _clean_summary(text: str) -> str:
     return out
 
 def _product_hint(task: str, fallback: str) -> str:
+    """(Nội bộ) Product hint.
+
+    Args:
+        task: (str) Tham số `task`.
+        fallback: (str) Tham số `fallback`.
+
+    Returns:
+        (str) Kết quả trả về."""
     from_block = extract_product_name(task)
     if from_block:
         return from_block
@@ -50,16 +69,37 @@ def _product_hint(task: str, fallback: str) -> str:
     return fallback or 'sản phẩm'
 
 def _product_tokens(product: str) -> List[str]:
+    """(Nội bộ) Product tokens.
+
+    Args:
+        product: (str) Tham số `product`.
+
+    Returns:
+        (List[str]) Kết quả trả về."""
     tokens = re.findall('[a-z0-9]{2,}', product.lower())
     return [t for t in tokens if t not in _PRODUCT_STOPWORDS]
 
 def _is_viet_or_english(text: str) -> bool:
+    """(Nội bộ) Is viet or english.
+
+    Args:
+        text: (str) Tham số `text`.
+
+    Returns:
+        (bool) Kết quả trả về."""
     if _VIET_RE.search(text):
         return True
     letters = re.findall('[a-zA-Z]', text)
     return len(letters) >= max(4, len(text.strip()) * 0.4)
 
 def _is_noise(text: str) -> bool:
+    """(Nội bộ) Is noise.
+
+    Args:
+        text: (str) Tham số `text`.
+
+    Returns:
+        (bool) Kết quả trả về."""
     stripped = text.strip()
     if len(stripped) < 6:
         return True
@@ -68,6 +108,14 @@ def _is_noise(text: str) -> bool:
     return False
 
 def filter_reviews(reviews: List[Dict], product: str) -> List[Dict]:
+    """Lọc reviews.
+
+    Args:
+        reviews: (List[Dict]) Tham số `reviews`.
+        product: (str) Tham số `product`.
+
+    Returns:
+        (List[Dict]) Kết quả trả về."""
     tokens = _product_tokens(product)
     filtered: List[Dict] = []
     for review in reviews:
@@ -87,6 +135,13 @@ def filter_reviews(reviews: List[Dict], product: str) -> List[Dict]:
     return filtered
 
 def _format_reviews(reviews: List[Dict]) -> str:
+    """(Nội bộ) Định dạng reviews.
+
+    Args:
+        reviews: (List[Dict]) Tham số `reviews`.
+
+    Returns:
+        (str) Kết quả trả về."""
     lines = []
     for i, review in enumerate(reviews[:120], 1):
         text = review.get('content') or review.get('comment') or review.get('text') or ''
@@ -100,6 +155,16 @@ def _format_reviews(reviews: List[Dict]) -> str:
     return '\n'.join(lines)
 
 async def summarize_reviews(reviews: List[Dict], product: str='', source: str='', task: str='') -> Optional[str]:
+    """Tóm tắt reviews (async).
+
+    Args:
+        reviews: (List[Dict]) Tham số `reviews`.
+        product: (str, mặc định '') Tham số `product`.
+        source: (str, mặc định '') Tham số `source`.
+        task: (str, mặc định '') Tham số `task`.
+
+    Returns:
+        (Optional[str]) Kết quả trả về."""
     if not reviews:
         return None
     product_hint = _product_hint(task, product)
@@ -111,9 +176,32 @@ async def summarize_reviews(reviews: List[Dict], product: str='', source: str=''
     if not (_prompts.REVIEW_SUMMARY_PROMPT or '').strip():
         return None
     prompt = _prompts.REVIEW_SUMMARY_PROMPT.format(n=len(relevant), product=product_hint, source=source, reviews=_format_reviews(relevant))
-    response = await create_response(task=TASK_REVIEW_SUMMARY, model=settings.OPENAI_MODEL, instructions=_prompts.REVIEW_SUMMARY_SYSTEM, input=prompt, max_output_tokens=settings.OPENAI_MAX_TOKENS)
-    raw = extract_response_text(response)
-    if not raw:
-        return None
-    cleaned = _clean_summary(raw.strip())
-    return cleaned or None
+    _, primary = resolve(TASK_REVIEW_SUMMARY)
+    last_exc: Exception | None = None
+    for model in models_with_fallback(primary):
+        try:
+            response = await create_response(
+                task=TASK_REVIEW_SUMMARY,
+                model=model,
+                instructions=_prompts.REVIEW_SUMMARY_SYSTEM,
+                input=prompt,
+                max_output_tokens=max_tokens_for_task(TASK_REVIEW_SUMMARY),
+            )
+            raw = extract_response_text(response)
+            if not raw:
+                return None
+            cleaned = _clean_summary(raw.strip())
+            return cleaned or None
+        except Exception as exc:
+            last_exc = exc
+            if _should_fallback_synth(exc, model):
+                logger.warning(
+                    "[review_summary] fallback model=%s after upstream error",
+                    model,
+                )
+                continue
+            log_error(logger, exc, where="review_summary")
+            return None
+    if last_exc:
+        log_error(logger, last_exc, where="review_summary")
+    return None

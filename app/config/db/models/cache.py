@@ -7,6 +7,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.config.db.models.base import Base
 
 class SearchCache(Base):
+    """    Lớp `SearchCache` (kế thừa Base)."""
     __tablename__ = 'search_cache'
     query: Mapped[str] = mapped_column(Text, primary_key=True)
     platform: Mapped[str] = mapped_column(Text, primary_key=True)

@@ -7,6 +7,10 @@ from app.ingest.schemas import DLQ_NAME, DLX_NAME, EXCHANGE_NAME, QUEUE_COMMENTS
 logger = Logger.get(__name__)
 
 async def declare_topology() -> None:
+    """Declare topology (async).
+
+    Returns:
+        (None) Kết quả trả về."""
     channel = await get_channel()
     exchange_name = settings.RABBITMQ_EXCHANGE or EXCHANGE_NAME
     dlx = await channel.declare_exchange(DLX_NAME, ExchangeType.DIRECT, durable=True)
