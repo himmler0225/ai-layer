@@ -45,21 +45,21 @@ def _enabled() -> bool:
         (bool) Kết quả trả về."""
     return settings.INGEST_ENABLED and bool(settings.RABBITMQ_URL) and _ready
 
-async def publish(routing_key: str, *, platform: str, video_id: str='', product_hint: str='', payload: Optional[dict]=None) -> None:
+async def publish(routing_key: str, *, platform: str, video_id: str='', movie_hint: str='', payload: Optional[dict]=None) -> None:
     """Xuất bản `publish` (async).
 
     Args:
         routing_key: (str) Tham số `routing_key`.
         platform: (str) Tham số `platform`.
         video_id: (str, mặc định '') Tham số `video_id`.
-        product_hint: (str, mặc định '') Tham số `product_hint`.
+        movie_hint: (str, mặc định '') Tham số `movie_hint`.
         payload: (Optional[dict], mặc định None) Tham số `payload`.
 
     Returns:
         (None) Kết quả trả về."""
     if not _enabled():
         return
-    envelope = IngestEnvelope(job_id=str(uuid.uuid4()), routing_key=routing_key, platform=platform, video_id=video_id, product_hint=product_hint, payload=payload or {}, fetched_at=datetime.now(timezone.utc).isoformat())
+    envelope = IngestEnvelope(job_id=str(uuid.uuid4()), routing_key=routing_key, platform=platform, video_id=video_id, movie_hint=movie_hint, payload=payload or {}, fetched_at=datetime.now(timezone.utc).isoformat())
     try:
         exchange = await get_exchange()
         await exchange.publish(aio_pika.Message(body=envelope.model_dump_json().encode(), content_type='application/json', delivery_mode=aio_pika.DeliveryMode.PERSISTENT), routing_key=routing_key)

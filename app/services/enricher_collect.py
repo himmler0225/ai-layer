@@ -1,7 +1,7 @@
 from typing import Dict, List, Optional, Tuple
 from urllib.parse import quote
 
-from app.rag.product_hint import extract_product_name
+from app.rag.movie_hint import extract_movie_name
 
 _HISTORY_MARKER = '\n[Câu hỏi hiện tại]\n'
 _MAX_UI_VIDEOS = 8
@@ -276,8 +276,8 @@ def collect_tool_results(tool_calls: List[Dict]) -> Tuple[List[Dict], List[Dict]
     all_videos = all_videos[:_MAX_UI_VIDEOS]
     return (all_reviews, all_videos, sources)
 
-def product_name_from_task(task: str, videos: List[Dict]) -> str:
-    from_block = extract_product_name(task)
+def movie_name_from_task(task: str, videos: List[Dict]) -> str:
+    from_block = extract_movie_name(task)
     if from_block:
         return from_block
     question = task.split(_HISTORY_MARKER)[-1].strip() if task else ''
@@ -287,6 +287,6 @@ def product_name_from_task(task: str, videos: List[Dict]) -> str:
     if question and len(question) <= 80:
         return question
     if videos:
-        return (videos[0].get('title') or 'sản phẩm')[:80]
-    return 'sản phẩm'
+        return (videos[0].get('title') or 'phim')[:80]
+    return 'phim'
 

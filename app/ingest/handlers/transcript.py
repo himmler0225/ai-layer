@@ -24,5 +24,5 @@ async def handle_transcript_upsert(envelope: dict) -> None:
     chunks = chunk_transcript(video_id, text, language=payload.get('language', ''))
     if not chunks:
         return
-    hint = envelope.get('product_hint', '')
-    await publish(ROUTING_EMBED, platform=platform, video_id=video_id, product_hint=hint, payload={'chunks': [c.model_dump() for c in chunks], 'product_hint': hint})
+    hint = envelope.get('movie_hint', '')
+    await publish(ROUTING_EMBED, platform=platform, video_id=video_id, movie_hint=hint, payload={'chunks': [c.model_dump() for c in chunks], 'movie_hint': hint})

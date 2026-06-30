@@ -28,3 +28,7 @@ def youtube_rate_limit() -> str:
     Returns:
         (str) Kết quả trả về."""
     return settings.YOUTUBE_RATE_LIMIT
+
+def movies_rate_limit() -> str:
+    """Movies rate limit."""
+    return settings.MOVIE_RATE_LIMIT

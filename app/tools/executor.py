@@ -5,10 +5,12 @@ import app.config.settings as settings
 from app.clients import data_miner
 from app.rag import search as rag_search
 from app.services.url_extractor import extract_id_from_url as _url_extract
+from app.services import movies as movies_service
 from app.tools.definitions import TIKTOK_TOOLS, UTIL_TOOLS, YOUTUBE_TOOLS
+from app.tools.movie_definitions import MOVIE_TOOLS
 from app.tools.rag_definitions import RAG_TOOLS
 _RAG_TOOL_NAMES = frozenset((t['name'] for t in RAG_TOOLS))
-_SCHEMAS: Dict[str, Dict] = {tool['name']: tool['parameters'] for tool in (*(RAG_TOOLS if settings.RAG_ENABLED else []), *YOUTUBE_TOOLS, *TIKTOK_TOOLS, *UTIL_TOOLS)}
+_SCHEMAS: Dict[str, Dict] = {tool['name']: tool['parameters'] for tool in (*(RAG_TOOLS if settings.RAG_ENABLED else []), *YOUTUBE_TOOLS, *TIKTOK_TOOLS, *MOVIE_TOOLS, *UTIL_TOOLS)}
 
 async def _youtube_search(inp: Dict) -> Any:
     """(Nội bộ) Youtube search (async).
@@ -222,7 +224,83 @@ async def _extract_id_from_url(inp: Dict) -> Any:
     Returns:
         (Any) Kết quả trả về."""
     return _url_extract(url=inp['url'])
-_REGISTRY = {'youtube_search': _youtube_search, 'youtube_get_by_topic': _youtube_get_by_topic, 'youtube_get_shorts': _youtube_get_shorts, 'youtube_get_live': _youtube_get_live, 'youtube_get_by_region': _youtube_get_by_region, 'youtube_get_detail': _youtube_get_detail, 'youtube_get_comments': _youtube_get_comments, 'youtube_get_comments_batch': _youtube_get_comments_batch, 'youtube_get_transcript': _youtube_get_transcript, 'youtube_get_transcript_batch': _youtube_get_transcript_batch, 'youtube_get_channel_info': _youtube_get_channel_info, 'youtube_get_channel_videos': _youtube_get_channel_videos, 'youtube_get_channel_playlists': _youtube_get_channel_playlists, 'youtube_get_playlist_videos': _youtube_get_playlist_videos, 'tiktok_search': _tiktok_search, 'tiktok_video_info': _tiktok_video_info, 'tiktok_comments': _tiktok_comments, 'tiktok_profile': _tiktok_profile, 'tiktok_transcript': _tiktok_transcript, 'extract_id_from_url': _extract_id_from_url}
+
+async def _movie_search(inp: Dict) -> Any:
+    return await movies_service.search(
+        inp['keyword'],
+        provider=inp.get('provider'),
+        page=inp.get('page', 1),
+        limit=inp.get('limit', 10),
+    )
+
+async def _movie_get_detail(inp: Dict) -> Any:
+    return await movies_service.get_detail(inp['slug'], provider=inp.get('provider'))
+
+async def _movie_list_new(inp: Dict) -> Any:
+    return await movies_service.list_new(provider=inp.get('provider'), page=inp.get('page', 1))
+
+async def _movie_list_by_type(inp: Dict) -> Any:
+    return await movies_service.list_by_type(
+        inp['type'],
+        provider=inp.get('provider'),
+        page=inp.get('page', 1),
+        limit=inp.get('limit', 10),
+        category=inp.get('category'),
+        country=inp.get('country'),
+        year=inp.get('year'),
+        sort_lang=inp.get('sort_lang'),
+        sort_field=inp.get('sort_field'),
+        sort_type=inp.get('sort_type'),
+    )
+
+async def _movie_list_by_genre(inp: Dict) -> Any:
+    return await movies_service.list_by_genre(
+        inp['slug'],
+        provider=inp.get('provider'),
+        page=inp.get('page', 1),
+        limit=inp.get('limit', 10),
+        category=inp.get('category'),
+        country=inp.get('country'),
+        year=inp.get('year'),
+        sort_lang=inp.get('sort_lang'),
+        sort_field=inp.get('sort_field'),
+        sort_type=inp.get('sort_type'),
+    )
+
+async def _movie_list_by_country(inp: Dict) -> Any:
+    return await movies_service.list_by_country(
+        inp['slug'],
+        provider=inp.get('provider'),
+        page=inp.get('page', 1),
+        limit=inp.get('limit', 10),
+        category=inp.get('category'),
+        country=inp.get('country'),
+        year=inp.get('year'),
+        sort_lang=inp.get('sort_lang'),
+        sort_field=inp.get('sort_field'),
+        sort_type=inp.get('sort_type'),
+    )
+
+async def _movie_list_by_year(inp: Dict) -> Any:
+    return await movies_service.list_by_year(
+        inp['year'],
+        provider=inp.get('provider'),
+        page=inp.get('page', 1),
+        limit=inp.get('limit', 10),
+        category=inp.get('category'),
+        country=inp.get('country'),
+        sort_lang=inp.get('sort_lang'),
+        sort_field=inp.get('sort_field'),
+        sort_type=inp.get('sort_type'),
+    )
+
+async def _movie_get_metadata(inp: Dict) -> Any:
+    provider = inp.get('provider')
+    if inp['kind'] == 'genres':
+        return await movies_service.get_genres(provider=provider)
+    return await movies_service.get_countries(provider=provider)
+
+_REGISTRY = {'youtube_search': _youtube_search, 'youtube_get_by_topic': _youtube_get_by_topic, 'youtube_get_shorts': _youtube_get_shorts, 'youtube_get_live': _youtube_get_live, 'youtube_get_by_region': _youtube_get_by_region, 'youtube_get_detail': _youtube_get_detail, 'youtube_get_comments': _youtube_get_comments, 'youtube_get_comments_batch': _youtube_get_comments_batch, 'youtube_get_transcript': _youtube_get_transcript, 'youtube_get_transcript_batch': _youtube_get_transcript_batch, 'youtube_get_channel_info': _youtube_get_channel_info, 'youtube_get_channel_videos': _youtube_get_channel_videos, 'youtube_get_channel_playlists': _youtube_get_channel_playlists, 'youtube_get_playlist_videos': _youtube_get_playlist_videos, 'tiktok_search': _tiktok_search, 'tiktok_video_info': _tiktok_video_info, 'tiktok_comments': _tiktok_comments, 'tiktok_profile': _tiktok_profile, 'tiktok_transcript': _tiktok_transcript, 'extract_id_from_url': _extract_id_from_url, 'movie_search': _movie_search, 'movie_get_detail': _movie_get_detail, 'movie_list_new': _movie_list_new, 'movie_list_by_type': _movie_list_by_type, 'movie_list_by_genre': _movie_list_by_genre, 'movie_list_by_country': _movie_list_by_country, 'movie_list_by_year': _movie_list_by_year, 'movie_get_metadata': _movie_get_metadata}
 
 async def execute_tool(name: str, inputs: Dict, **kwargs) -> Dict:
     """Thực thi tool (async).
@@ -243,12 +321,12 @@ async def execute_tool(name: str, inputs: Dict, **kwargs) -> Dict:
     if name in _RAG_TOOL_NAMES:
         if not settings.RAG_ENABLED:
             return {'error': 'RAG disabled'}
-        if name == 'search_product_summary':
-            return await rag_search.search_aspect_summary(inputs['product_id'], inputs['query'], aspect=inputs.get('aspect'))
+        if name == 'search_movie_summary':
+            return await rag_search.search_aspect_summary(inputs['movie_id'], inputs['query'], aspect=inputs.get('aspect'))
         if name == 'search_aspect_evidence':
-            return await rag_search.search_aspect_evidence(inputs['product_id'], inputs['query'], aspect=inputs.get('aspect'))
+            return await rag_search.search_aspect_evidence(inputs['movie_id'], inputs['query'], aspect=inputs.get('aspect'))
         if name == 'get_raw_reviews':
-            return await rag_search.get_raw_reviews(inputs['product_id'], limit=int(inputs.get('limit') or 10))
+            return await rag_search.get_raw_reviews(inputs['movie_id'], limit=int(inputs.get('limit') or 10))
     fn = _REGISTRY.get(name)
     if fn is None:
         return {'error': f'Unknown tool: {name}'}

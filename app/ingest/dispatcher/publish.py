@@ -20,13 +20,13 @@ def _map_video(raw: dict, platform: str) -> dict | None:
         return map_youtube_video(raw)
     return map_tiktok_video(raw)
 
-async def publish_videos(videos: list[dict], *, platform: str, product_hint: str, search_cache: dict | None=None) -> None:
+async def publish_videos(videos: list[dict], *, platform: str, movie_hint: str, search_cache: dict | None=None) -> None:
     """Xuất bản videos (async).
 
     Args:
         videos: (list[dict]) Tham số `videos`.
         platform: (str) Tham số `platform`.
-        product_hint: (str) Tham số `product_hint`.
+        movie_hint: (str) Tham số `movie_hint`.
         search_cache: (dict | None, mặc định None) Tham số `search_cache`.
 
     Returns:
@@ -38,16 +38,16 @@ async def publish_videos(videos: list[dict], *, platform: str, product_hint: str
         payload: dict[str, Any] = {'video': mapped}
         if search_cache and index == 0:
             payload['search_cache'] = search_cache
-        await publish(ROUTING_VIDEO, platform=mapped['platform'], video_id=mapped['id'], product_hint=product_hint, payload=payload)
+        await publish(ROUTING_VIDEO, platform=mapped['platform'], video_id=mapped['id'], movie_hint=movie_hint, payload=payload)
 
-async def publish_search(inputs: dict, data: dict, platform: str, product_hint: str) -> None:
+async def publish_search(inputs: dict, data: dict, platform: str, movie_hint: str) -> None:
     """Xuất bản search (async).
 
     Args:
         inputs: (dict) Tham số `inputs`.
         data: (dict) Tham số `data`.
         platform: (str) Tham số `platform`.
-        product_hint: (str) Tham số `product_hint`.
+        movie_hint: (str) Tham số `movie_hint`.
 
     Returns:
         (None) Kết quả trả về."""
@@ -64,16 +64,16 @@ async def publish_search(inputs: dict, data: dict, platform: str, product_hint: 
                 ids.append(mapped['id'])
         if ids:
             search_cache = {'query': query, 'platform': platform, 'video_ids': ids}
-    await publish_videos(videos, platform=platform, product_hint=product_hint, search_cache=search_cache)
+    await publish_videos(videos, platform=platform, movie_hint=movie_hint, search_cache=search_cache)
 
-async def publish_comments(video_id: str, platform: str, comments: list[dict], product_hint: str, url: str='') -> None:
+async def publish_comments(video_id: str, platform: str, comments: list[dict], movie_hint: str, url: str='') -> None:
     """Xuất bản comments (async).
 
     Args:
         video_id: (str) Tham số `video_id`.
         platform: (str) Tham số `platform`.
         comments: (list[dict]) Tham số `comments`.
-        product_hint: (str) Tham số `product_hint`.
+        movie_hint: (str) Tham số `movie_hint`.
         url: (str, mặc định '') Tham số `url`.
 
     Returns:
@@ -82,20 +82,20 @@ async def publish_comments(video_id: str, platform: str, comments: list[dict], p
     mapped = [item for item in mapped if item]
     if not mapped:
         return
-    await publish(ROUTING_COMMENTS, platform=platform, video_id=video_id, product_hint=product_hint, payload={'video_id': video_id, 'platform': platform, 'comments': mapped, 'url': url})
+    await publish(ROUTING_COMMENTS, platform=platform, video_id=video_id, movie_hint=movie_hint, payload={'video_id': video_id, 'platform': platform, 'comments': mapped, 'url': url})
 
-async def publish_transcript(video_id: str, platform: str, text: str, product_hint: str, language: str='') -> None:
+async def publish_transcript(video_id: str, platform: str, text: str, movie_hint: str, language: str='') -> None:
     """Xuất bản transcript (async).
 
     Args:
         video_id: (str) Tham số `video_id`.
         platform: (str) Tham số `platform`.
         text: (str) Tham số `text`.
-        product_hint: (str) Tham số `product_hint`.
+        movie_hint: (str) Tham số `movie_hint`.
         language: (str, mặc định '') Tham số `language`.
 
     Returns:
         (None) Kết quả trả về."""
     if not video_id or not text:
         return
-    await publish(ROUTING_TRANSCRIPT, platform=platform, video_id=video_id, product_hint=product_hint, payload={'video_id': video_id, 'platform': platform, 'text': text, 'language': language})
+    await publish(ROUTING_TRANSCRIPT, platform=platform, video_id=video_id, movie_hint=movie_hint, payload={'video_id': video_id, 'platform': platform, 'text': text, 'language': language})

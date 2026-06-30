@@ -5,7 +5,7 @@ from typing import Dict, List
 from app.services.enricher_collect import (
     collect_tool_results,
     detect_source_label,
-    product_name_from_task,
+    movie_name_from_task,
 )
 from app.services.review_summarizer import summarize_reviews
 
@@ -21,12 +21,12 @@ async def enrich_agent_result(
     """Bổ sung metadata UI sau khi agent hoàn tất."""
     all_reviews, all_videos, sources = collect_tool_results(tool_calls)
     source_label = detect_source_label(tool_calls)
-    product = product_name_from_task(task, all_videos)
+    movie_name = movie_name_from_task(task, all_videos)
     review_summary = None
     if include_summary and all_reviews:
         review_summary = await summarize_reviews(
             all_reviews,
-            product=product,
+            movie=movie_name,
             source=source_label,
             task=task,
         )

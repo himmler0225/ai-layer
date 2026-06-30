@@ -12,7 +12,7 @@ QUEUE_VIDEO = 'ingest.video'
 QUEUE_COMMENTS = 'ingest.comments'
 QUEUE_TRANSCRIPT = 'ingest.transcript'
 QUEUE_EMBED = 'ingest.embed'
-ROUTING_SUMMARIZE = 'product.summarize'
+ROUTING_SUMMARIZE = 'movie.summarize'
 QUEUE_SUMMARIZE = 'ingest.summarize'
 Platform = Literal['youtube', 'tiktok']
 
@@ -22,7 +22,7 @@ class IngestEnvelope(BaseModel):
     routing_key: str
     platform: Platform
     video_id: str = ''
-    product_hint: str = ''
+    movie_hint: str = ''
     payload: dict[str, Any] = Field(default_factory=dict)
     fetched_at: str = ''
 

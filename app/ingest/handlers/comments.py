@@ -1,6 +1,6 @@
 from __future__ import annotations
 from app.ingest.processing.chunking import comment_chunks
-from app.ingest.processing.rag_sync import sync_comments_to_product_rag
+from app.ingest.processing.rag_sync import sync_comments_to_movie_rag
 from app.ingest.producer.publisher import publish
 from app.ingest.schemas import ROUTING_EMBED
 from app.repositories.comments import insert_comments
@@ -25,9 +25,9 @@ async def handle_comments_upsert(envelope: dict) -> None:
     if not await exists_video(video_id):
         await upsert_video(id=video_id, platform=platform, url=payload.get('url', ''))
     await insert_comments(video_id, raw_comments)
-    hint = envelope.get('product_hint') or payload.get('product_hint') or ''
-    await sync_comments_to_product_rag(product_hint=hint, platform=platform, video_id=video_id, raw_comments=raw_comments)
+    hint = envelope.get('movie_hint') or payload.get('movie_hint') or ''
+    await sync_comments_to_movie_rag(movie_hint=hint, platform=platform, video_id=video_id, raw_comments=raw_comments)
     chunks = comment_chunks(video_id, raw_comments)
     if not chunks:
         return
-    await publish(ROUTING_EMBED, platform=platform, video_id=video_id, product_hint=hint, payload={'chunks': [c.model_dump() for c in chunks], 'product_hint': hint})
+    await publish(ROUTING_EMBED, platform=platform, video_id=video_id, movie_hint=hint, payload={'chunks': [c.model_dump() for c in chunks], 'movie_hint': hint})

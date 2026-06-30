@@ -17,7 +17,7 @@ router = APIRouter(prefix='/agent', dependencies=[Depends(verify_api_key)])
 class AgentRequest(BaseModel):
     """    Lớp `AgentRequest` (kế thừa BaseModel)."""
     task: str = Field(..., description='Natural language task')
-    tools: Literal['youtube', 'tiktok', 'all'] = Field('all')
+    tools: Literal['youtube', 'tiktok', 'movies', 'all'] = Field('all')
     max_iter: Optional[int] = Field(None, ge=1, le=20, description='Defaults to AGENT_MAX_ITER from remote config')
     system: Optional[str] = Field(None)
 

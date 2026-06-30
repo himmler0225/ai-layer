@@ -4,10 +4,10 @@ import app.config.settings as settings
 from app.ai.router import TASK_ASPECT_GROUP, TASK_ASPECT_SUMMARY, max_tokens_for_task
 from app.config.logger import Logger
 from app.ingest.processing.embeddings import embed_texts
-from app.repositories.aspect_chunks import delete_aspect_chunks_for_product, upsert_aspect_chunks
+from app.repositories.aspect_chunks import delete_aspect_chunks_for_movie, upsert_aspect_chunks
 from app.repositories.aspect_summaries import upsert_aspect_summary
 from app.repositories.curated_reviews import get_curated_reviews
-from app.repositories.products import get_product, upsert_product
+from app.repositories.movies import get_movie, upsert_movie
 from app.repositories.raw_reviews import count_raw_reviews
 from app.services import prompts as rag_prompts
 from app.utils.openai_responses import complete_json
@@ -42,12 +42,12 @@ def _fallback_group(curated: list[dict]) -> list[dict]:
     texts = [c['content'] for c in curated[:50]]
     return [{'aspect': 'other', 'review_ids': [c.get('raw_review_id') for c in curated[:50]], 'content': '\n'.join(texts), 'positive_percent': 70.0, 'negative_percent': 30.0}]
 
-async def _llm_group_aspects(curated: list[dict], *, product_name: str) -> list[dict]:
+async def _llm_group_aspects(curated: list[dict], *, movie_name: str) -> list[dict]:
     """(Nội bộ) Llm group aspects (async).
 
     Args:
         curated: (list[dict]) Tham số `curated`.
-        product_name: (str) Tham số `product_name`.
+        movie_name: (str) Tham số `movie_name`.
 
     Returns:
         (list[dict]) Kết quả trả về."""
@@ -59,7 +59,7 @@ async def _llm_group_aspects(curated: list[dict], *, product_name: str) -> list[
         likes = c.get('likes', 0)
         content = (c.get('content') or '')[:500]
         lines.append(f'- id={rid} likes={likes}: {content}')
-    prompt = rag_prompts.ASPECT_GROUP_PROMPT.format(product=product_name, aspects=', '.join(ASPECTS), reviews='\n'.join(lines))
+    prompt = rag_prompts.ASPECT_GROUP_PROMPT.format(movie=movie_name, product=movie_name, aspects=', '.join(ASPECTS), reviews='\n'.join(lines))
     try:
         raw = await complete_json(prompt, rag_prompts.ASPECT_GROUP_SYSTEM, max_tokens=max_tokens_for_task(TASK_ASPECT_GROUP), task=TASK_ASPECT_GROUP)
         parsed = _parse_json(raw)
@@ -83,17 +83,17 @@ async def _llm_group_aspects(curated: list[dict], *, product_name: str) -> list[
         logger.warning('[summarize] group_aspects LLM failed: %s', exc)
     return _fallback_group(curated)
 
-async def _llm_summarize_aspect(aspect: str, chunk_content: str, *, product_name: str) -> dict:
+async def _llm_summarize_aspect(aspect: str, chunk_content: str, *, movie_name: str) -> dict:
     """(Nội bộ) Llm summarize aspect (async).
 
     Args:
         aspect: (str) Tham số `aspect`.
         chunk_content: (str) Tham số `chunk_content`.
-        product_name: (str) Tham số `product_name`.
+        movie_name: (str) Tham số `movie_name`.
 
     Returns:
         (dict) Kết quả trả về."""
-    prompt = rag_prompts.ASPECT_SUMMARY_PROMPT.format(product=product_name, aspect=aspect, content=chunk_content[:6000])
+    prompt = rag_prompts.ASPECT_SUMMARY_PROMPT.format(movie=movie_name, product=movie_name, aspect=aspect, content=chunk_content[:6000])
     try:
         raw = await complete_json(prompt, rag_prompts.ASPECT_SUMMARY_SYSTEM, max_tokens=max_tokens_for_task(TASK_ASPECT_SUMMARY), task=TASK_ASPECT_SUMMARY)
         parsed = _parse_json(raw)
@@ -101,43 +101,37 @@ async def _llm_summarize_aspect(aspect: str, chunk_content: str, *, product_name
             return {'summary': str(parsed['summary'])[:2000], 'pros': parsed.get('pros') or [], 'cons': parsed.get('cons') or [], 'positive_percent': parsed.get('positive_percent')}
     except Exception as exc:
         logger.warning('[summarize] summarize_aspect LLM failed aspect=%s: %s', aspect, exc)
-    return {'summary': f'Tóm tắt {aspect} cho {product_name}: {chunk_content[:300]}...', 'pros': [], 'cons': [], 'positive_percent': None}
+    return {'summary': f'Tóm tắt {aspect} cho {movie_name}: {chunk_content[:300]}...', 'pros': [], 'cons': [], 'positive_percent': None}
 
-async def handle_product_summarize(envelope: dict) -> None:
-    """Xử lý product summarize (async).
-
-    Args:
-        envelope: (dict) Tham số `envelope`.
-
-    Returns:
-        (None) Kết quả trả về."""
+async def handle_movie_summarize(envelope: dict) -> None:
+    """Xử lý movie summarize (async)."""
     payload = envelope.get('payload') or {}
-    product_id = payload.get('product_id') or envelope.get('video_id')
-    if not product_id:
+    movie_id = payload.get('movie_id') or envelope.get('video_id')
+    if not movie_id:
         return
-    product = await get_product(product_id)
-    product_name = (product or {}).get('name') or product_id
-    curated = await get_curated_reviews(product_id, limit=getattr(settings, "AGENT_CURATED_TOP_N", 300))
+    movie_row = await get_movie(movie_id)
+    movie_name = (movie_row or {}).get('name') or movie_id
+    curated = await get_curated_reviews(movie_id, limit=getattr(settings, "AGENT_CURATED_TOP_N", 300))
     if not curated:
-        logger.warning('[summarize] no curated product=%s', product_id)
+        logger.warning('[summarize] no curated movie=%s', movie_id)
         return
-    groups = await _llm_group_aspects(curated, product_name=product_name)
+    groups = await _llm_group_aspects(curated, movie_name=movie_name)
     aspects = [g['aspect'] for g in groups]
     chunk_rows = []
     for g in groups:
-        chunk_rows.append({'id': f"chk:{product_id}:{g['aspect']}", 'product_id': product_id, 'aspect': g['aspect'], 'content': g['content'], 'review_ids': g.get('review_ids') or [], 'positive_percent': g.get('positive_percent'), 'negative_percent': g.get('negative_percent')})
-    await delete_aspect_chunks_for_product(product_id, keep_aspects=aspects)
+        chunk_rows.append({'id': f"chk:{movie_id}:{g['aspect']}", 'movie_id': movie_id, 'aspect': g['aspect'], 'content': g['content'], 'review_ids': g.get('review_ids') or [], 'positive_percent': g.get('positive_percent'), 'negative_percent': g.get('negative_percent')})
+    await delete_aspect_chunks_for_movie(movie_id, keep_aspects=aspects)
     vectors = await embed_texts([r['content'] for r in chunk_rows])
     for row, vec in zip(chunk_rows, vectors):
         row['embedding'] = vec
     await upsert_aspect_chunks(chunk_rows)
     for row in chunk_rows:
         aspect = row['aspect']
-        meta = await _llm_summarize_aspect(aspect, row['content'], product_name=product_name)
+        meta = await _llm_summarize_aspect(aspect, row['content'], movie_name=movie_name)
         summary_vec = (await embed_texts([meta['summary']]))[0]
-        await upsert_aspect_summary(id=f'sum:{product_id}:{aspect}', product_id=product_id, aspect=aspect, summary=meta['summary'], pros=meta.get('pros') or [], cons=meta.get('cons') or [], positive_percent=meta.get('positive_percent'), source_chunk_ids=[row['id']], embedding=summary_vec)
-    meta = dict((product or {}).get('metadata') or {})
-    meta['last_summarize_raw_count'] = await count_raw_reviews(product_id)
+        await upsert_aspect_summary(id=f'sum:{movie_id}:{aspect}', movie_id=movie_id, aspect=aspect, summary=meta['summary'], pros=meta.get('pros') or [], cons=meta.get('cons') or [], positive_percent=meta.get('positive_percent'), source_chunk_ids=[row['id']], embedding=summary_vec)
+    meta = dict((movie_row or {}).get('metadata') or {})
+    meta['last_summarize_raw_count'] = await count_raw_reviews(movie_id)
     meta['summarized_at'] = envelope.get('fetched_at') or ''
-    await upsert_product(id=product_id, name=product_name, platform=(product or {}).get('platform') or 'mixed', metadata=meta)
-    logger.info('[summarize] done product=%s chunks=%d aspects=%s', product_id, len(chunk_rows), aspects)
+    await upsert_movie(id=movie_id, name=movie_name, platform=(movie_row or {}).get('platform') or 'mixed', metadata=meta)
+    logger.info('[summarize] done movie=%s chunks=%d aspects=%s', movie_id, len(chunk_rows), aspects)

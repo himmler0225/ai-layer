@@ -4,7 +4,7 @@ import app.services.prompts as _prompts
 from app.ai.router import TASK_REVIEW_SUMMARY, max_tokens_for_task, resolve
 from app.services.agent.synthesis import _should_fallback_synth, models_with_fallback
 from app.utils.llm_errors import log_error, user_message
-from app.rag.product_hint import extract_product_name
+from app.rag.movie_hint import extract_movie_name
 from app.config.logger import Logger
 from app.utils.llm_responses import create_response, extract_response_text
 
@@ -14,7 +14,7 @@ _VIET_RE = re.compile('[àáạảãâầấậẩẫăằắặẳẵèéẹẻ
 _EMOJI_ONLY_RE = re.compile('^[\\s\\U0001F300-\\U0001FAFF\\U00002600-\\U000027BF\\U0000FE00-\\U0000FEFF!?.…,]+$')
 _COMMERCE_RE = re.compile('\\b(giá|pin|sạc|bh|bảo hành|shop|mua|bán|xài|dùng|chất|ok|oke|xịn|keng|body|màn|active|trả|vn/a|like new)\\b', re.IGNORECASE)
 _FOREIGN_RE = re.compile('\\b(perai|mesmo|tamanho|gimana|bagus|sangat|kenapa|kak|anh|bro)\\b', re.IGNORECASE)
-_PRODUCT_STOPWORDS = frozenset({'review', 'cho', 'mình', 'biết', 'về', 'của', 'the', 'người', 'dùng', 'nói', 'gì', 'là', 'có', 'không', 'như', 'thế', 'nào', 'bao', 'nhiêu'})
+_MOVIE_STOPWORDS = frozenset({'review', 'cho', 'mình', 'biết', 'về', 'của', 'the', 'người', 'dùng', 'nói', 'gì', 'là', 'có', 'không', 'như', 'thế', 'nào', 'phim', 'movie'})
 
 def _clean_summary(text: str) -> str:
     """(Nội bộ) Clean summary.
@@ -42,7 +42,7 @@ def _clean_summary(text: str) -> str:
     out = re.sub('\\n{3,}', '\n\n', out).strip()
     return out
 
-def _product_hint(task: str, fallback: str) -> str:
+def _movie_hint(task: str, fallback: str) -> str:
     """(Nội bộ) Product hint.
 
     Args:
@@ -51,7 +51,7 @@ def _product_hint(task: str, fallback: str) -> str:
 
     Returns:
         (str) Kết quả trả về."""
-    from_block = extract_product_name(task)
+    from_block = extract_movie_name(task)
     if from_block:
         return from_block
     question = task.split(_HISTORY_MARKER)[-1].strip() if task else ''
@@ -66,18 +66,11 @@ def _product_hint(task: str, fallback: str) -> str:
             question = question[len(prefix):].strip()
     if question and len(question) <= 120:
         return question
-    return fallback or 'sản phẩm'
+    return fallback or 'phim'
 
-def _product_tokens(product: str) -> List[str]:
-    """(Nội bộ) Product tokens.
-
-    Args:
-        product: (str) Tham số `product`.
-
-    Returns:
-        (List[str]) Kết quả trả về."""
-    tokens = re.findall('[a-z0-9]{2,}', product.lower())
-    return [t for t in tokens if t not in _PRODUCT_STOPWORDS]
+def _movie_tokens(movie: str) -> List[str]:
+    tokens = re.findall('[a-z0-9]{2,}', movie.lower())
+    return [t for t in tokens if t not in _MOVIE_STOPWORDS]
 
 def _is_viet_or_english(text: str) -> bool:
     """(Nội bộ) Is viet or english.
@@ -107,16 +100,8 @@ def _is_noise(text: str) -> bool:
         return True
     return False
 
-def filter_reviews(reviews: List[Dict], product: str) -> List[Dict]:
-    """Lọc reviews.
-
-    Args:
-        reviews: (List[Dict]) Tham số `reviews`.
-        product: (str) Tham số `product`.
-
-    Returns:
-        (List[Dict]) Kết quả trả về."""
-    tokens = _product_tokens(product)
+def filter_reviews(reviews: List[Dict], movie: str) -> List[Dict]:
+    tokens = _movie_tokens(movie)
     filtered: List[Dict] = []
     for review in reviews:
         text = (review.get('content') or review.get('comment') or review.get('text') or '').strip()
@@ -127,9 +112,9 @@ def filter_reviews(reviews: List[Dict], product: str) -> List[Dict]:
         if _FOREIGN_RE.search(text) and (not _VIET_RE.search(text)):
             continue
         lower = text.lower()
-        matches_product = tokens and any((token in lower for token in tokens))
+        matches_movie = tokens and any((token in lower for token in tokens))
         matches_topic = bool(_COMMERCE_RE.search(lower))
-        if tokens and (not matches_product) and (not matches_topic):
+        if tokens and (not matches_movie) and (not matches_topic):
             continue
         filtered.append({**review, 'content': text})
     return filtered
@@ -154,28 +139,18 @@ def _format_reviews(reviews: List[Dict]) -> str:
         lines.append(f'{i}. {prefix}{text[:300]}{source_tag}')
     return '\n'.join(lines)
 
-async def summarize_reviews(reviews: List[Dict], product: str='', source: str='', task: str='') -> Optional[str]:
-    """Tóm tắt reviews (async).
-
-    Args:
-        reviews: (List[Dict]) Tham số `reviews`.
-        product: (str, mặc định '') Tham số `product`.
-        source: (str, mặc định '') Tham số `source`.
-        task: (str, mặc định '') Tham số `task`.
-
-    Returns:
-        (Optional[str]) Kết quả trả về."""
+async def summarize_reviews(reviews: List[Dict], movie: str = '', source: str = '', task: str = '') -> Optional[str]:
     if not reviews:
         return None
-    product_hint = _product_hint(task, product)
-    relevant = filter_reviews(reviews, product_hint)
+    movie_hint = _movie_hint(task, movie)
+    relevant = filter_reviews(reviews, movie_hint)
     if not relevant:
         relevant = [r for r in reviews if (r.get('content') or '').strip()][:40]
     if not (_prompts.REVIEW_SUMMARY_SYSTEM or '').strip():
         return None
     if not (_prompts.REVIEW_SUMMARY_PROMPT or '').strip():
         return None
-    prompt = _prompts.REVIEW_SUMMARY_PROMPT.format(n=len(relevant), product=product_hint, source=source, reviews=_format_reviews(relevant))
+    prompt = _prompts.REVIEW_SUMMARY_PROMPT.format(n=len(relevant), movie=movie_hint, product=movie_hint, source=source, reviews=_format_reviews(relevant))
     _, primary = resolve(TASK_REVIEW_SUMMARY)
     last_exc: Exception | None = None
     for model in models_with_fallback(primary):

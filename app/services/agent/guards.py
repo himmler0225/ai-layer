@@ -29,7 +29,7 @@ _EVIDENCE_TOOLS: Set[str] = frozenset({
     "youtube_get_transcript_batch",
     "tiktok_get_comments_batch",
     "tiktok_comments",
-    "search_product_summary",
+    "search_movie_summary",
     "search_aspect_evidence",
     "get_raw_reviews",
 })
@@ -154,7 +154,7 @@ def search_budget_message(
     )
     message = (
         f"Đã gọi {tool_name} đủ lần cho phiên này. "
-        f"Dùng {follow} với video_id từ kết quả search trước, hoặc search_product_summary nếu có RAG."
+        f"Dùng {follow} với video_id từ kết quả search trước, hoặc search_movie_summary nếu có RAG."
     )
     out: Dict[str, Any] = {
         "error": "search_budget_exhausted",

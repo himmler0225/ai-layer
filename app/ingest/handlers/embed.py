@@ -21,12 +21,12 @@ async def handle_chunks_embed(envelope: dict) -> None:
     if not valid:
         return
     vectors = await embed_texts([text for _, text in valid])
-    product_hint = payload.get('product_hint') or envelope.get('product_hint') or ''
+    movie_hint = payload.get('movie_hint') or envelope.get('movie_hint') or ''
     rows = []
     for (item, text), vector in zip(valid, vectors):
         metadata = dict(item.get('metadata') or {})
         metadata['chunk_type'] = item.get('chunk_type', 'text')
-        if product_hint:
-            metadata['product_hint'] = product_hint
+        if movie_hint:
+            metadata['movie_hint'] = movie_hint
         rows.append({'id': item['id'], 'video_id': video_id, 'platform': platform, 'content': text, 'embedding': vector, 'metadata': metadata})
     await upsert_chunks(rows)

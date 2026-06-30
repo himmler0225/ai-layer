@@ -19,7 +19,7 @@ def curate_review_rows(rows: list[dict], *, top_n: int | None=None) -> list[dict
         raw_id = row.get('id') or row.get('raw_review_id')
         if not raw_id:
             continue
-        curated.append({'id': f"cur:{row.get('product_id', '')}:{raw_id}", 'raw_review_id': raw_id, 'rank': rank, 'likes': int(row.get('likes') or 0), 'content': row['content']})
+        curated.append({'id': f"cur:{row.get('movie_id', '')}:{raw_id}", 'raw_review_id': raw_id, 'rank': rank, 'likes': int(row.get('likes') or 0), 'content': row['content']})
     return curated
 
 def merge_curated(existing: list[dict], new_rows: list[dict], *, top_n: int | None=None) -> list[dict]:
@@ -38,6 +38,6 @@ def merge_curated(existing: list[dict], new_rows: list[dict], *, top_n: int | No
         raw_id = row.get('raw_review_id') or row.get('id')
         if not raw_id:
             continue
-        pool.append({'id': raw_id, 'content': row.get('content', ''), 'likes': int(row.get('likes') or 0), 'product_id': row.get('product_id', '')})
+        pool.append({'id': raw_id, 'content': row.get('content', ''), 'likes': int(row.get('likes') or 0), 'movie_id': row.get('movie_id', '')})
     pool.extend(new_rows)
     return curate_review_rows(pool, top_n=limit)

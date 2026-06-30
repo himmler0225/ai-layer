@@ -110,17 +110,17 @@ def tool_status(tool: str, args: dict) -> tuple[str, str]:
     if tool == 'tiktok_profile':
         handle = a.get('handle') or ''
         return (f'Đang xem profile @{handle}…' if handle else 'Đang xem profile TikTok…', f'Loading @{handle}…' if handle else 'Loading TikTok profile…')
-    if tool == 'search_product_summary':
-        pid = _clip(a.get('product_id') or '')
-        return (f'Đang đọc tổng quan review «{pid}»…' if pid else 'Đang đọc tổng quan review…', f'Reading saved summary for {pid}…' if pid else 'Reading product summary…')
+    if tool == 'search_movie_summary':
+        pid = _clip(a.get('movie_id') or '')
+        return (f'Đang đọc tổng quan review «{pid}»…' if pid else 'Đang đọc tổng quan review…', f'Reading saved summary for {pid}…' if pid else 'Reading movie summary…')
     if tool == 'search_aspect_evidence':
         aspect = a.get('aspect') or ''
-        pid = _clip(a.get('product_id') or '')
+        pid = _clip(a.get('movie_id') or '')
         if aspect and pid:
             return (f'Đang tìm chi tiết {aspect} — {pid}…', f'Searching {aspect} evidence for {pid}…')
         return ('Đang tìm chi tiết review…', 'Searching review details…')
     if tool == 'get_raw_reviews':
-        pid = _clip(a.get('product_id') or '')
+        pid = _clip(a.get('movie_id') or '')
         return (f'Đang lấy review gốc «{pid}»…' if pid else 'Đang lấy review gốc…', f'Fetching raw reviews for {pid}…' if pid else 'Fetching raw reviews…')
     if tool == 'extract_id_from_url':
         return ('Đang phân tích link video…', 'Parsing video URL…')

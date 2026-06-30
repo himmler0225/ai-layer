@@ -15,16 +15,16 @@ def test_filter_tools_youtube_only():
     assert [t["name"] for t in filtered] == ["youtube_search"]
 
 
-def test_prepare_tools_product_context():
+def test_prepare_tools_movie_context():
     tools = [
         {"name": "youtube_search"},
-        {"name": "search_product_summary"},
+        {"name": "search_movie_summary"},
         {"name": "tiktok_profile"},
     ]
-    task = "[Sản phẩm đang xem]\nTên: iPhone 16\n[Câu hỏi hiện tại]\nReview giúp tôi"
+    task = "[Phim đang xem]\nTên: Dune Part Two\n[Câu hỏi hiện tại]\nReview giúp tôi"
     narrowed = prepare_tools(tools, task)
     names = {t["name"] for t in narrowed}
-    assert "search_product_summary" in names
+    assert "search_movie_summary" in names
     assert "tiktok_profile" not in names
 
 
@@ -48,8 +48,8 @@ def test_serialize_trims_comments(monkeypatch):
 
 def test_curate_review_rows_ranking():
     rows = [
-        {"id": "a", "content": "good review here", "likes": 5, "product_id": "p1"},
-        {"id": "b", "content": "better review here", "likes": 50, "product_id": "p1"},
+        {"id": "a", "content": "good review here", "likes": 5, "movie_id": "m1"},
+        {"id": "b", "content": "better review here", "likes": 50, "movie_id": "m1"},
     ]
     curated = curate_review_rows(rows, top_n=2)
     assert len(curated) == 2
@@ -63,7 +63,7 @@ def test_merge_curated_incremental():
             "raw_review_id": "old",
             "content": "existing review text",
             "likes": 10,
-            "product_id": "p1",
+            "movie_id": "m1",
             "rank": 1,
         }
     ]
@@ -72,7 +72,7 @@ def test_merge_curated_incremental():
             "id": "new",
             "content": "brand new review text",
             "likes": 99,
-            "product_id": "p1",
+            "movie_id": "m1",
         },
     ]
     merged = merge_curated(existing, new_rows, top_n=5)

@@ -1,6 +1,6 @@
 # AI Layer
 
-Orchestration service for **ReviewMine** — turns a product question into a researched answer from **YouTube and TikTok** (search, transcripts, comments) with optional **RAG** over previously ingested reviews.
+Orchestration service for **CineFlow AI** — turns a movie question into a researched answer from **YouTube and TikTok** (search, transcripts, comments) with optional **RAG** over previously ingested reviews.
 
 Built on the **OpenAI Responses API** (tool calling). The model plans tool use; this service executes tools against **data-miner**, streams the answer to the chatbot, and runs a background **ingest → RAG** pipeline into PostgreSQL.
 
@@ -10,7 +10,7 @@ Built on the **OpenAI Responses API** (tool calling). The model plans tool use; 
         ▼
    AI Layer ── agent loop (SSE) ──► data-miner (YouTube / TikTok crawl)
         │
-        ├─ PostgreSQL (local)   chat, video cache, products, RAG vectors
+        ├─ PostgreSQL (local)   chat, video cache, movies, RAG vectors
         ├─ Redis                auth + history cache
         ├─ RabbitMQ             ingest jobs (comments → RAG → summarize)
         └─ Supabase             Auth, profiles, runtime config table only
@@ -59,10 +59,10 @@ app/
 │   ├── definitions.py     # YouTube / TikTok tool schemas
 │   ├── rag_definitions.py # RAG tool schemas (when RAG_ENABLED)
 │   └── executor.py        # dispatch + jsonschema validation
-├── rag/                   # vector search, product_id, product_hint
+├── rag/                   # vector search, movie_id, movie_hint
 ├── ingest/                # RabbitMQ consumer, handlers, RAG sync, summarize
 ├── repositories/          # SQLAlchemy data access
-├── config/db/models/      # chat, video, product RAG tables
+├── config/db/models/      # chat, video, movie RAG tables
 ├── clients/data_miner.py
 ├── utilities/             # QR code, URL shortener (active)
 ├── config/
@@ -126,10 +126,10 @@ Schemas in `tools/definitions.py` + `tools/rag_definitions.py`, executed in `too
 |-----|----------|
 | **YouTube** | search, comments_batch, transcript_batch, detail, channel, … |
 | **TikTok** | search, video_info, comments, transcript, profile |
-| **RAG** | `search_product_summary`, `search_aspect_evidence`, `get_raw_reviews` |
+| **RAG** | `search_movie_summary`, `search_aspect_evidence`, `get_raw_reviews` |
 | **Util** | `extract_id_from_url` |
 
-Per request: `tools: "youtube" | "tiktok" | "all"`. `prepare_tools_for_task()` narrows by platform, product context block, and **RAG cache-first** when saved summaries are fresh.
+Per request: `tools: "youtube" | "tiktok" | "all"`. `prepare_tools_for_task()` narrows by platform, movie context block, and **RAG cache-first** when saved summaries are fresh.
 
 ---
 
@@ -157,7 +157,7 @@ PostgreSQL (local `DATABASE_URL`). Schema via SQLAlchemy models.
 |------|--------|
 | Chat | `chat_sessions`, `chat_messages` |
 | Video cache | `videos`, `comments`, `search_cache`, `video_chunks` |
-| Product RAG | `products`, `raw_reviews`, `curated_reviews`, `aspect_chunks`, `aspect_summaries` |
+| Movie RAG | `movies`, `raw_reviews`, `curated_reviews`, `aspect_chunks`, `aspect_summaries` |
 
 ---
 
@@ -255,4 +255,4 @@ Until then, the custom loop remains simpler to debug and matches OpenAI Response
 
 ## License / stack context
 
-Part of the ReviewMine monorepo: **ai-chatbot** (UI) · **ai-layer** (this repo) · **data-miner** (scraping).
+Part of the CineFlow AI monorepo: **ai-chatbot** (UI) · **ai-layer** (this repo) · **data-miner** (scraping).
