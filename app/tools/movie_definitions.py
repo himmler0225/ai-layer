@@ -1,6 +1,16 @@
 from __future__ import annotations
 
-from app.clients import movie_api
+from app.clients import data_miner
+
+MOVIE_LIST_TYPES = frozenset({
+    "phim-bo",
+    "phim-le",
+    "tv-shows",
+    "hoat-hinh",
+    "phim-vietsub",
+    "phim-thuyet-minh",
+    "phim-long-tieng",
+})
 
 _PROVIDER_PARAM = {
     "type": "string",
@@ -90,7 +100,7 @@ MOVIE_TOOLS = [
             "properties": {
                 "type": {
                     "type": "string",
-                    "enum": list(movie_api.MOVIE_LIST_TYPES),
+                    "enum": list(MOVIE_LIST_TYPES),
                     "description": "Loại phim",
                 },
                 "provider": _PROVIDER_PARAM,

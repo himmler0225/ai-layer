@@ -53,7 +53,6 @@ GEOIP_CACHE_MAX: int = int(os.getenv("GEOIP_CACHE_MAX", "500"))
 AGENT_BACKEND: str = os.getenv("AGENT_BACKEND", "")
 
 MOVIE_DEFAULT_PROVIDER: str = os.getenv("MOVIE_DEFAULT_PROVIDER", "kkphim").strip().lower()
-MOVIE_RATE_LIMIT: str = os.getenv("MOVIE_RATE_LIMIT", "60/minute")
 
 _REMOTE: dict[str, Any] = {}
 _remote_ready = False

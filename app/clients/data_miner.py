@@ -308,3 +308,151 @@ async def tiktok_transcript(aweme_id: str) -> Dict:
     Returns:
         (Dict) Kết quả trả về."""
     return await _get('/api/tiktok/transcript', {'aweme_id': aweme_id})
+
+
+def _movie_provider(provider: Optional[str] = None) -> str:
+    return (provider or settings.MOVIE_DEFAULT_PROVIDER).strip().lower()
+
+
+def _movie_filters(**kwargs: Any) -> Dict[str, Any]:
+    return {key: value for key, value in kwargs.items() if value is not None and value != ''}
+
+
+async def movie_search(
+    keyword: str,
+    provider: Optional[str] = None,
+    page: int = 1,
+    limit: int = 10,
+) -> Dict:
+    return await _get('/api/movies/search', {
+        'provider': _movie_provider(provider),
+        'keyword': keyword,
+        'page': page,
+        'limit': limit,
+    })
+
+
+async def movie_get_detail(slug: str, provider: Optional[str] = None) -> Dict:
+    return await _get(f'/api/movies/{slug}', {'provider': _movie_provider(provider)})
+
+
+async def movie_list_new(provider: Optional[str] = None, page: int = 1) -> Dict:
+    return await _get('/api/movies/new', {'provider': _movie_provider(provider), 'page': page})
+
+
+async def movie_list_by_type(
+    movie_type: str,
+    provider: Optional[str] = None,
+    page: int = 1,
+    limit: int = 10,
+    category: Optional[str] = None,
+    country: Optional[str] = None,
+    year: Optional[int] = None,
+    sort_lang: Optional[str] = None,
+    sort_field: Optional[str] = None,
+    sort_type: Optional[str] = None,
+) -> Dict:
+    params = {
+        'provider': _movie_provider(provider),
+        'page': page,
+        'limit': limit,
+        **_movie_filters(
+            category=category,
+            country=country,
+            year=year,
+            sort_lang=sort_lang,
+            sort_field=sort_field,
+            sort_type=sort_type,
+        ),
+    }
+    return await _get(f'/api/movies/types/{movie_type}', params)
+
+
+async def movie_list_by_genre(
+    slug: str,
+    provider: Optional[str] = None,
+    page: int = 1,
+    limit: int = 10,
+    category: Optional[str] = None,
+    country: Optional[str] = None,
+    year: Optional[int] = None,
+    sort_lang: Optional[str] = None,
+    sort_field: Optional[str] = None,
+    sort_type: Optional[str] = None,
+) -> Dict:
+    params = {
+        'provider': _movie_provider(provider),
+        'page': page,
+        'limit': limit,
+        **_movie_filters(
+            category=category,
+            country=country,
+            year=year,
+            sort_lang=sort_lang,
+            sort_field=sort_field,
+            sort_type=sort_type,
+        ),
+    }
+    return await _get(f'/api/movies/genres/{slug}', params)
+
+
+async def movie_list_by_country(
+    slug: str,
+    provider: Optional[str] = None,
+    page: int = 1,
+    limit: int = 10,
+    category: Optional[str] = None,
+    country: Optional[str] = None,
+    year: Optional[int] = None,
+    sort_lang: Optional[str] = None,
+    sort_field: Optional[str] = None,
+    sort_type: Optional[str] = None,
+) -> Dict:
+    params = {
+        'provider': _movie_provider(provider),
+        'page': page,
+        'limit': limit,
+        **_movie_filters(
+            category=category,
+            country=country,
+            year=year,
+            sort_lang=sort_lang,
+            sort_field=sort_field,
+            sort_type=sort_type,
+        ),
+    }
+    return await _get(f'/api/movies/countries/{slug}', params)
+
+
+async def movie_list_by_year(
+    year: int,
+    provider: Optional[str] = None,
+    page: int = 1,
+    limit: int = 10,
+    category: Optional[str] = None,
+    country: Optional[str] = None,
+    sort_lang: Optional[str] = None,
+    sort_field: Optional[str] = None,
+    sort_type: Optional[str] = None,
+) -> Dict:
+    params = {
+        'provider': _movie_provider(provider),
+        'page': page,
+        'limit': limit,
+        **_movie_filters(
+            category=category,
+            country=country,
+            sort_lang=sort_lang,
+            sort_field=sort_field,
+            sort_type=sort_type,
+        ),
+    }
+    return await _get(f'/api/movies/years/{year}', params)
+
+
+async def movie_get_genres(provider: Optional[str] = None) -> Dict:
+    return await _get('/api/movies/meta/genres', {'provider': _movie_provider(provider)})
+
+
+async def movie_get_countries(provider: Optional[str] = None) -> Dict:
+    return await _get('/api/movies/meta/countries', {'provider': _movie_provider(provider)})

@@ -12,7 +12,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import app.config.settings as settings
 from app.exceptions import AiLayerConfigError, AiLayerError
-from app.api.movies import router as movies_router
 from app.api.admin import router as admin_router
 from app.api.agent import router as agent_router
 from app.api.history import router as history_router
@@ -176,7 +175,6 @@ app.include_router(youtube_router, prefix='/ai', tags=['YouTube AI'])
 app.include_router(agent_router, prefix='/ai', tags=['Agent'])
 app.include_router(utilities_router, prefix='/ai', tags=['Utilities'])
 app.include_router(history_router, prefix='/ai', tags=['History'])
-app.include_router(movies_router, prefix='/ai', tags=['Movies'])
 app.include_router(admin_router, prefix='/ai', tags=['Admin'])
 
 @app.get('/health', tags=['Health'])
