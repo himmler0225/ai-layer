@@ -6,6 +6,7 @@ import app.config.settings as settings
 from app.config.constants import DATA_MINER_MAX_CONN, DATA_MINER_MAX_KEEPALIVE, HTTP_MAX_ATTEMPTS, HTTP_RETRY_STATUSES
 from app.config.headers import get_data_miner_headers
 from app.config.logger import Logger
+from app.exceptions import AiLayerUpstreamError
 logger = Logger.get(__name__)
 _MAX_ATTEMPTS = HTTP_MAX_ATTEMPTS
 _RETRY_ON_STATUS = HTTP_RETRY_STATUSES
@@ -60,7 +61,7 @@ async def _get(path: str, params: Dict=None) -> Any:
 
     Returns:
         (Any) Kết quả trả về."""
-    last_exc: Exception = RuntimeError('Unknown error')
+    last_exc: Exception = AiLayerUpstreamError('Unknown error')
     for attempt in range(1, _MAX_ATTEMPTS + 1):
         try:
             r = await _get_client().get(path, params=params or {}, headers=_headers())
@@ -80,7 +81,7 @@ async def _get(path: str, params: Dict=None) -> Any:
             await asyncio.sleep(delay)
         else:
             logger.error('[data_miner] GET %s failed attempts=%d', path, _MAX_ATTEMPTS)
-    raise last_exc
+    raise AiLayerUpstreamError(str(last_exc), cause=last_exc) from last_exc
 
 async def search_youtube(query: str, max_results: int=10, sort: str='relevance') -> Dict:
     """Tìm kiếm youtube (async).

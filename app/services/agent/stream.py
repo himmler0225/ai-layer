@@ -14,6 +14,7 @@ from app.services.agent.loop import (
     video_preview,
 )
 from app.services.agent.synthesis import iter_synthesis_deltas
+from app.exceptions import AiLayerConfigError, AiLayerError
 from app.services.agent.tool_status import _parse_args, tool_status
 from app.utils.llm_errors import log_error, user_message
 from app.utils.llm_responses import extract_response_text, response_stream_with_retry, status_error
@@ -51,8 +52,11 @@ async def run_agent_stream(task: str, tools: List[Dict], max_iter: int=10, syste
     """Chạy agent stream (async)."""
     try:
         ctx = await bootstrap_agent(task, tools, system, max_iter)
-    except ValueError as exc:
-        yield _sse({'type': 'error', 'message': str(exc)})
+    except AiLayerConfigError as exc:
+        yield _sse({'type': 'error', 'message': exc.message})
+        return
+    except AiLayerError as exc:
+        yield _sse({'type': 'error', 'message': exc.message})
         return
     for iteration in range(1, ctx['max_iter'] + 1):
         ctx['_iteration'] = iteration

@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
+from app.exceptions import AiLayerServiceUnavailableError
 from app.ingest.monitor import get_ingest_queue_stats
 from app.middleware.auth import verify_api_key
 from app.schemas.response import ApiResponse
@@ -17,4 +18,4 @@ async def ingest_queues():
     try:
         return ApiResponse.ok(await get_ingest_queue_stats())
     except Exception as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise AiLayerServiceUnavailableError(str(exc), cause=exc) from exc

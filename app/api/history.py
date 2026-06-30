@@ -2,7 +2,8 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 from typing import Optional
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header
+from app.exceptions import AiLayerAuthError, AiLayerError, AiLayerNotFoundError
 from pydantic import BaseModel
 from app.auth.supabase import get_user_id
 from app.cache.client import get_redis
@@ -87,7 +88,7 @@ async def admin_session_stats(days: int=7):
         data = await chat_repo.session_stats(days=days)
     except Exception as e:
         logger.error('[history] admin_session_stats failed: %s', e, exc_info=True)
-        raise HTTPException(500, str(e))
+        raise AiLayerError(str(e), cause=e) from e
     return ApiResponse.ok(data)
 
 @router.get('/history/sessions')
@@ -98,11 +99,11 @@ async def list_sessions(authorization: str=Header(...)):
         authorization: (str, mặc định Header(...)) Tham số `authorization`."""
     try:
         user_id = await get_user_id(_parse_token(authorization))
-    except HTTPException:
+    except AiLayerAuthError:
         raise
     except Exception as e:
         logger.error('[history] list_sessions auth failed: %s', e, exc_info=True)
-        raise HTTPException(500, str(e))
+        raise AiLayerError(str(e), cause=e) from e
     redis = await get_redis()
     key = f'history:sessions:{user_id}'
     if redis:
@@ -113,7 +114,7 @@ async def list_sessions(authorization: str=Header(...)):
         rows = await chat_repo.list_sessions(user_id)
     except Exception as e:
         logger.error('[history] list_sessions db failed: %s', e, exc_info=True)
-        raise HTTPException(500, str(e))
+        raise AiLayerError(str(e), cause=e) from e
     data = [{'id': r.id, 'title': r.title, 'created_at': r.created_at.isoformat(), 'updated_at': r.updated_at.isoformat()} for r in rows]
     if redis:
         await redis.setex(key, HISTORY_SESSIONS_TTL, json.dumps(data))
@@ -142,7 +143,7 @@ async def patch_session(session_id: str, body: SessionPatch, authorization: str=
     user_id = await get_user_id(_parse_token(authorization))
     owner_id = await chat_repo.get_session_user_id(session_id)
     if owner_id != user_id:
-        raise HTTPException(404, 'Session not found')
+        raise AiLayerNotFoundError('Session not found')
     await chat_repo.patch_session(session_id, title=body.title)
     await _bust_sessions(await get_redis(), user_id)
     return ApiResponse.ok({'id': session_id})
@@ -157,7 +158,7 @@ async def delete_session(session_id: str, authorization: str=Header(...)):
     user_id = await get_user_id(_parse_token(authorization))
     owner_id = await chat_repo.get_session_user_id(session_id)
     if owner_id != user_id:
-        raise HTTPException(404, 'Session not found')
+        raise AiLayerNotFoundError('Session not found')
     await chat_repo.delete_session(session_id)
     redis = await get_redis()
     await _bust_sessions(redis, user_id)
@@ -180,7 +181,7 @@ async def get_messages(session_id: str, authorization: str=Header(...)):
             return ApiResponse.ok(json.loads(cached))
     owner_id = await chat_repo.get_session_user_id(session_id)
     if owner_id != user_id:
-        raise HTTPException(404, 'Session not found')
+        raise AiLayerNotFoundError('Session not found')
     msgs = await chat_repo.list_messages(session_id)
     data = [{'id': m.id, 'role': m.role, 'content': m.content, 'metadata': m.metadata_, 'created_at': m.created_at.isoformat()} for m in msgs]
     if redis:
@@ -198,7 +199,7 @@ async def save_messages(session_id: str, body: list[MessageSave], authorization:
     user_id = await get_user_id(_parse_token(authorization))
     owner_id = await chat_repo.get_session_user_id(session_id)
     if owner_id != user_id:
-        raise HTTPException(404, 'Session not found')
+        raise AiLayerNotFoundError('Session not found')
     await chat_repo.save_messages(session_id, [{'id': msg.id, 'role': msg.role, 'content': msg.content, 'metadata': msg.metadata, 'created_at': _parse_dt(msg.created_at)} for msg in body])
     redis = await get_redis()
     await _bust_messages(redis, session_id)

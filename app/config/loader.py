@@ -8,10 +8,10 @@ import app.services.prompts as prompts
 from app.config.defaults import (
     apply_env_fallbacks,
     build_prompt_defaults,
-    build_settings_defaults,
     load_schema as _load_schema,
 )
 from app.config.logger import Logger
+from app.exceptions import AiLayerConfigError, AiLayerValidationError
 
 logger = Logger.get(__name__)
 
@@ -94,7 +94,7 @@ def _set_module_value(module: str, attr: str, value: Any) -> None:
     elif module == "prompts":
         prompts.set_prompt(attr, str(value))
     else:
-        raise ValueError(f"unknown module: {module}")
+        raise AiLayerValidationError(f"unknown module: {module}")
 
 
 def _apply_flat_prefix(data: dict, bind: dict, key_schema: dict) -> None:
@@ -357,6 +357,6 @@ def validate_required(schema: dict[str, Any]) -> None:
         elif not str(val).strip():
             missing.append(key)
     if missing:
-        raise RuntimeError(
+        raise AiLayerConfigError(
             "Missing Supabase config keys: " + ", ".join(sorted(missing))
         )

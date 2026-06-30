@@ -2,6 +2,7 @@ import pytest
 
 from app.config.defaults import build_prompt_defaults, build_settings_defaults, load_schema
 from app.config.loader import validate_required
+from app.exceptions import AiLayerConfigError
 
 
 def test_validate_required_raises_when_openai_key_missing(monkeypatch):
@@ -23,5 +24,5 @@ def test_validate_required_raises_when_openai_key_missing(monkeypatch):
             prompts._VALUES[key] = "configured"
 
     settings._REMOTE["OPENAI_API_KEY"] = ""
-    with pytest.raises(RuntimeError, match="Missing Supabase config keys"):
+    with pytest.raises(AiLayerConfigError, match="Missing Supabase config keys"):
         validate_required(schema)

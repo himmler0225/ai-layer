@@ -1,195 +1,270 @@
-# LangGraph — Hướng dẫn migrate (ai-layer)
+# LangGraph — Hướng dẫn migrate (vừa làm vừa học)
 
-Tài liệu **tự làm** để thay vòng lặp agent hiện tại bằng [LangGraph](https://langchain-ai.github.io/langgraph/). Đọc sau [FLOW.md](./FLOW.md) (tổng quan agent) và [RAG-GUIDE.md](./RAG-GUIDE.md) (tầng retrieval).
+Tài liệu **tự làm** để thay vòng lặp agent hiện tại bằng [LangGraph](https://langchain-ai.github.io/langgraph/).
 
-**Phạm vi:** chỉ orchestration (`services/agent/`). **Không** viết lại ingest, lưu RAG, hay client data-miner trong cùng một PR.
+**Đọc trước:**
+- [FLOW.md](./FLOW.md) — luồng end-to-end chatbot → ai-layer → data-miner
+- [RAG-GUIDE.md](./RAG-GUIDE.md) — L1/L2/L3, ingest (không đụng khi migrate graph)
+
+**Phạm vi PR:** chỉ `app/services/agent/` (orchestration). **Không** viết lại ingest, RAG pipeline, data-miner client.
+
+**Trạng thái repo (2026-06):**
+- Loop legacy: `runner.py`, `stream.py`, `engine.py`, `guards.py` — **đang chạy production**
+- LangGraph: `graph/state.py` (có sẵn), `graph/nodes.py` (trống) — **chưa wire vào API**
 
 ---
 
-## 1. Hiện trạng
+## 0. Bạn sẽ học được gì
 
-### Điểm vào API (giữ nguyên cho ai-chatbot)
+Sau khi làm xong lộ trình dưới, bạn nên trả lời được:
 
-| Route | File | Backend hiện tại |
-|-------|------|------------------|
-| `POST /ai/agent/run` | `app/api/agent.py` | `run_agent()` |
-| `POST /ai/agent/run/stream` | `app/api/agent.py` | `run_agent_stream()` |
+1. **State** LangGraph khác `ctx` dict hiện tại thế nào?
+2. **Node** nào map sang file Python nào trong repo?
+3. **Conditional edge** thay `if/continue` ở đâu trong `stream.py`?
+4. Vì sao **không** đưa `executor.py` / ingest vào graph?
+5. Stream SSE (`tool_start`, `text_delta`, `done`) map từ graph event ra sao?
 
-Chatbot kỳ vọng **SSE** các event: `status`, `tool_start`, `tool_done`, `data_preview`, `text_delta`, `done`, `error`. Hợp đồng này nằm ở `app/services/agent/stream.py`.
+---
 
-### Vòng lặp custom (phần bạn thay thế)
+## 1. LangGraph trong 5 phút
+
+| Khái niệm | Ý nghĩa | Tương đương code hiện tại |
+|-----------|---------|---------------------------|
+| **State** | Dict typed, merge qua các bước | `ctx` trong `loop.new_context()` |
+| **Node** | Hàm async nhận state → trả partial update | Một “bước” trong vòng `for iteration` |
+| **Edge** | Chuyển node tiếp theo | `continue` / `return` trong loop |
+| **Conditional edge** | Hàm routing trả tên node | `if call_items: ... elif dual_mode: ...` |
+| **Reducer** | Gộp list khi nhiều node append | `tool_call_log.extend(...)` |
+
+**While-loop hiện tại** (`stream.py` ~dòng 57–140):
 
 ```
-bootstrap_agent (lọc platform, RAG cache-first)
-  → for iteration in 1..max_iter:
-       gọi LLM (Responses API, TASK_AGENT_TOOL)
-       → có tool calls? execute_parallel + schedule_tool_ingest → tiếp tục
-       → không tool, dual_mode? run_synthesis → finish_agent
-       → không tool, một model? extract text → finish_agent
+bootstrap → [llm → tools? → guards? → synthesis? → done] × max_iter
 ```
 
-| File | Vai trò |
-|------|---------|
-| `loop.py` | Shape context, bootstrap, vòng tool, nhánh synthesis |
-| `runner.py` | Vòng lặp đồng bộ |
-| `stream.py` | Cùng logic + map sang SSE |
-| `platform.py` | Lọc tool (YouTube/TikTok, block sản phẩm, RAG cache) |
-| `tools.py` | Chạy tool song song + schedule ingest |
-| `synthesis.py` | Lượt model thứ hai khi `dual_mode()` |
-| `finalize.py` | Bọc `enricher.py` |
-| `config.py` | Model / token từ `LLMRouter` |
+**LangGraph** biến vòng lặp thành **graph có tên**, dễ trace, checkpoint, human-in-the-loop sau này.
 
-### Dict context (map 1:1 sang LangGraph state)
+---
+
+## 2. Hiện trạng code (cập nhật)
+
+### 2.1 Điểm vào API (giữ nguyên cho chatbot)
+
+| Route | File | Backend |
+|-------|------|---------|
+| `POST /ai/agent/run` | `app/api/agent.py` | `run_agent()` → `runner.py` |
+| `POST /ai/agent/run/stream` | `app/api/agent.py` | `run_agent_stream()` → `stream.py` |
+
+Chatbot proxy: `ai-chatbot/src/app/api/chat/route.ts` → không gửi `max_iter` (dùng `AGENT_MAX_ITER` Supabase).
+
+### 2.2 Luồng legacy chi tiết
+
+```mermaid
+flowchart TD
+    A[bootstrap_agent] --> B[LLM tool round]
+    B --> C{Có tool calls?}
+    C -->|Có| D[execute_parallel + apply_tool_budget]
+    D --> E{should_force_synthesis?}
+    E -->|Không| B
+    E -->|Có| F[synthesis stream]
+    C -->|Không| G{dual_mode?}
+    G -->|Có + có tool_log| F
+    G -->|Không| H[extract text từ LLM]
+    F --> I[finish_agent + enricher]
+    H --> I
+    I --> J[SSE done]
+```
+
+### 2.3 File map (quan trọng khi migrate)
+
+| File | Vai trò | Đưa vào graph? |
+|------|---------|----------------|
+| `platform.py` | Lọc tool, RAG cache-first | Gọi trong node `bootstrap` |
+| `loop.py` | Context, tool round helpers | Node gọi helper |
+| `engine.py` | `process_agent_step`, `tool_round_action` | **Tái dùng** trong route / node |
+| `guards.py` | Search budget, force synthesis | **Tái dùng** trong route `after_tools` |
+| `tools.py` | `execute_parallel`, ingest schedule | Node `execute_tools` |
+| `synthesis.py` | Synth + fallback model 502 | Node `synthesize` |
+| `config.py` | `tool_model()`, `dual_mode()`, `include_review_summary()` | Đọc trong node |
+| `stream.py` | SSE mapping | `langgraph_stream.py` (phase sau) |
+| `tools/executor.py` | data-miner + RAG thực thi | **Không** — node chỉ gọi |
+| `ai/router.py` | `LLM_DEFAULT_PROVIDER=deepseek` | **Không** — node gọi `create_response` |
+| `utils/llm_responses.py` | Helper LLM (trước: openai_responses) | Node gọi trực tiếp |
+
+### 2.4 Dict `ctx` → `AgentState`
 
 ```python
+# loop.new_context() / bootstrap_agent()
 {
     "session_id": str,
     "task": str,
     "system": str,
-    "tools": list[dict],       # schema tool Responses API
+    "tools": list[dict],
     "max_iter": int,
-    "iteration": int,          # nên khai báo rõ trong graph
-    "input_items": list[dict], # hội thoại Responses API
+    "input_items": list[dict],
     "tool_call_log": list[dict],
+}
+# Thêm khi chạy:
+{
+    "iteration": int,
+    "llm_output": Any,      # response LLM vòng hiện tại
     "final_text": str | None,
     "error": str | None,
+    "result": dict | None,  # payload sau finish_agent (tùy chọn)
 }
 ```
 
-Tạo trong `loop.new_context()` / `bootstrap_agent()`.
+File mẫu đã có: `app/services/agent/graph/state.py`.
 
-### Không đưa vào graph
-
-| Giữ nguyên | Lý do |
-|------------|-------|
-| `tools/executor.py`, `definitions.py`, `rag_definitions.py` | Implementation tool |
-| `ingest/dispatcher/schedule.py` | RabbitMQ nền |
-| `enricher.py` | Hậu xử lý payload `done` |
-| `ai/providers.py`, `ai/router.py` | Provider LLM |
-| `utils/openai_responses.py` | Helper Responses API |
-
-Node LangGraph **gọi** các module này; không copy logic vào file graph.
+**Reducer `tool_call_log`:** dùng `Annotated[list, operator.add]` nếu mỗi node chỉ **trả entry mới**; nếu vẫn mutate in-place như `complete_tool_round`, reducer không cần.
 
 ---
 
-## 2. Khi nào nên dùng LangGraph
+## 3. Hợp đồng SSE (đừng phá chatbot)
 
-Nên migrate khi cần **ít nhất hai** mục sau:
+`stream.py` emit JSON qua SSE (`data: {...}\n\n`):
 
-- Nhánh rõ ràng (RAG đủ → trả lời / crawl / hỏi lại user)
-- Checkpoint / resume sau crash hoặc run dài
-- Human-in-the-loop (duyệt crawl, xác nhận sản phẩm)
-- Quan sát từng node (LangSmith, chi phí token từng bước)
-- Nhánh song song (ví dụ YouTube + TikTok rồi gộp)
+| `type` | Khi nào | Payload chính |
+|--------|---------|---------------|
+| `status` | Bắt đầu / trước synthesis | `detail_vi`, `detail_en` |
+| `tool_start` | Trước chạy tool | `tool`, `detail_vi`, `detail_en` |
+| `tool_done` | Sau tool xong | `tool` |
+| `data_preview` | Có video từ search | `videos[]` |
+| `text_delta` | Token stream | `delta` |
+| `done` | Kết thúc OK | `data`, `tool_calls` |
+| `error` | Lỗi | `message` |
 
-Nếu chỉ cần “gọi tool đến khi xong”, while-loop hiện tại đơn giản hơn và đã khớp OpenAI Responses API.
+LangGraph phase 1 có thể **chỉ parity sync** (`/run`). Phase 2 mới bắt buộc parity stream.
+
+**Kiểm tra tay:** `curl -N` vào `/ai/agent/run/stream` — thấy đủ event trên.
 
 ---
 
-## 3. Graph mục tiêu (đề xuất 6 node)
+## 4. Graph mục tiêu (8 node — khớp guards hiện tại)
+
+Phiên bản cũ thiếu nhánh **force synthesis** (search budget, max_iter mềm). Graph mới:
 
 ```mermaid
 flowchart TD
     START --> bootstrap
     bootstrap --> llm_tool
-    llm_tool -->|co tool| execute_tools
-    llm_tool -->|khong tool, dual_mode| synthesize
-    llm_tool -->|khong tool, 1 model| finalize
-    llm_tool -->|het max_iter| finalize
-    execute_tools -->|iteration < max| llm_tool
-    execute_tools -->|iteration >= max| finalize
+    llm_tool -->|tool calls| execute_tools
+    llm_tool -->|no tool + dual| synthesize
+    llm_tool -->|no tool + single model| finalize
+    llm_tool -->|incomplete tokens| synthesize_or_finalize
+  llm_tool -->|error| finalize
+    execute_tools -->|continue| llm_tool
+    execute_tools -->|force_synthesis| synthesize
+    execute_tools -->|max_iter| finalize
     synthesize --> finalize
+    synthesize_or_finalize --> finalize
     finalize --> END
 ```
 
-| Node | Bọc code có sẵn |
-|------|-----------------|
+| Node | Bọc hàm có sẵn |
+|------|----------------|
 | `bootstrap` | `bootstrap_agent()` |
-| `llm_tool` | `create_response` / `response_stream_with_retry` với `TASK_AGENT_TOOL` |
-| `execute_tools` | `run_tool_round()` hoặc `begin_tool_round` + `complete_tool_round` |
-| `synthesize` | `run_synthesis()` / `iter_synthesis_deltas()` |
-| `finalize` | `finish_agent()` |
-| `route` | cạnh có điều kiện: tool calls, `dual_mode()`, `max_iter` |
+| `llm_tool` | `response_stream_with_retry` / `create_response` + `TASK_AGENT_TOOL` |
+| `execute_tools` | `begin_tool_round` + `complete_tool_round` + `apply_tool_budget` (trong complete) |
+| `synthesize` | `iter_synthesis_deltas` / `run_synthesis` |
+| `finalize` | `finish_agent()` → `enricher` |
+| `route_after_llm` | `extract_function_calls`, `dual_mode`, `is_max_tokens_incomplete` |
+| `route_after_tools` | `tool_round_action()` từ `engine.py` |
 
-Làm graph này trước khi thêm node RAG riêng (`rag_lookup`, `coverage_gate`, …).
+### 4.1 Routing sau LLM (`routes.py`)
+
+```python
+def route_after_llm(state: AgentState) -> str:
+    if state.get("error"):
+        return "finalize"
+    response = state["llm_output"]
+    if status_error(response):
+        return "finalize"
+    if is_max_tokens_incomplete(response):
+        if config.dual_mode() and state.get("tool_call_log"):
+            return "synthesize"
+        return "finalize"
+    if extract_function_calls(response.output):
+        return "execute_tools"
+    if config.dual_mode() and state.get("tool_call_log"):
+        return "synthesize"
+    return "finalize"
+```
+
+### 4.2 Routing sau tools
+
+```python
+def route_after_tools(state: AgentState) -> str:
+    if state["iteration"] >= state["max_iter"]:
+        return "finalize"
+    if tool_round_action(state, state["iteration"]) == "force_synthesis":
+        return "synthesize"
+    return "llm_tool"
+```
+
+**Học:** `should_force_synthesis` trong `guards.py` — không copy logic sang graph; **import và gọi**.
 
 ---
 
-## 4. Dependencies
+## 5. Lộ trình làm từng bước (có checklist)
 
-Thêm vào `requirements.txt` (pin version trên nhánh spike):
+### Phase 0 — Spike không đổi hành vi (½ ngày)
 
-```text
-langgraph>=0.2.0
-langchain-core>=0.3.0
-```
+**Mục tiêu:** Cài deps, feature flag, graph compile được nhưng vẫn gọi legacy.
 
-**Không bắt buộc** dùng LangChain OpenAI wrapper nếu node vẫn gọi `get_router().create_response()` trực tiếp.
+1. Thêm vào `requirements.txt`:
+   ```text
+   langgraph>=0.2.0
+   langchain-core>=0.3.0
+   ```
 
-Tùy chọn:
+2. Env local:
+   ```bash
+   AGENT_BACKEND=legacy   # mặc định
+   ```
 
-```text
-langgraph-checkpoint-postgres>=2.0.0   # resume session
-langsmith>=0.1.0                       # tracing
-```
+3. `app/api/agent.py`:
+   ```python
+   if getattr(settings, "AGENT_BACKEND", "legacy") == "langgraph":
+       from app.services.agent.langgraph_runner import run_agent_langgraph
+       ...
+   else:
+       result = await run_agent(...)
+   ```
+
+4. `langgraph_runner.py` tạm:
+   ```python
+   async def run_agent_langgraph(...):
+       return await run_agent(...)  # delegate legacy
+   ```
+
+**✅ Xong khi:** `pytest` pass, API `/run` hành vi không đổi.
 
 ---
 
-## 5. Các bước triển khai
+### Phase 1 — State + node sync (1–2 ngày)
 
-### Bước 0 — Feature flag
+**Mục tiêu:** `graph.ainvoke()` chạy được 1 task đơn giản (mock LLM).
 
-Thêm env (chỉ local lúc đầu):
+#### Bước 1.1 — Hoàn thiện `graph/state.py`
 
-```bash
-AGENT_BACKEND=legacy   # mặc định
-# AGENT_BACKEND=langgraph
-```
-
-Trong `app/api/agent.py`:
-
+Đã có skeleton. Bổ sung nếu cần:
 ```python
-if settings.AGENT_BACKEND == "langgraph":
-    from app.services.agent.langgraph_runner import run_agent_langgraph
-    result = await run_agent_langgraph(...)
-else:
-    result = await run_agent(...)
+result: dict  # output finish_agent
+text_streamed: bool  # cho stream sau
 ```
 
-Giữ flag cho đến khi stream đạt parity với legacy.
+#### Bước 1.2 — `graph/nodes.py` (wrapper mỏng)
 
-### Bước 1 — Kiểu state
-
-Tạo `app/services/agent/graph/state.py`:
-
-```python
-from typing import Annotated, Any, TypedDict
-import operator
-
-class AgentState(TypedDict, total=False):
-    session_id: str
-    task: str
-    system: str
-    tools: list[dict]
-    max_iter: int
-    iteration: int
-    input_items: list[dict]
-    tool_call_log: Annotated[list[dict], operator.add]
-    llm_output: Any
-    final_text: str
-    error: str
-```
-
-Chỉ dùng `Annotated[..., operator.add]` khi nhiều node append `tool_call_log` trong một bước.
-
-### Bước 2 — Node
-
-Tạo `app/services/agent/graph/nodes.py`. Mỗi node là wrapper mỏng:
+Nguyên tắc: **node không chứa business mới** — chỉ gọi hàm cũ.
 
 ```python
 async def bootstrap_node(state: AgentState) -> dict:
     ctx = await bootstrap_agent(
-        state["task"], state["tools"], state.get("system"), state["max_iter"]
+        state["task"],
+        state["tools"],
+        state.get("system"),
+        state["max_iter"],
     )
     return {
         "session_id": ctx["session_id"],
@@ -199,9 +274,11 @@ async def bootstrap_node(state: AgentState) -> dict:
         "tool_call_log": [],
         "iteration": 0,
     }
+```
 
+```python
 async def llm_tool_node(state: AgentState) -> dict:
-    iteration = state["iteration"] + 1
+    iteration = state.get("iteration", 0) + 1
     response = await create_response(
         task=TASK_AGENT_TOOL,
         model=config.tool_model(),
@@ -214,143 +291,129 @@ async def llm_tool_node(state: AgentState) -> dict:
     return {"iteration": iteration, "llm_output": response}
 ```
 
-Tái dùng `is_max_tokens_incomplete`, `status_error`, `extract_function_calls` từ module hiện có.
-
-### Bước 3 — Node tool
-
 ```python
 async def execute_tools_node(state: AgentState) -> dict:
     output = state["llm_output"].output
+    # Refactor khuyến nghị: complete_tool_round trả dict mới thay vì mutate state
     call_items = await begin_tool_round(state, output)
     if not call_items:
         return {}
     await complete_tool_round(state, output, state["iteration"])
     return {
         "input_items": state["input_items"],
-        "tool_call_log": state["tool_call_log"],  # hiện mutate in-place — nên đổi sang immutable
+        "tool_call_log": state["tool_call_log"],
     }
 ```
 
-**Gợi ý refactor:** cho `complete_tool_round` **trả về** `input_items` / `tool_call_log` mới thay vì sửa `ctx` — LangGraph sạch hơn với state bất biến.
-
-### Bước 4 — Routing
-
 ```python
-def after_llm(state: AgentState) -> str:
-    if state.get("error"):
-        return "finalize"
-    response = state["llm_output"]
-    if is_max_tokens_incomplete(response):
-        return "synthesize" if config.dual_mode() and state["tool_call_log"] else "finalize"
-    if extract_function_calls(response.output):
-        return "execute_tools"
-    if config.dual_mode() and state["tool_call_log"]:
-        return "synthesize"
-    return "finalize"
-
-def after_tools(state: AgentState) -> str:
-    if state["iteration"] >= state["max_iter"]:
-        return "finalize"
-    return "llm_tool"
+async def synthesize_node(state: AgentState) -> dict:
+    text = await run_synthesis(
+        system=state["system"],
+        task=state["task"],
+        tool_call_log=state["tool_call_log"],
+    )
+    return {"final_text": text}
 ```
 
-### Bước 5 — Compile graph
-
-Tạo `app/services/agent/graph/build.py`:
-
 ```python
-from langgraph.graph import END, StateGraph
-from .nodes import bootstrap_node, llm_tool_node, execute_tools_node, synthesize_node, finalize_node
-from .routes import after_llm, after_tools
-
-def build_agent_graph():
-    g = StateGraph(AgentState)
-    g.add_node("bootstrap", bootstrap_node)
-    g.add_node("llm_tool", llm_tool_node)
-    g.add_node("execute_tools", execute_tools_node)
-    g.add_node("synthesize", synthesize_node)
-    g.add_node("finalize", finalize_node)
-    g.set_entry_point("bootstrap")
-    g.add_edge("bootstrap", "llm_tool")
-    g.add_conditional_edges("llm_tool", after_llm, {
-        "execute_tools": "execute_tools",
-        "synthesize": "synthesize",
-        "finalize": "finalize",
-    })
-    g.add_conditional_edges("execute_tools", after_tools, {
-        "llm_tool": "llm_tool",
-        "finalize": "finalize",
-    })
-    g.add_edge("synthesize", "finalize")
-    g.add_edge("finalize", END)
-    return g.compile()
+async def finalize_node(state: AgentState) -> dict:
+    text = state.get("final_text") or extract_response_text(state.get("llm_output"))
+    enriched = await finish_agent(
+        state,
+        iteration=state.get("iteration", 1),
+        final_text=text,
+    )
+    return {"result": enriched, "final_text": text}
 ```
 
-### Bước 6 — Runner đồng bộ
+#### Bước 1.3 — `graph/build.py`
 
-`app/services/agent/langgraph_runner.py`:
+Xem mẫu §6 bên dưới (copy-paste được).
+
+#### Bước 1.4 — Test
+
+`tests/test_agent_graph.py`:
+- Mock `create_response` trả 1 `function_call` fake → graph đi `execute_tools` → mock `execute_parallel`
+- Mock lần 2 không tool → `finalize`
+
+**✅ Xong khi:** test pass không gọi API thật.
+
+---
+
+### Phase 2 — Immutable state (khuyến nghị, 1 ngày)
+
+**Vấn đề:** `complete_tool_round(ctx, ...)` sửa `ctx` in-place — LangGraph thích partial return.
+
+**Refactor nhỏ trong `loop.py`:**
 
 ```python
-async def run_agent_langgraph(task, tools, max_iter=10, system=None):
-    graph = build_agent_graph()
-    initial = {"task": task, "tools": tools, "max_iter": max_iter, "system": system}
-    final = await graph.ainvoke(initial)
-    if final.get("error"):
-        raise RuntimeError(final["error"])
-    return final["result"]  # shape từ finish_agent
+async def complete_tool_round(...) -> tuple[list, list]:
+    outputs, entries = await execute_parallel(...)
+    return (
+        state["input_items"] + output_items_extension,
+        state["tool_call_log"] + entries,
+    )
 ```
 
-Gọi `finish_agent` trong `finalize_node` và lưu `result` lên state.
+Node trả:
+```python
+return {"input_items": new_items, "tool_call_log": new_log}
+```
 
-### Bước 7 — Streaming (phần khó)
+**✅ Xong khi:** không còn mutate `state` ngoài return dict.
 
-`stream.py` hiện xen kẽ token LLM + trạng thái tool. Ba hướng:
+---
 
-| Cách | Ưu | Nhược |
-|------|-----|-------|
-| **A. `graph.astream_events(v2)`** | Streaming chính thức LangGraph | Phải map nhiều event → SSE của bạn |
-| **B. Stream trong node `llm_tool` / `synthesize`** | Tái dùng `response_stream_with_retry` | Graph tạm dừng khi stream; tự yield event |
-| **C. Hybrid** | Graph chỉ routing; wrapper stream bên ngoài | Ít “thuần” LangGraph |
+### Phase 3 — Parity `/run` sync (1 ngày)
 
-**Đề xuất cho codebase này:** làm **B** trước.
+So sánh legacy vs langgraph cùng task (mock hoặc staging):
 
+| Tiêu chí | Cách so |
+|----------|---------|
+| Cùng tool được gọi | So `tool_calls` trong `done` |
+| Cùng số iteration | Log `iteration` |
+| Guards hoạt động | Task review → search 1 lần → comments |
+
+**✅ Xong khi:** `AGENT_BACKEND=langgraph` cho `/run` trên staging.
+
+---
+
+### Phase 4 — Stream SSE (2–3 ngày, khó nhất)
+
+Ba chiến lược (giữ từ doc cũ, cập nhật):
+
+| Cách | Mô tả | Giai đoạn |
+|------|-------|-----------|
+| **B — Hybrid** | Graph route; stream wrapper bọc ngoài gọi `response_stream_with_retry` | **Làm trước** |
+| **A — astream_events** | Map event LangGraph → SSE | Sau khi B parity |
+| **C — Stream trong node** | Node yield queue | Tránh trừ khi cần |
+
+**Hybrid (đề xuất):** copy skeleton từ `stream.py`, thay `if should_force_synthesis` bằng `tool_round_action`, thay body loop bằng `graph` chỉ khi đã tự tin.
+
+Pseudo:
 ```python
 async def run_agent_stream_langgraph(...):
-    ctx = await bootstrap_agent(...)
-    # yield SSE status
-    for iteration in range(1, max_iter + 1):
+    state = await bootstrap_agent(...)
+    yield sse_status("Đang phân tích…")
+    for iteration in range(1, state["max_iter"] + 1):
         async with response_stream_with_retry(...) as stream:
             async for event in stream:
-                if event.type == "response.output_text.delta":
-                    yield sse_text_delta(event.delta)
+                ...
             final = await stream.get_final_response()
-        # nhánh tool → yield tool_start / tool_done (copy từ stream.py)
-        # route giống hiện tại
-    yield sse_done(...)
+        # tool branch → yield tool_start/done (giống stream.py)
+        if tool_round_action(...) == "force_synthesis":
+            async for delta in iter_synthesis_deltas(...):
+                yield sse_text_delta(delta)
+            yield sse_done(...)
+            return
+    ...
 ```
 
-Khi đã parity, dần chuyển routing sang `astream_events`.
+**✅ Xong khi:** chatbot UI hiển thị giống legacy (tool chips, text, videos).
 
-### Bước 8 — Adapter OpenAI Responses API
+---
 
-Tutorial LangGraph thường dùng Chat Completions + `bind_tools`. Project này dùng **Responses API** (`input_items`, `function_call_output`).
-
-| Responses API (hiện tại) | LangChain/LangGraph thường gặp |
-|--------------------------|--------------------------------|
-| `instructions` + `input` | `system` + `messages` |
-| item `function_call` | `tool_calls` trên AIMessage |
-| `function_call_output` | `ToolMessage` |
-
-**Đừng đổi format API giữa chừng migrate.** Tiếp tục gọi:
-
-- `get_router().create_response(task=TASK_AGENT_TOOL, ...)`
-- `get_router().response_stream(task=TASK_AGENT_TOOL, ...)`
-
-DeepSeek/XAH đã chuẩn hóa qua `app/ai/adapters.py` → `LLMResponse`. OpenAI dùng Responses native. Node graph nên phụ thuộc `LLMResponse` + `openai_responses.py`, không phụ thuộc type SDK thô.
-
-### Bước 9 — Checkpoint (tùy chọn, giai đoạn 2)
-
-Khi cần resume:
+### Phase 5 — Checkpoint + LangSmith (tùy chọn)
 
 ```python
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
@@ -358,101 +421,232 @@ from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 checkpointer = AsyncPostgresSaver.from_conn_string(settings.DATABASE_URL)
 graph = builder.compile(checkpointer=checkpointer)
 
-await graph.ainvoke(
-    initial,
-    config={"configurable": {"thread_id": session_id}},
-)
+await graph.ainvoke(initial, config={"configurable": {"thread_id": session_id}})
 ```
 
-Dùng cùng `session_id` như `loop.new_context()`. Lưu `thread_id` trong chat history nếu user tiếp tục session cũ.
+Dùng `session_id` từ `loop.new_context()`.
 
-### Bước 10 — Test
-
-| Test | File |
-|------|------|
-| Route graph (mock LLM) | `tests/test_agent_graph.py` |
-| Thứ tự event SSE | `tests/test_agent_stream.py` |
-| Lọc tool không đổi | `tests/test_core.py` (có sẵn) |
-| Parity legacy vs langgraph | cùng task → cùng tên tool được gọi |
-
-Mock tại `create_response` / `execute_tool`, không mock sâu trong thư viện graph.
+**✅ Xong khi:** resume cùng `thread_id` sau restart process.
 
 ---
 
-## 6. Cấu trúc thư mục sau migrate
+### Phase 6 — Cutover
+
+1. Soak `AGENT_BACKEND=langgraph` 1–2 tuần
+2. Mặc định langgraph
+3. Xóa `runner.py` / `stream.py` legacy ở PR riêng (không vội)
+
+---
+
+## 6. Code mẫu `build.py` (đầy đủ hơn)
+
+```python
+from langgraph.graph import END, StateGraph
+
+from app.services.agent.graph.nodes import (
+    bootstrap_node,
+    execute_tools_node,
+    finalize_node,
+    llm_tool_node,
+    synthesize_node,
+)
+from app.services.agent.graph.routes import route_after_llm, route_after_tools
+from app.services.agent.graph.state import AgentState
+
+
+def build_agent_graph():
+    g = StateGraph(AgentState)
+
+    g.add_node("bootstrap", bootstrap_node)
+    g.add_node("llm_tool", llm_tool_node)
+    g.add_node("execute_tools", execute_tools_node)
+    g.add_node("synthesize", synthesize_node)
+    g.add_node("finalize", finalize_node)
+
+    g.set_entry_point("bootstrap")
+    g.add_edge("bootstrap", "llm_tool")
+
+    g.add_conditional_edges(
+        "llm_tool",
+        route_after_llm,
+        {
+            "execute_tools": "execute_tools",
+            "synthesize": "synthesize",
+            "finalize": "finalize",
+        },
+    )
+
+    g.add_conditional_edges(
+        "execute_tools",
+        route_after_tools,
+        {
+            "llm_tool": "llm_tool",
+            "synthesize": "synthesize",
+            "finalize": "finalize",
+        },
+    )
+
+    g.add_edge("synthesize", "finalize")
+    g.add_edge("finalize", END)
+
+    return g.compile()
+```
+
+`langgraph_runner.py`:
+
+```python
+async def run_agent_langgraph(task, tools, max_iter=10, system=None):
+    graph = build_agent_graph()
+    initial: AgentState = {
+        "task": task,
+        "tools": tools,
+        "max_iter": max_iter,
+        "system": system,
+    }
+    final = await graph.ainvoke(initial)
+    if final.get("error"):
+        raise RuntimeError(final["error"])
+    return final["result"]
+```
+
+---
+
+## 7. LLM layer — đừng đổi giữa chừng
+
+Project dùng **Responses-shaped API** qua adapter:
+
+| Hiện tại | LangChain tutorial thường thấy |
+|----------|-------------------------------|
+| `instructions` + `input_items` | `SystemMessage` + `messages` |
+| `function_call` item | `tool_calls` on AIMessage |
+| `function_call_output` | `ToolMessage` |
+
+**Node graph gọi:**
+```python
+from app.utils.llm_responses import create_response, response_stream_with_retry
+from app.ai.router import TASK_AGENT_TOOL, TASK_AGENT_SYNTH
+```
+
+Provider hiện tại: `LLM_DEFAULT_PROVIDER=deepseek` (XAH/OpenAI có thể comment trong `providers.py`).
+
+`ConfiguredLLM` chuẩn hóa DeepSeek/XAH → `LLMResponse` (`app/ai/adapters.py`).
+
+**Synthesis fallback 502:** đã có trong `synthesis.py` (`synth_models_to_try`) — node `synthesize` tự hưởng, không cần logic mới.
+
+---
+
+## 8. Config & env
+
+| Nguồn | Ảnh hưởng graph |
+|-------|-----------------|
+| `AGENT_BACKEND` | `legacy` \| `langgraph` (bạn thêm) |
+| Supabase `AI_AGENT` | `max_iter`, `include_review_summary`, limits |
+| Supabase `AI_MODELS` | `deepseek.tool_model`, `deepseek.model` |
+| `LLM_DEFAULT_PROVIDER` | `.env` — nên `deepseek` |
+| `PROMPTS.agent.system` | `bootstrap` → `system` |
+
+LangGraph **không** cần key riêng.
+
+---
+
+## 9. Cấu trúc thư mục đích
 
 ```
 app/services/agent/
-├── loop.py              # giữ đến khi cutover; helper dùng chung
-├── runner.py            # backend legacy
-├── stream.py            # SSE legacy
-├── langgraph_runner.py  # entry đồng bộ mới
-├── langgraph_stream.py  # entry SSE mới
-├── graph/
-│   ├── state.py
-│   ├── nodes.py
-│   ├── routes.py
-│   └── build.py
-└── ...                  # platform, tools, synthesis giữ nguyên
+├── engine.py              # routing dùng chung (giữ)
+├── guards.py              # budget / force synthesis (giữ)
+├── loop.py                # helpers → refactor immutable
+├── runner.py              # legacy sync
+├── stream.py              # legacy SSE
+├── langgraph_runner.py    # NEW — sync entry
+├── langgraph_stream.py    # NEW — SSE entry (phase 4)
+└── graph/
+    ├── state.py           # có sẵn
+    ├── nodes.py           # điền dần
+    ├── routes.py          # NEW
+    └── build.py           # NEW
 ```
 
 ---
 
-## 7. Env / config
+## 10. Lỗi thường gặp (và cách học từ đó)
 
-LangGraph **không** cần thêm key Supabase.
-
-| Env | Mục đích |
-|-----|----------|
-| `AGENT_BACKEND` | `legacy` \| `langgraph` (bạn tự thêm) |
-| `AGENT_MAX_ITER` | Supabase `AI_AGENT` — vẫn dùng |
-| `OPENAI_*`, `DEEP_SEEK_*` | Supabase `AI_MODELS` — model tool vs synth |
-| `LANGSMITH_API_KEY` | Tracing (tùy chọn) |
-| `LANGSMITH_PROJECT` | Tracing (tùy chọn) |
-
-Prompt vẫn từ Supabase `PROMPTS` → `AGENT_SYSTEM`, `AGENT_SYNTH_SYSTEM`.
+| # | Triệu chứng | Nguyên nhân | Cách sửa |
+|---|-------------|-------------|----------|
+| 1 | Graph chạy nhưng `tool_call_log` rỗng | Mutate state in-place, không return | Phase 2 immutable |
+| 2 | Search loop vô hạn | Không gọi `apply_tool_budget` | Giữ trong `complete_tool_round` |
+| 3 | Ép synthesis quá sớm | Route không dùng `guards` | `tool_round_action()` |
+| 4 | Chatbot không hiện tool | Thiếu SSE `tool_start` | Parity stream phase 4 |
+| 5 | 502 synthesis | Model nặng upstream | Đã có fallback; đổi `model` Supabase |
+| 6 | Import LangChain OpenAI | Tutorial khác stack | Chỉ dùng `llm_responses` |
 
 ---
 
-## 8. Lỗi thường gặp
+## 11. Bài tập tự kiểm (không cần production)
 
-1. **Mutate dict `ctx`** — LangGraph cần partial state trả về; refactor helper trong `loop.py` để return thay vì sửa in-place.
-2. **Dual-model** — `config.dual_mode()` khi provider tool ≠ synth; synthesis là node riêng, không nhét thêm LLM call trong `llm_tool`.
-3. **RAG cache-first** — vẫn trong `bootstrap_agent` / `platform.py`; chạy trước khi graph bắt đầu.
-4. **Ingest** — giữ `schedule_tool_ingest` trong `execute_parallel`; đừng tách job async nếu chưa test `product_hint`.
-5. **SSE song ngữ** — `tool_status.py` giữ nguyên; chỉ map ở lớp stream.
-6. **Viết lại ingest/RAG** — ngoài phạm vi; xem [RAG-GUIDE.md](./RAG-GUIDE.md).
+1. Vẽ graph tay trên giấy với task: *"review iPhone 16 pin"* — đánh dấu node nào chạy.
+2. Đọc `guards.should_force_synthesis` — liệt kê 3 điều kiện `return True`.
+3. Mock test: 1 search + 1 comments_batch → route phải là `finalize` hay `synthesize`?
+4. Tìm trong `stream.py` chỗ emit `data_preview` — node graph tương ứng đặt ở đâu?
 
----
-
-## 9. Thứ tự PR đề xuất
-
-1. Flag `AGENT_BACKEND` + `langgraph_runner` rỗng delegate về legacy (không đổi hành vi).
-2. `graph/state.py`, `graph/nodes.py` + unit test; chỉ đường sync.
-3. Parity stream: `text_delta` + `tool_start` / `tool_done` + `done`.
-4. Gom helper routing dùng chung giữa `runner.py` và `langgraph_runner`.
-5. Tùy chọn: Postgres checkpointer + LangSmith.
-6. Mặc định `AGENT_BACKEND=langgraph` sau soak; xóa loop legacy ở PR sau.
+Đáp án gợi ý: (3) dual_mode + có log → `synthesize`; single model + LLM trả text → `finalize`. (4) Sau `execute_tools`, trước route tiếp.
 
 ---
 
-## 10. Bản đồ code nhanh
+## 12. Thứ tự PR (tóm tắt)
+
+| PR | Nội dung |
+|----|----------|
+| 1 | Deps + `AGENT_BACKEND` + delegate legacy |
+| 2 | `graph/*` + test mock sync |
+| 3 | Immutable `complete_tool_round` |
+| 4 | Parity `/run` |
+| 5 | `langgraph_stream.py` + SSE test |
+| 6 | Checkpoint / LangSmith (opt) |
+| 7 | Cutover default + xóa legacy (sau) |
+
+---
+
+## 13. Bản đồ file nhanh
 
 | Mối quan tâm | File |
 |--------------|------|
-| Route API | `app/api/agent.py` |
-| Schema tool | `app/tools/definitions.py`, `rag_definitions.py` |
-| Dispatch tool | `app/tools/executor.py` |
-| Lọc platform / RAG | `app/services/agent/platform.py` |
-| Routing LLM | `app/ai/router.py` |
-| Helper Responses | `app/utils/openai_responses.py` |
-| Response enrich | `app/services/enricher.py` |
-| Giới hạn agent remote | Supabase `AI_AGENT`, `AI_MODELS`, `PROMPTS` |
+| API | `app/api/agent.py` |
+| Tool schema | `app/tools/definitions.py`, `rag_definitions.py` |
+| Tool exec | `app/tools/executor.py` |
+| Platform / RAG filter | `app/services/agent/platform.py` |
+| Engine + guards | `app/services/agent/engine.py`, `guards.py` |
+| LLM router | `app/ai/router.py` |
+| LLM helpers | `app/utils/llm_responses.py` |
+| Enricher | `app/services/enricher.py`, `enricher_collect.py` |
+| Remote config | Supabase `AI_AGENT`, `AI_MODELS`, `PROMPTS` |
 
 ---
 
-## 11. Đọc thêm
+## 14. Đọc thêm
 
 - [LangGraph tutorials](https://langchain-ai.github.io/langgraph/tutorials/)
-- [Streaming với `astream_events`](https://langchain-ai.github.io/langgraph/how-tos/streaming/)
-- Nội bộ: [FLOW.md](./FLOW.md) · [RAG-GUIDE.md](./RAG-GUIDE.md) · mục roadmap trong README
+- [Conditional edges](https://langchain-ai.github.io/langgraph/how-tos/graph-api/#add-conditional-edges)
+- [Streaming `astream_events`](https://langchain-ai.github.io/langgraph/how-tos/streaming/)
+- Nội bộ: [FLOW.md](./FLOW.md) · [RAG-GUIDE.md](./RAG-GUIDE.md)
+
+---
+
+## Phụ lục A — So sánh 1 vòng iteration
+
+**Legacy (`runner.py`):**
+```python
+response = await create_response(...)
+outcome = await process_agent_step(ctx, response, iteration)
+if outcome.action == "continue":
+    continue
+if outcome.action == "force_synthesis":
+    return await finish_agent(..., await run_synthesis(...))
+```
+
+**LangGraph tương đương:**
+```
+llm_tool → execute_tools → route_after_tools → llm_tool | synthesize | finalize
+```
+
+`process_agent_step` có thể thu gọn thành 2 node (`execute_tools` + route) thay vì 1 node — **tách route ra edge** là điểm học chính của LangGraph.

@@ -3,6 +3,7 @@ from typing import Optional
 import aio_pika
 from aio_pika import ExchangeType
 from aio_pika.abc import AbstractChannel, AbstractRobustConnection
+from app.exceptions import AiLayerConfigError
 import app.config.settings as settings
 from app.ingest.schemas import EXCHANGE_NAME
 _connection: Optional[AbstractRobustConnection] = None
@@ -17,7 +18,7 @@ async def get_connection() -> AbstractRobustConnection:
     global _connection
     if _connection is None or _connection.is_closed:
         if not settings.RABBITMQ_URL:
-            raise RuntimeError('RABBITMQ_URL is not configured')
+            raise AiLayerConfigError('RABBITMQ_URL is not configured')
         _connection = await aio_pika.connect_robust(settings.RABBITMQ_URL)
     return _connection
 

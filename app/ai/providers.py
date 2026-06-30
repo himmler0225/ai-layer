@@ -16,6 +16,7 @@ from app.ai.adapters import (
 )
 from app.ai.base import BaseLLM
 from app.config.logger import Logger
+from app.exceptions import AiLayerConfigError, AiLayerLLMError, AiLayerValidationError
 from app.utils.llm_errors import log_error, should_retry
 
 logger = Logger.get(__name__)
@@ -83,7 +84,7 @@ def get_provider_spec(name: str) -> ProviderSpec:
     key = normalize_provider(name)
     spec = PROVIDER_SPECS.get(key)
     if spec is None:
-        raise ValueError(f"LLM provider not found: {name}")
+        raise AiLayerValidationError(f"LLM provider not found: {name}")
     return spec
 
 
@@ -112,7 +113,7 @@ def get_sdk_client(spec: ProviderSpec) -> AsyncOpenAI:
     if spec.name not in _clients:
         api_key = _setting(spec, "API_KEY")
         if not api_key:
-            raise RuntimeError(f"{spec.settings_prefix}_API_KEY is not configured")
+            raise AiLayerConfigError(f"{spec.settings_prefix}_API_KEY is not configured")
         kwargs: Dict[str, Any] = {"api_key": api_key}
         if spec.base_url:
             kwargs["base_url"] = spec.base_url
@@ -501,7 +502,7 @@ class ConfiguredLLM(BaseLLM):
     Returns:
         (List[List[float]]) Kết quả trả về."""
         if not self._spec.supports_embeddings:
-            raise RuntimeError(
+            raise AiLayerValidationError(
                 f"{self.name} provider does not support embeddings — use task=embedding (openai)"
             )
         if not texts:

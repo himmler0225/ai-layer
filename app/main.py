@@ -11,6 +11,7 @@ from fastapi.exceptions import HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import app.config.settings as settings
+from app.exceptions import AiLayerConfigError, AiLayerError
 from app.api.admin import router as admin_router
 from app.api.agent import router as agent_router
 from app.api.history import router as history_router
@@ -107,18 +108,18 @@ async def lifespan(_app: FastAPI):
     from app.config.remote import load_and_apply
     await load_and_apply()
     if not settings.API_KEYS:
-        raise RuntimeError('API_KEYS must be set before starting ai-layer')
+        raise AiLayerConfigError('API_KEYS must be set before starting ai-layer')
     if not settings.DATA_MINER_URL or not settings.DATA_MINER_KEY:
-        raise RuntimeError('DATA_MINER_URL and DATA_MINER_KEY must be configured')
+        raise AiLayerConfigError('DATA_MINER_URL and DATA_MINER_KEY must be configured')
     if settings.APP_ENV != 'development' and not settings.DATA_MINER_SERVICE_TOKEN:
-        raise RuntimeError('DATA_MINER_SERVICE_TOKEN must be configured')
+        raise AiLayerConfigError('DATA_MINER_SERVICE_TOKEN must be configured')
     from app.cache.client import get_redis
     from app.config.db.session import close_engine, init_db
     try:
         await init_db()
     except Exception as exc:
         logger.error('[db] init failed: %s', exc)
-        raise RuntimeError(f'Database initialization failed: {exc}') from exc
+        raise AiLayerConfigError(f'Database initialization failed: {exc}', cause=exc) from exc
     await get_redis()
     await _start_config_refresher()
     from app.ingest.producer.publisher import close_producer, init_producer
@@ -138,6 +139,14 @@ app.add_middleware(CORSMiddleware, allow_origins=settings.CORS_ORIGINS, allow_cr
 app.add_middleware(GeoIPMiddleware)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
+
+@app.exception_handler(AiLayerError)
+async def ai_layer_error_handler(_request: Request, exc: AiLayerError) -> JSONResponse:
+    """Global handler for ai-layer domain errors."""
+    return JSONResponse(
+        status_code=exc.http_status,
+        content=ApiResponse.fail(exc.message).model_dump(),
+    )
 
 @app.exception_handler(HTTPException)
 async def http_exception_handler(_request: Request, exc: HTTPException) -> JSONResponse:

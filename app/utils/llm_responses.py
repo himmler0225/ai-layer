@@ -9,7 +9,6 @@ from app.config.logger import Logger
 
 logger = Logger.get(__name__)
 
-
 def extract_response_text(response: Any) -> str:
     if isinstance(response, LLMResponse):
         if response.output_text:

@@ -2,6 +2,7 @@ import json
 from typing import Dict, List
 from app.clients import data_miner
 from app.config.logger import Logger
+from app.exceptions import AiLayerUpstreamError
 from app.utils.openai_responses import complete_json
 logger = Logger.get(__name__)
 _SYSTEM = 'You are an AI assistant analyzing YouTube content.\nBe concise. Always respond in the same language as the video content when possible.'
@@ -19,7 +20,7 @@ def _parse_json(raw: str, context: str) -> Dict:
         return json.loads(raw)
     except (json.JSONDecodeError, TypeError) as e:
         logger.error('[youtube] json parse failed context=%s error=%s raw=%s', context, e, raw[:200])
-        raise ValueError(f'ChatGPT returned invalid JSON in {context}: {e}') from e
+        raise AiLayerUpstreamError(f'ChatGPT returned invalid JSON in {context}: {e}', cause=e) from e
 
 async def summarize_video(video_id: str) -> Dict:
     """Tóm tắt video (async).

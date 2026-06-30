@@ -2,6 +2,7 @@ from __future__ import annotations
 import json
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
+from app.exceptions import AiLayerConfigError
 import app.config.settings as settings
 from app.config.logger import Logger
 from app.config.db.models import Base
@@ -16,7 +17,7 @@ def _database_url() -> str:
         (str) Kết quả trả về."""
     url = settings.DATABASE_URL
     if not url:
-        raise RuntimeError('DATABASE_URL is not configured')
+        raise AiLayerConfigError('DATABASE_URL is not configured')
     if url.startswith('postgresql://'):
         return url.replace('postgresql://', 'postgresql+asyncpg://', 1)
     if url.startswith('postgres://'):

@@ -1,5 +1,6 @@
 from typing import Literal
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, Request
+from app.exceptions import AiLayerUpstreamError
 from pydantic import BaseModel, HttpUrl
 from app.config.rate_limits import qr_rate_limit, shorten_rate_limit
 from app.middleware.auth import verify_api_key
@@ -31,7 +32,7 @@ async def shorten(request: Request, body: ShortenRequest):
         body: (ShortenRequest) Tham số `body`."""
     result = await shorten_url(str(body.url), provider=body.provider)
     if 'error' in result:
-        raise HTTPException(status_code=502, detail=result['error'])
+        raise AiLayerUpstreamError(result['error'])
     return ApiResponse.ok(result)
 
 @router.post('/qr', summary='Tạo mã QR từ URL')
@@ -42,7 +43,4 @@ async def qr_code(request: Request, body: QRRequest):
     Args:
         request: (Request) Tham số `request`.
         body: (QRRequest) Tham số `body`."""
-    try:
-        return ApiResponse.ok(await generate_qr(url=str(body.url), size=body.size, theme=body.theme, rounded=body.rounded))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    return ApiResponse.ok(await generate_qr(url=str(body.url), size=body.size, theme=body.theme, rounded=body.rounded))

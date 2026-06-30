@@ -1,6 +1,7 @@
 from __future__ import annotations
 import uuid
 from typing import Any, Dict, List, Optional
+from app.exceptions import AiLayerAgentError, AiLayerConfigError
 from app.services.agent import config
 from app.services.agent.finalize import finish
 from app.services.agent.platform import prepare_tools_for_task
@@ -36,7 +37,7 @@ async def bootstrap_agent(task: str, tools: List[Dict], system: Optional[str], m
     import app.services.prompts as _prompts
     resolved_system = system or _prompts.AGENT_SYSTEM
     if not (resolved_system or '').strip():
-        raise ValueError('AGENT_SYSTEM chưa cấu hình — thêm key trên Supabase config')
+        raise AiLayerConfigError('AGENT_SYSTEM chưa cấu hình — thêm key trên Supabase config')
     prepared = await prepare_tools_for_task(tools, task)
     return new_context(task=task, tools=prepared, system=resolved_system, max_iter=max_iter)
 
@@ -166,7 +167,7 @@ async def handle_incomplete_sync(ctx: Dict[str, Any], response: Any, iteration: 
     partial = extract_response_text(response)
     if partial:
         return await finish_agent(ctx, iteration=iteration, final_text=partial)
-    raise RuntimeError(f'Model hit max_output_tokens at iteration {iteration} without text.')
+    raise AiLayerAgentError(f'Model hit max_output_tokens at iteration {iteration} without text.')
 
 def video_preview(tool_call_log: List[Dict]) -> List[Dict]:
     """Video preview.

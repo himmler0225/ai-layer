@@ -9,6 +9,7 @@ from app.ai.router import TASK_AGENT_SYNTH
 from app.config.logger import Logger
 from app.services.agent import config
 from app.services.agent.serialize import serialize_result
+from app.exceptions import AiLayerLLMError
 from app.utils.llm_errors import is_upstream_gateway_error, log_error, user_message
 from app.utils.llm_responses import (
     create_response,
@@ -132,15 +133,15 @@ async def run_synthesis(
                 )
                 continue
             log_error(logger, exc, where="synthesis")
-            raise RuntimeError(user_message(exc)) from exc
+            raise AiLayerLLMError(user_message(exc), cause=exc) from exc
 
         err = status_error(response)
         if err:
-            raise RuntimeError(err)
+            raise AiLayerLLMError(err)
         return extract_response_text(response)
 
-    log_error(logger, last_exc or RuntimeError("synthesis failed"), where="synthesis")
-    raise RuntimeError(user_message(last_exc or RuntimeError("synthesis failed"))) from last_exc
+    log_error(logger, last_exc or AiLayerLLMError("synthesis failed"), where="synthesis")
+    raise AiLayerLLMError(user_message(last_exc or AiLayerLLMError("synthesis failed")), cause=last_exc) from last_exc
 
 
 async def iter_synthesis_deltas(
@@ -183,7 +184,7 @@ async def iter_synthesis_deltas(
                 )
                 continue
             log_error(logger, exc, where="synthesis_stream")
-            raise RuntimeError(user_message(exc)) from exc
+            raise AiLayerLLMError(user_message(exc), cause=exc) from exc
 
-    log_error(logger, last_exc or RuntimeError("synthesis_stream failed"), where="synthesis_stream")
-    raise RuntimeError(user_message(last_exc or RuntimeError("synthesis_stream failed"))) from last_exc
+    log_error(logger, last_exc or AiLayerLLMError("synthesis_stream failed"), where="synthesis_stream")
+    raise AiLayerLLMError(user_message(last_exc or AiLayerLLMError("synthesis_stream failed")), cause=last_exc) from last_exc
