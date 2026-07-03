@@ -1,7 +1,5 @@
 """Alembic env — async SQLAlchemy; URL từ DATABASE_URL."""
 
-from __future__ import annotations
-
 import asyncio
 from logging.config import fileConfig
 

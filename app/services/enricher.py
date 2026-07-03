@@ -1,7 +1,3 @@
-from __future__ import annotations
-
-from typing import Dict, List
-
 from app.services.enricher_collect import (
     collect_tool_results,
     detect_source_label,
@@ -12,12 +8,12 @@ from app.services.review_summarizer import summarize_reviews
 
 async def enrich_agent_result(
     result_text: str,
-    tool_calls: List[Dict],
+    tool_calls: list[dict],
     iterations: int,
     task: str = "",
     *,
     include_summary: bool = True,
-) -> Dict:
+) -> dict:
     """Bổ sung metadata UI sau khi agent hoàn tất."""
     all_reviews, all_videos, sources = collect_tool_results(tool_calls)
     source_label = detect_source_label(tool_calls)

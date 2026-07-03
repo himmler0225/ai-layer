@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import httpx
 
 import app.config.settings as settings
@@ -32,11 +30,7 @@ async def load_and_apply() -> None:
             if not response.is_success:
                 validate_required(schema)
                 return
-            remote = {
-                row["key"]: row["value"]
-                for row in response.json()
-                if row.get("value")
-            }
+            remote = {row["key"]: row["value"] for row in response.json() if row.get("value")}
     except Exception:
         validate_required(schema)
         return

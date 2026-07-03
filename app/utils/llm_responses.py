@@ -1,13 +1,13 @@
-from __future__ import annotations
-
 from contextlib import asynccontextmanager
-from typing import Any, AsyncIterator, Dict, List, Optional
+from typing import Any
+from collections.abc import AsyncIterator
 
 from app.ai.router import TASK_DEFAULT, get_router
 from app.ai.types import LLMResponse
 from app.config.logger import Logger
 
 logger = Logger.get(__name__)
+
 
 def extract_response_text(response: Any) -> str:
     if isinstance(response, LLMResponse):
@@ -40,14 +40,14 @@ def is_incomplete_for(reason: str, response: Any) -> bool:
     )
 
 
-def status_error(response: Any) -> Optional[str]:
+def status_error(response: Any) -> str | None:
     status = getattr(response, "status", None)
     if status in ("failed", "cancelled"):
         return f"LLM response {status}: {getattr(response, 'error', None)}"
     return None
 
 
-def output_item_to_input(item: Any) -> Dict:
+def output_item_to_input(item: Any) -> dict:
     item_type = getattr(item, "type", None)
     if item_type == "function_call":
         return {
@@ -72,21 +72,21 @@ def output_item_to_input(item: Any) -> Dict:
     return dumped
 
 
-def output_items_to_input(output: List[Any]) -> List[Dict]:
+def output_items_to_input(output: list[Any]) -> list[dict]:
     return [output_item_to_input(item) for item in output]
 
 
 async def create_response(
     *,
     task: str = TASK_DEFAULT,
-    model: Optional[str] = None,
-    instructions: Optional[str] = None,
+    model: str | None = None,
+    instructions: str | None = None,
     input: Any = None,
-    max_output_tokens: Optional[int] = None,
-    tools: Optional[List[Dict]] = None,
-    tool_choice: Optional[str] = None,
+    max_output_tokens: int | None = None,
+    tools: list[dict] | None = None,
+    tool_choice: str | None = None,
 ) -> Any:
-    kwargs: Dict[str, Any] = {}
+    kwargs: dict[str, Any] = {}
     if model is not None:
         kwargs["model"] = model
     if instructions is not None:
@@ -103,9 +103,7 @@ async def create_response(
 
 
 @asynccontextmanager
-async def response_stream_with_retry(
-    *, task: str = TASK_DEFAULT, **kwargs: Any
-) -> AsyncIterator[Any]:
+async def response_stream(*, task: str = TASK_DEFAULT, **kwargs: Any) -> AsyncIterator[Any]:
     async with get_router().response_stream(task, **kwargs) as stream:
         yield stream
 
@@ -113,8 +111,8 @@ async def response_stream_with_retry(
 async def complete(
     user_prompt: str,
     system_prompt: str,
-    max_tokens: Optional[int] = None,
-    model: Optional[str] = None,
+    max_tokens: int | None = None,
+    model: str | None = None,
     *,
     task: str = TASK_DEFAULT,
 ) -> str:
@@ -130,8 +128,8 @@ async def complete(
 async def complete_json(
     user_prompt: str,
     system_prompt: str,
-    max_tokens: Optional[int] = None,
-    model: Optional[str] = None,
+    max_tokens: int | None = None,
+    model: str | None = None,
     *,
     task: str = TASK_DEFAULT,
 ) -> str:

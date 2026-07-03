@@ -1,10 +1,16 @@
+import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from openai import APIStatusError
 
 from app.services.agent.engine import process_agent_step, tool_round_action
-from app.services.agent.synthesis import _should_fallback_synth, synth_models_to_try
+from app.services.agent.synthesis import (
+    _is_stream_open_failure,
+    _should_fallback_synth,
+    iter_synthesis_deltas,
+    synth_models_to_try,
+)
 from app.utils.llm_errors import is_upstream_gateway_error, user_message
 
 
@@ -113,3 +119,49 @@ def test_user_message_502_mentions_gateway():
     exc = _make_status_error(502, {"error": {"message": "AI gateway upstream đang lỗi."}})
     msg = user_message(exc)
     assert "502" in msg
+
+
+def test_is_stream_open_failure():
+    assert _is_stream_open_failure(json.JSONDecodeError("Expecting value", "", 0)) is True
+    assert _is_stream_open_failure(ValueError("Expecting value: line 1 column 1 (char 0)")) is True
+    assert _is_stream_open_failure(RuntimeError("timeout")) is False
+
+
+@pytest.mark.asyncio
+async def test_iter_synthesis_deltas_falls_back_to_non_stream(monkeypatch):
+    import app.services.agent.config as cfg
+
+    monkeypatch.setattr(cfg, "synth_model", lambda: "big-model")
+    monkeypatch.setattr(cfg, "tool_model", lambda: "small-model")
+    monkeypatch.setattr(cfg, "synth_max_tokens", lambda: 1024)
+
+    stream_ctx = AsyncMock()
+    stream_ctx.__aenter__.return_value = _empty_async_iter()
+    stream_ctx.__aexit__.return_value = None
+
+    with patch(
+        "app.services.agent.synthesis.response_stream",
+        return_value=stream_ctx,
+    ) as mock_stream:
+        mock_stream.side_effect = json.JSONDecodeError("Expecting value", "", 0)
+        with patch(
+            "app.services.agent.synthesis.run_synthesis",
+            new_callable=AsyncMock,
+            return_value="final answer",
+        ) as mock_run:
+            chunks = [
+                delta
+                async for delta in iter_synthesis_deltas(
+                    system="sys",
+                    task="hello",
+                    tool_call_log=[{"tool": "t", "inputs": {}, "result": {"ok": True}}],
+                )
+            ]
+
+    assert chunks == ["final answer"]
+    assert mock_run.await_count == 1
+
+
+async def _empty_async_iter():
+    if False:
+        yield ""

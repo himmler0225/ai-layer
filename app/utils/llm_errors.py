@@ -1,12 +1,10 @@
-from __future__ import annotations
-
+import json
 import logging
-from typing import Optional
 
 from openai import APIError, APIStatusError, APITimeoutError, RateLimitError
 
 
-def request_id(exc: Exception) -> Optional[str]:
+def request_id(exc: Exception) -> str | None:
     rid = getattr(exc, "request_id", None)
     if rid:
         return str(rid)
@@ -32,8 +30,7 @@ def user_message(exc: Exception) -> str:
             return "API key LLM sai hoặc hết hạn — kiểm tra Supabase AI_MODELS / .env."
         if code == 402 or "quota" in raw.lower() or "billing" in raw.lower():
             return (
-                f"Hết quota hoặc billing LLM provider — kiểm tra key/plan "
-                f"(đặt LLM_DEFAULT_PROVIDER=xah nếu chỉ dùng XAH).{tag}"
+                f"Hết quota hoặc billing LLM provider — kiểm tra key/plan hoặc bật provider khác trong AI_MODELS.{tag}"
             )
         if code in (502, 503, 504):
             return (
@@ -48,21 +45,38 @@ def user_message(exc: Exception) -> str:
                     "Model synthesis từ chối request (context quá dài hoặc model upstream lỗi). "
                     f"Thử hỏi ngắn hơn hoặc giảm số vòng tool.{tag}"
                 )
-            return (
-                f"LLM không xử lý được request (prompt/context quá nặng). "
-                f"Thử hỏi ngắn hơn.{tag}"
-            )
+            return f"LLM không xử lý được request (prompt/context quá nặng). Thử hỏi ngắn hơn.{tag}"
     if isinstance(exc, APIError):
         raw = str(exc)
         if "quota" in raw.lower() or "billing" in raw.lower():
             return (
-                f"Hết quota hoặc billing LLM provider — kiểm tra key/plan "
-                f"(đặt LLM_DEFAULT_PROVIDER=xah nếu chỉ dùng XAH).{tag}"
+                f"Hết quota hoặc billing LLM provider — kiểm tra key/plan hoặc bật provider khác trong AI_MODELS.{tag}"
             )
         if "error occurred while processing" in raw.lower():
             return f"LLM crash giữa chừng — thử lại. Nếu lặp lại, báo dev kèm mã lỗi.{tag}"
         return f"Lỗi LLM: {raw[:200]}{tag}"
     return f"Lỗi không xác định: {exc}{tag}"
+
+
+def _is_connection_drop(exc: Exception) -> bool:
+    """SSE/body rỗng, TCP reset, gateway đóng giữa chừng."""
+    if isinstance(exc, (ConnectionError, TimeoutError, json.JSONDecodeError)):
+        return True
+    if isinstance(exc, OSError) and getattr(exc, "errno", None) in (54, 104, 110, 111):
+        # ECONNRESET, ECONNREFUSED, ETIMEDOUT, ECONNREFUSED (platform-dependent)
+        return True
+    msg = str(exc).lower()
+    needles = (
+        "connection reset",
+        "connection aborted",
+        "connection closed",
+        "broken pipe",
+        "expecting value",
+        "incomplete read",
+        "disconnected",
+        "remote end closed",
+    )
+    return any(n in msg for n in needles)
 
 
 def should_retry(exc: Exception) -> bool:
@@ -74,6 +88,8 @@ def should_retry(exc: Exception) -> bool:
         503,
         504,
     ):
+        return True
+    if _is_connection_drop(exc):
         return True
     return False
 

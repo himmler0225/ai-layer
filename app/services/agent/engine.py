@@ -1,7 +1,5 @@
-from __future__ import annotations
-
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Literal
+from typing import Any, Literal
 
 from app.services.agent.guards import should_force_synthesis
 from app.services.agent.loop import (
@@ -20,12 +18,12 @@ class AgentStepOutcome:
     """Kết quả một vòng LLM sau khi xử lý tool / synthesis decision."""
 
     action: Action
-    call_items: List[Any] = field(default_factory=list)
+    call_items: list[Any] = field(default_factory=list)
     final_text: str = ""
     response: Any = None
 
 
-def tool_round_action(ctx: Dict[str, Any], iteration: int) -> ToolRoundAction:
+def tool_round_action(ctx: dict[str, Any], iteration: int) -> ToolRoundAction:
     """Sau khi tool round hoàn tất — có nên ép synthesis không."""
     if should_force_synthesis(ctx["tool_call_log"], iteration, ctx["max_iter"]):
         return "force_synthesis"
@@ -33,7 +31,7 @@ def tool_round_action(ctx: Dict[str, Any], iteration: int) -> ToolRoundAction:
 
 
 async def process_agent_step(
-    ctx: Dict[str, Any],
+    ctx: dict[str, Any],
     response: Any,
     iteration: int,
 ) -> AgentStepOutcome:

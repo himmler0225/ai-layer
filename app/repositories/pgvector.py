@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 def vector_literal(vec: list[float]) -> str:
     """Vector literal.
 
@@ -8,4 +6,4 @@ def vector_literal(vec: list[float]) -> str:
 
     Returns:
         (str) Kết quả trả về."""
-    return '[' + ','.join((f'{v:.8f}' for v in vec)) + ']'
+    return "[" + ",".join(f"{v:.8f}" for v in vec) + "]"

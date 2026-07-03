@@ -96,9 +96,7 @@ def test_search_budget_message_includes_video_ids():
 
 
 def test_tool_signature_stable():
-    assert tool_signature("youtube_search", {"keyword": "x"}) == tool_signature(
-        "youtube_search", {"keyword": "x"}
-    )
+    assert tool_signature("youtube_search", {"keyword": "x"}) == tool_signature("youtube_search", {"keyword": "x"})
 
 
 def test_count_tool_name():

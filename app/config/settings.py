@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import os
 from typing import Any
 
@@ -22,8 +20,7 @@ def _env_list(key: str, default: str = "") -> list[str]:
 
 APP_ENV: str = os.getenv("APP_ENV", "development")
 LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
-# Khi set (vd. xah): mọi task LLM dùng một provider. Embedding: LLM_EMBEDDING_PROVIDER hoặc cùng default.
-LLM_DEFAULT_PROVIDER: str = os.getenv("LLM_DEFAULT_PROVIDER", "").strip().lower()
+# Embedding: LLM_EMBEDDING_PROVIDER hoặc cùng provider đang active trong AI_MODELS.
 LLM_EMBEDDING_PROVIDER: str = os.getenv("LLM_EMBEDDING_PROVIDER", "").strip().lower()
 API_KEYS: list[str] = _env_list("API_KEYS")
 CORS_ORIGINS: list[str] = _env_list("CORS_ORIGINS", "http://localhost:3000")
@@ -53,6 +50,22 @@ GEOIP_CACHE_MAX: int = int(os.getenv("GEOIP_CACHE_MAX", "500"))
 AGENT_BACKEND: str = os.getenv("AGENT_BACKEND", "")
 
 MOVIE_DEFAULT_PROVIDER: str = os.getenv("MOVIE_DEFAULT_PROVIDER", "kkphim").strip().lower()
+
+
+from app.ingest.config import (
+    INGEST_ENABLED,
+    INGEST_WORKER_INLINE,
+    RABBITMQ_EXCHANGE,
+    RABBITMQ_URL,
+)
+from app.rag.config import (
+    CACHE_TTL_DAYS,
+    EMBEDDING_DIM,
+    EMBEDDING_MODEL,
+    RAG_ENABLED,
+    RAG_MIN_SCORE,
+    RAG_TOP_K,
+)
 
 _REMOTE: dict[str, Any] = {}
 _remote_ready = False

@@ -1,7 +1,6 @@
-from __future__ import annotations
-
 import json
-from typing import Any, AsyncGenerator, Dict, List
+from typing import Any
+from collections.abc import AsyncGenerator
 
 import app.config.settings as settings
 import app.services.prompts as _prompts
@@ -14,7 +13,7 @@ from app.utils.llm_errors import is_upstream_gateway_error, log_error, user_mess
 from app.utils.llm_responses import (
     create_response,
     extract_response_text,
-    response_stream_with_retry,
+    response_stream,
     status_error,
 )
 
@@ -28,7 +27,7 @@ def _synth_input_budget() -> int:
     return min(max(base * 3, 12_000), _DEFAULT_SYNTH_INPUT_CHARS)
 
 
-def models_with_fallback(primary: str, fallback: str | None = None) -> List[str]:
+def models_with_fallback(primary: str, fallback: str | None = None) -> list[str]:
     """Danh sách model thử: primary rồi fallback (thường là tool_model)."""
     fb = fallback or config.tool_model()
     if primary != fb:
@@ -36,14 +35,14 @@ def models_with_fallback(primary: str, fallback: str | None = None) -> List[str]
     return [primary]
 
 
-def synth_models_to_try() -> List[str]:
+def synth_models_to_try() -> list[str]:
     return models_with_fallback(config.synth_model())
 
 
-def build_synthesis_input(task: str, tool_call_log: List[Dict[str, Any]]) -> List[Dict[str, str]]:
+def build_synthesis_input(task: str, tool_call_log: list[dict[str, Any]]) -> list[dict[str, str]]:
     """Gom kết quả tool thành một user message gọn cho bước synthesis."""
     budget = _synth_input_budget()
-    blocks: List[str] = []
+    blocks: list[str] = []
     used = 0
 
     for entry in tool_call_log:
@@ -70,8 +69,7 @@ def build_synthesis_input(task: str, tool_call_log: List[Dict[str, Any]]) -> Lis
         content = (
             f"Câu hỏi người dùng:\n{task.strip()}\n\n"
             f"Dữ liệu từ {len(tool_call_log)} lần gọi tool "
-            f"(hiển thị {len(blocks)}, đã rút gọn):\n\n"
-            + "\n".join(blocks)
+            f"(hiển thị {len(blocks)}, đã rút gọn):\n\n" + "\n".join(blocks)
         )
 
     return [{"role": "user", "content": content}]
@@ -98,11 +96,18 @@ def _should_fallback_synth(exc: Exception, model: str) -> bool:
     return is_upstream_gateway_error(exc)
 
 
+def _is_stream_open_failure(exc: Exception) -> bool:
+    """Upstream trả body rỗng / không phải SSE — OpenAI SDK báo JSONDecodeError."""
+    if isinstance(exc, json.JSONDecodeError):
+        return True
+    return "expecting value" in str(exc).lower()
+
+
 async def run_synthesis(
     *,
     system: str,
     task: str,
-    tool_call_log: List[Dict[str, Any]],
+    tool_call_log: list[dict[str, Any]],
 ) -> str:
     input_items = build_synthesis_input(task, tool_call_log)
     instructions = synthesis_instructions(system)
@@ -148,8 +153,8 @@ async def iter_synthesis_deltas(
     *,
     system: str,
     task: str,
-    tool_call_log: List[Dict[str, Any]],
-) -> AsyncGenerator[str, None]:
+    tool_call_log: list[dict[str, Any]],
+) -> AsyncGenerator[str]:
     input_items = build_synthesis_input(task, tool_call_log)
     instructions = synthesis_instructions(system)
     models = synth_models_to_try()
@@ -163,7 +168,7 @@ async def iter_synthesis_deltas(
             model,
         )
         try:
-            async with response_stream_with_retry(
+            async with response_stream(
                 task=TASK_AGENT_SYNTH,
                 model=model,
                 max_output_tokens=config.synth_max_tokens(),
@@ -176,15 +181,37 @@ async def iter_synthesis_deltas(
             return
         except Exception as exc:
             last_exc = exc
-            if idx < len(models) - 1 and _should_fallback_synth(exc, model):
+            can_try_next = idx < len(models) - 1 and (
+                _should_fallback_synth(exc, model) or _is_stream_open_failure(exc)
+            )
+            if can_try_next:
                 logger.warning(
-                    "[agent] synthesis_stream fallback model=%s -> %s",
+                    "[agent] synthesis_stream fallback model=%s -> %s (%s)",
                     model,
                     models[idx + 1],
+                    exc,
                 )
                 continue
             log_error(logger, exc, where="synthesis_stream")
-            raise AiLayerLLMError(user_message(exc), cause=exc) from exc
+            break
 
-    log_error(logger, last_exc or AiLayerLLMError("synthesis_stream failed"), where="synthesis_stream")
-    raise AiLayerLLMError(user_message(last_exc or AiLayerLLMError("synthesis_stream failed")), cause=last_exc) from last_exc
+    # Một số gateway (vd. xah + claude-opus) trả body rỗng khi stream:true
+    # nhưng non-stream vẫn OK — fallback giữ UX stream endpoint sống.
+    logger.warning(
+        "[agent] synthesis_stream unavailable (%s), falling back to non-stream synthesis",
+        last_exc,
+    )
+    try:
+        text = await run_synthesis(
+            system=system,
+            task=task,
+            tool_call_log=tool_call_log,
+        )
+    except Exception as exc:
+        if last_exc is not None:
+            raise AiLayerLLMError(user_message(last_exc), cause=last_exc) from exc
+        log_error(logger, exc, where="synthesis_stream")
+        raise AiLayerLLMError(user_message(exc), cause=exc) from exc
+
+    if text:
+        yield text

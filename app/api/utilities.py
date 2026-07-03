@@ -8,21 +8,27 @@ from app.middleware.rate_limit import limiter
 from app.schemas.response import ApiResponse
 from app.utilities.qr_generator import generate_qr
 from app.utilities.url_shortener import shorten_url
-router = APIRouter(prefix='/utilities', dependencies=[Depends(verify_api_key)])
+
+router = APIRouter(prefix="/utilities", dependencies=[Depends(verify_api_key)])
+
 
 class ShortenRequest(BaseModel):
-    """    Lớp `ShortenRequest` (kế thừa BaseModel)."""
+    """Lớp `ShortenRequest` (kế thừa BaseModel)."""
+
     url: HttpUrl
-    provider: Literal['tinyurl', 'isgd'] = 'tinyurl'
+    provider: Literal["tinyurl", "isgd"] = "tinyurl"
+
 
 class QRRequest(BaseModel):
-    """    Lớp `QRRequest` (kế thừa BaseModel)."""
+    """Lớp `QRRequest` (kế thừa BaseModel)."""
+
     url: HttpUrl
     size: int = 10
-    theme: Literal['default', 'green', 'dark'] = 'default'
+    theme: Literal["default", "green", "dark"] = "default"
     rounded: bool = True
 
-@router.post('/shorten', summary='Rút gọn URL')
+
+@router.post("/shorten", summary="Rút gọn URL")
 @limiter.limit(shorten_rate_limit)
 async def shorten(request: Request, body: ShortenRequest):
     """Shorten `shorten` (async).
@@ -31,11 +37,12 @@ async def shorten(request: Request, body: ShortenRequest):
         request: (Request) Tham số `request`.
         body: (ShortenRequest) Tham số `body`."""
     result = await shorten_url(str(body.url), provider=body.provider)
-    if 'error' in result:
-        raise AiLayerUpstreamError(result['error'])
+    if "error" in result:
+        raise AiLayerUpstreamError(result["error"])
     return ApiResponse.ok(result)
 
-@router.post('/qr', summary='Tạo mã QR từ URL')
+
+@router.post("/qr", summary="Tạo mã QR từ URL")
 @limiter.limit(qr_rate_limit)
 async def qr_code(request: Request, body: QRRequest):
     """Qr code (async).

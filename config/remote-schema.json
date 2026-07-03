@@ -26,10 +26,13 @@
         "providers": {
           "openai": "OPENAI",
           "deepseek": "DEEP_SEEK",
-          "xah": "XAH"
+          "xah": "XAH",
+          "kira": "KIRA"
         },
-        "string_fields": ["api_key", "model", "tool_model"],
-        "int_fields": ["max_tokens", "tool_max_tokens"]
+        "id_field": "id",
+        "string_fields": ["api_key", "base_url", "model", "tool_model"],
+        "int_fields": ["max_tokens", "tool_max_tokens"],
+        "skip_fields": ["is_active"]
       },
       "store": "models"
     },
@@ -62,12 +65,7 @@
             "key": "str",
             "timeout": "int",
             "service_token": "str"
-          },
-          "rabbitmq": { "url": "str", "exchange": "str" },
-          "ingest": { "enabled": "bool", "worker_inline": "bool" },
-          "embedding": { "model": "str", "dim": "int" },
-          "rag": { "enabled": "bool", "top_k": "int", "min_score": "float" },
-          "cache": { "ttl_days": "int" }
+          }
         }
       },
       "store": "services"
@@ -82,13 +80,6 @@
     }
   },
   "required": [
-    "OPENAI_API_KEY",
-    "OPENAI_MODEL",
-    "DEEP_SEEK_API_KEY",
-    "DEEP_SEEK_MODEL",
-    "XAH_API_KEY",
-    "XAH_MODEL",
-    "OPENAI_MAX_TOKENS",
     "AGENT_MAX_ITER",
     "AGENT_SYSTEM",
     "REVIEW_SUMMARY_SYSTEM",
@@ -106,8 +97,10 @@
       "agent": ["AI_AGENT"],
       "limits": ["RATE_LIMIT"],
       "prompts": ["PROMPTS"],
-      "services": ["SERVICES"]
+      "services": ["SERVICES"],
+      "miner": ["PROXY_POOLS"]
     },
+    "standalone_keys": [],
     "json_keys": ["AI_AGENT", "AI_MODELS", "PROMPTS", "RATE_LIMIT", "SERVICES"],
     "secret_keys": ["AI_MODELS", "SERVICES"],
     "long_text_keys": ["PROMPTS"]

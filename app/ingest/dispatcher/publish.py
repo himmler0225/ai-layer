@@ -1,11 +1,22 @@
-from __future__ import annotations
 from typing import Any
 from app.ingest.mappers.comment import map_comment
 from app.ingest.mappers.unwrap import extract_search_query, video_list
 from app.ingest.mappers.video import map_tiktok_video, map_youtube_video
 from app.ingest.producer.publisher import publish
 from app.ingest.schemas import ROUTING_COMMENTS, ROUTING_TRANSCRIPT, ROUTING_VIDEO
-SEARCH_TOOLS = frozenset({'youtube_search', 'youtube_get_by_topic', 'youtube_get_shorts', 'youtube_get_live', 'youtube_get_by_region', 'youtube_get_channel_videos', 'tiktok_search'})
+
+SEARCH_TOOLS = frozenset(
+    {
+        "youtube_search",
+        "youtube_get_by_topic",
+        "youtube_get_shorts",
+        "youtube_get_live",
+        "youtube_get_by_region",
+        "youtube_get_channel_videos",
+        "tiktok_search",
+    }
+)
+
 
 def _map_video(raw: dict, platform: str) -> dict | None:
     """(Nội bộ) Map video.
@@ -16,11 +27,14 @@ def _map_video(raw: dict, platform: str) -> dict | None:
 
     Returns:
         (dict | None) Kết quả trả về."""
-    if platform == 'youtube':
+    if platform == "youtube":
         return map_youtube_video(raw)
     return map_tiktok_video(raw)
 
-async def publish_videos(videos: list[dict], *, platform: str, movie_hint: str, search_cache: dict | None=None) -> None:
+
+async def publish_videos(
+    videos: list[dict], *, platform: str, movie_hint: str, search_cache: dict | None = None
+) -> None:
     """Xuất bản videos (async).
 
     Args:
@@ -35,10 +49,13 @@ async def publish_videos(videos: list[dict], *, platform: str, movie_hint: str, 
         mapped = _map_video(raw, platform)
         if not mapped:
             continue
-        payload: dict[str, Any] = {'video': mapped}
+        payload: dict[str, Any] = {"video": mapped}
         if search_cache and index == 0:
-            payload['search_cache'] = search_cache
-        await publish(ROUTING_VIDEO, platform=mapped['platform'], video_id=mapped['id'], movie_hint=movie_hint, payload=payload)
+            payload["search_cache"] = search_cache
+        await publish(
+            ROUTING_VIDEO, platform=mapped["platform"], video_id=mapped["id"], movie_hint=movie_hint, payload=payload
+        )
+
 
 async def publish_search(inputs: dict, data: dict, platform: str, movie_hint: str) -> None:
     """Xuất bản search (async).
@@ -61,12 +78,13 @@ async def publish_search(inputs: dict, data: dict, platform: str, movie_hint: st
         for raw in videos:
             mapped = _map_video(raw, platform)
             if mapped:
-                ids.append(mapped['id'])
+                ids.append(mapped["id"])
         if ids:
-            search_cache = {'query': query, 'platform': platform, 'video_ids': ids}
+            search_cache = {"query": query, "platform": platform, "video_ids": ids}
     await publish_videos(videos, platform=platform, movie_hint=movie_hint, search_cache=search_cache)
 
-async def publish_comments(video_id: str, platform: str, comments: list[dict], movie_hint: str, url: str='') -> None:
+
+async def publish_comments(video_id: str, platform: str, comments: list[dict], movie_hint: str, url: str = "") -> None:
     """Xuất bản comments (async).
 
     Args:
@@ -82,9 +100,16 @@ async def publish_comments(video_id: str, platform: str, comments: list[dict], m
     mapped = [item for item in mapped if item]
     if not mapped:
         return
-    await publish(ROUTING_COMMENTS, platform=platform, video_id=video_id, movie_hint=movie_hint, payload={'video_id': video_id, 'platform': platform, 'comments': mapped, 'url': url})
+    await publish(
+        ROUTING_COMMENTS,
+        platform=platform,
+        video_id=video_id,
+        movie_hint=movie_hint,
+        payload={"video_id": video_id, "platform": platform, "comments": mapped, "url": url},
+    )
 
-async def publish_transcript(video_id: str, platform: str, text: str, movie_hint: str, language: str='') -> None:
+
+async def publish_transcript(video_id: str, platform: str, text: str, movie_hint: str, language: str = "") -> None:
     """Xuất bản transcript (async).
 
     Args:
@@ -98,4 +123,10 @@ async def publish_transcript(video_id: str, platform: str, text: str, movie_hint
         (None) Kết quả trả về."""
     if not video_id or not text:
         return
-    await publish(ROUTING_TRANSCRIPT, platform=platform, video_id=video_id, movie_hint=movie_hint, payload={'video_id': video_id, 'platform': platform, 'text': text, 'language': language})
+    await publish(
+        ROUTING_TRANSCRIPT,
+        platform=platform,
+        video_id=video_id,
+        movie_hint=movie_hint,
+        payload={"video_id": video_id, "platform": platform, "text": text, "language": language},
+    )

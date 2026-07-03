@@ -1,7 +1,6 @@
-from __future__ import annotations
-
 from dataclasses import dataclass, field, fields
-from typing import Any, Callable
+from typing import Any
+from collections.abc import Callable
 
 import app.config.settings as settings
 import app.services.prompts as prompts
@@ -18,7 +17,8 @@ logger = Logger.get(__name__)
 
 @dataclass
 class AgentConfig:
-    """    Lớp `AgentConfig` (kế thừa object)."""
+    """Lớp `AgentConfig` (kế thừa object)."""
+
     max_iter: int = 0
     max_comments: int = 0
     max_comment_len: int = 0
@@ -28,15 +28,18 @@ class AgentConfig:
 
 @dataclass
 class RuntimeConfig:
-    """    Lớp `RuntimeConfig` (kế thừa object)."""
+    """Lớp `RuntimeConfig` (kế thừa object)."""
+
     agent: AgentConfig = field(default_factory=AgentConfig)
-    models: dict[str, Any] = field(default_factory=dict)
+    models: list[dict[str, Any]] = field(default_factory=list)
+    active_provider: str | None = None
     prompts: dict[str, Any] = field(default_factory=dict)
     services: dict[str, Any] = field(default_factory=dict)
     rate_limit: dict[str, Any] = field(default_factory=dict)
 
 
 runtime = RuntimeConfig()
+config_parse_errors: dict[str, str] = {}
 
 
 def load_schema() -> dict[str, Any]:
@@ -57,14 +60,17 @@ def parse_remote(raw: dict[str, str]) -> dict[str, Any]:
         (dict[str, Any]) Kết quả trả về."""
     import json
 
+    config_parse_errors.clear()
     parsed: dict[str, Any] = {}
     for key, value in raw.items():
         if value is None:
             continue
         try:
             parsed[key] = json.loads(value)
-        except json.JSONDecodeError:
+        except json.JSONDecodeError as exc:
+            config_parse_errors[key] = str(exc)
             parsed[key] = value
+            logger.error("[remote_config] %s JSON invalid: %s", key, exc)
     return parsed
 
 
@@ -127,7 +133,7 @@ def _apply_flat_prefix(data: dict, bind: dict, key_schema: dict) -> None:
             else:
                 val = data[field_name]
             _set_module_value(bind["module"], f"{prefix}{_screaming(field_name)}", val)
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             logger.warning("[remote_config] invalid value %s.%s", prefix, field_name)
 
 
@@ -154,29 +160,65 @@ def _apply_group_field(data: dict, bind: dict) -> None:
             )
 
 
-def _apply_provider(data: dict, bind: dict) -> None:
+def _coerce_bool(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    return bool(value)
+
+
+def resolve_active_provider(data: dict | list) -> str | None:
+    """Provider có `is_active: true` trong AI_MODELS (chỉ lấy entry đầu tiên)."""
+    for provider_id, cfg in _normalize_provider_map(data).items():
+        if isinstance(cfg, dict) and _coerce_bool(cfg.get("is_active")):
+            return str(provider_id).strip().lower()
+    return None
+
+
+def _normalize_provider_map(data: dict | list) -> dict[str, dict]:
+    """Chuyển AI_MODELS dạng mảng `[{id, ...}]` hoặc object legacy `{id: {...}}` thành map."""
+    if isinstance(data, list):
+        out: dict[str, dict] = {}
+        for item in data:
+            if not isinstance(item, dict):
+                continue
+            provider_id = item.get("id") or item.get("provider")
+            if not provider_id:
+                continue
+            key = str(provider_id).strip().lower()
+            fields = {k: v for k, v in item.items() if k not in ("id", "provider") and v is not None}
+            out[key] = fields
+        return out
+    if isinstance(data, dict):
+        return {k: v for k, v in data.items() if isinstance(v, dict)}
+    return {}
+
+
+def _apply_provider(data: dict | list, bind: dict) -> None:
     """(Nội bộ) Áp dụng provider.
 
     Args:
-        data: (dict) Tham số `data`.
+        data: (dict | list) Tham số `data`.
         bind: (dict) Tham số `bind`.
 
     Returns:
         (None) Kết quả trả về."""
     providers = bind.get("providers") or {}
     int_fields = set(bind.get("int_fields") or [])
-    for provider, provider_data in data.items():
+    skip_fields = set(bind.get("skip_fields") or [])
+    for provider, provider_data in _normalize_provider_map(data).items():
         if not isinstance(provider_data, dict):
             continue
         prefix = providers.get(provider, _screaming(provider))
         for field_name, value in provider_data.items():
-            if value is None:
+            if field_name in skip_fields or value is None:
                 continue
             attr = f"{prefix}_{_screaming(field_name)}"
             try:
                 val = int(value) if field_name in int_fields else value
                 _set_module_value(bind["module"], attr, val)
-            except (TypeError, ValueError):
+            except TypeError, ValueError:
                 pass
 
 
@@ -265,9 +307,13 @@ def _store_runtime(key: str, data: Any, key_schema: dict) -> None:
                 if k in known and k in data and data[k] is not None
             }
         )
-    elif store in {"models", "prompts", "services", "rate_limit"} and isinstance(
-        data, dict
-    ):
+    elif store == "models":
+        if isinstance(data, list):
+            runtime.models = [item for item in data if isinstance(item, dict)]
+        elif isinstance(data, dict):
+            runtime.models = [{"id": k, **v} for k, v in data.items() if isinstance(v, dict)]
+        runtime.active_provider = resolve_active_provider(data)
+    elif store in {"prompts", "services", "rate_limit"} and isinstance(data, dict):
         setattr(runtime, store, data)
 
 
@@ -316,7 +362,7 @@ def apply_schema(parsed: dict[str, Any], schema: dict[str, Any]) -> None:
         bind_type = bind.get("type")
         if bind_type == "flat_prefix" and isinstance(data, dict):
             _apply_flat_prefix(data, bind, key_schema)
-        elif bind_type in _BINDERS and isinstance(data, dict):
+        elif bind_type in _BINDERS and (isinstance(data, dict) or (bind_type == "provider" and isinstance(data, list))):
             _BINDERS[bind_type](data, bind)
         mirror = key_schema.get("mirror")
         if mirror and isinstance(data, dict):
@@ -324,6 +370,10 @@ def apply_schema(parsed: dict[str, Any], schema: dict[str, Any]) -> None:
         _store_runtime(key, data, key_schema)
 
     apply_env_fallbacks(settings._REMOTE, schema)
+
+    from app.ai.factory import LLMFactory
+
+    LLMFactory.reset()
 
 
 def value_for_required(key: str, schema: dict[str, Any]) -> str | int:
@@ -340,6 +390,128 @@ def value_for_required(key: str, schema: dict[str, Any]) -> str | int:
     return getattr(settings, key, "")
 
 
+def _provider_prefix_map(schema: dict[str, Any]) -> dict[str, str]:
+    bind = (schema.get("keys", {}).get("AI_MODELS") or {}).get("bind") or {}
+    return bind.get("providers") or {}
+
+
+def provider_settings_prefix(provider_id: str, schema: dict[str, Any] | None = None) -> str:
+    """Map provider id (vd. deepseek) → settings prefix (vd. DEEP_SEEK)."""
+    if schema is None:
+        schema = load_schema()
+    key = (provider_id or "").strip().lower()
+    return _provider_prefix_map(schema).get(key, _screaming(key))
+
+
+def _provider_required_setting_keys(prefix: str) -> list[str]:
+    return [
+        f"{prefix}_API_KEY",
+        f"{prefix}_BASE_URL",
+        f"{prefix}_MODEL",
+        f"{prefix}_MAX_TOKENS",
+        f"{prefix}_TOOL_MODEL",
+        f"{prefix}_TOOL_MAX_TOKENS",
+    ]
+
+
+def _all_provider_setting_keys(schema: dict[str, Any]) -> set[str]:
+    keys: set[str] = set()
+    seen_prefixes: set[str] = set()
+    for provider_id in _provider_prefix_map(schema):
+        prefix = provider_settings_prefix(provider_id, schema)
+        if prefix in seen_prefixes:
+            continue
+        seen_prefixes.add(prefix)
+        keys.update(_provider_required_setting_keys(prefix))
+    for item in runtime.models:
+        if not isinstance(item, dict):
+            continue
+        provider_id = item.get("id")
+        if not provider_id:
+            continue
+        prefix = provider_settings_prefix(str(provider_id), schema)
+        if prefix in seen_prefixes:
+            continue
+        seen_prefixes.add(prefix)
+        keys.update(_provider_required_setting_keys(prefix))
+    return keys
+
+
+def _configured_provider_prefixes(schema: dict[str, Any]) -> list[str]:
+    configured: list[str] = []
+    seen: set[str] = set()
+    candidates = list(_provider_prefix_map(schema)) + [
+        str(item.get("id")) for item in runtime.models if isinstance(item, dict) and item.get("id")
+    ]
+    for provider_id in candidates:
+        prefix = provider_settings_prefix(provider_id, schema)
+        if prefix in seen:
+            continue
+        seen.add(prefix)
+        val = getattr(settings, f"{prefix}_API_KEY", None)
+        if str(val or "").strip():
+            configured.append(prefix)
+    return configured
+
+
+def _resolve_validation_prefix(schema: dict[str, Any]) -> str | None:
+    """Prefix settings của provider cần validate (theo is_active hoặc provider duy nhất có key)."""
+    active = (runtime.active_provider or "").strip().lower()
+    if active:
+        return provider_settings_prefix(active, schema)
+    configured = _configured_provider_prefixes(schema)
+    if len(configured) == 1:
+        return configured[0]
+    return None
+
+
+def collect_required_keys(schema: dict[str, Any]) -> list[str]:
+    """Danh sách key bắt buộc: base schema + provider đang active."""
+    skip = _all_provider_setting_keys(schema)
+    keys = [k for k in (schema.get("required") or []) if k not in skip]
+    prefix = _resolve_validation_prefix(schema)
+    if prefix:
+        keys.extend(_provider_required_setting_keys(prefix))
+    return keys
+
+
+_INT_PROVIDER_SUFFIXES = ("_MAX_TOKENS", "_TOOL_MAX_TOKENS")
+
+_LEGACY_REQUIRED_ALIASES = {
+    "AGENT_SYSTEM": "PROMPTS.agent.system",
+    "DATA_MINER_KEY": "SERVICES.data_miner.key",
+    "DATA_MINER_URL": "SERVICES.data_miner.url",
+}
+
+
+def _friendly_config_gaps(schema: dict[str, Any]) -> list[str]:
+    """Thiếu config theo đường dẫn admin (dễ sửa hơn tên env)."""
+    gaps: list[str] = []
+    for key, message in config_parse_errors.items():
+        gaps.append(f"{key} (JSON lỗi: {message})")
+
+    agent = (runtime.prompts.get("agent") or {}) if isinstance(runtime.prompts, dict) else {}
+    if not str(agent.get("system") or "").strip() and not str(getattr(settings, "AGENT_SYSTEM", "") or "").strip():
+        gaps.append("PROMPTS.agent.system")
+
+    services = runtime.services if isinstance(runtime.services, dict) else {}
+    data_miner = services.get("data_miner") or {}
+    if not isinstance(data_miner, dict):
+        data_miner = {}
+    if not str(data_miner.get("url") or getattr(settings, "DATA_MINER_URL", "") or "").strip():
+        gaps.append("SERVICES.data_miner.url")
+    if not str(data_miner.get("key") or getattr(settings, "DATA_MINER_KEY", "") or "").strip():
+        gaps.append("SERVICES.data_miner.key")
+
+    if "AI_MODELS" in config_parse_errors:
+        return gaps
+
+    if runtime.models and not runtime.active_provider:
+        gaps.append("AI_MODELS.is_active (chọn đúng một provider)")
+
+    return gaps
+
+
 def validate_required(schema: dict[str, Any]) -> None:
     """Kiểm tra required.
 
@@ -348,15 +520,28 @@ def validate_required(schema: dict[str, Any]) -> None:
 
     Returns:
         (None) Kết quả trả về."""
-    missing: list[str] = []
-    for key in schema.get("required") or []:
+    missing: list[str] = list(_friendly_config_gaps(schema))
+    skip_keys = {
+        "AGENT_SYSTEM",
+        "DATA_MINER_KEY",
+        "DATA_MINER_URL",
+    }
+
+    active = (runtime.active_provider or "").strip().lower()
+    configured = _configured_provider_prefixes(schema)
+    if not config_parse_errors.get("AI_MODELS") and active and not _resolve_validation_prefix(schema):
+        missing.append(f"AI_MODELS.is_active ({active})")
+    elif not config_parse_errors.get("AI_MODELS") and not _resolve_validation_prefix(schema) and len(configured) > 1:
+        missing.append("AI_MODELS.is_active")
+
+    for key in collect_required_keys(schema):
+        if key in skip_keys:
+            continue
         val = value_for_required(key, schema)
-        if isinstance(val, int):
-            if val <= 0 and key in {"AGENT_MAX_ITER", "OPENAI_MAX_TOKENS"}:
-                missing.append(key)
+        if key.endswith(_INT_PROVIDER_SUFFIXES) or key == "AGENT_MAX_ITER":
+            if not isinstance(val, int) or val <= 0:
+                missing.append(_LEGACY_REQUIRED_ALIASES.get(key, key))
         elif not str(val).strip():
-            missing.append(key)
+            missing.append(_LEGACY_REQUIRED_ALIASES.get(key, key))
     if missing:
-        raise AiLayerConfigError(
-            "Missing Supabase config keys: " + ", ".join(sorted(missing))
-        )
+        raise AiLayerConfigError("Missing Supabase config keys: " + ", ".join(sorted(set(missing))))

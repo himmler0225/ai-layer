@@ -1,16 +1,14 @@
-from __future__ import annotations
-
-from app.clients import data_miner
-
-MOVIE_LIST_TYPES = frozenset({
-    "phim-bo",
-    "phim-le",
-    "tv-shows",
-    "hoat-hinh",
-    "phim-vietsub",
-    "phim-thuyet-minh",
-    "phim-long-tieng",
-})
+MOVIE_LIST_TYPES = frozenset(
+    {
+        "phim-bo",
+        "phim-le",
+        "tv-shows",
+        "hoat-hinh",
+        "phim-vietsub",
+        "phim-thuyet-minh",
+        "phim-long-tieng",
+    }
+)
 
 _PROVIDER_PARAM = {
     "type": "string",
@@ -162,10 +160,7 @@ MOVIE_TOOLS = [
     {
         "type": "function",
         "name": "movie_get_metadata",
-        "description": (
-            "Lấy metadata thể loại hoặc quốc gia (slug dùng cho filter/list). "
-            "kind: genres | countries."
-        ),
+        "description": ("Lấy metadata thể loại hoặc quốc gia (slug dùng cho filter/list). kind: genres | countries."),
         "parameters": {
             "type": "object",
             "properties": {

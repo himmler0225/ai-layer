@@ -164,7 +164,7 @@ flowchart TD
 | Node | Bọc hàm có sẵn |
 |------|----------------|
 | `bootstrap` | `bootstrap_agent()` |
-| `llm_tool` | `response_stream_with_retry` / `create_response` + `TASK_AGENT_TOOL` |
+| `llm_tool` | `response_stream` / `create_response` + `TASK_AGENT_TOOL` |
 | `execute_tools` | `begin_tool_round` + `complete_tool_round` + `apply_tool_budget` (trong complete) |
 | `synthesize` | `iter_synthesis_deltas` / `run_synthesis` |
 | `finalize` | `finish_agent()` → `enricher` |
@@ -384,7 +384,7 @@ Ba chiến lược (giữ từ doc cũ, cập nhật):
 
 | Cách | Mô tả | Giai đoạn |
 |------|-------|-----------|
-| **B — Hybrid** | Graph route; stream wrapper bọc ngoài gọi `response_stream_with_retry` | **Làm trước** |
+| **B — Hybrid** | Graph route; stream wrapper bọc ngoài gọi `response_stream` | **Làm trước** |
 | **A — astream_events** | Map event LangGraph → SSE | Sau khi B parity |
 | **C — Stream trong node** | Node yield queue | Tránh trừ khi cần |
 
@@ -396,7 +396,7 @@ async def run_agent_stream_langgraph(...):
     state = await bootstrap_agent(...)
     yield sse_status("Đang phân tích…")
     for iteration in range(1, state["max_iter"] + 1):
-        async with response_stream_with_retry(...) as stream:
+        async with response_stream(...) as stream:
             async for event in stream:
                 ...
             final = await stream.get_final_response()
@@ -523,7 +523,7 @@ Project dùng **Responses-shaped API** qua adapter:
 
 **Node graph gọi:**
 ```python
-from app.utils.llm_responses import create_response, response_stream_with_retry
+from app.utils.llm_responses import create_response, response_stream
 from app.ai.router import TASK_AGENT_TOOL, TASK_AGENT_SYNTH
 ```
 

@@ -1,7 +1,9 @@
 # Flow ai-layer (tóm tắt)
 
 **RAG chi tiết (đọc khi nâng cấp):** [RAG-GUIDE.md](./RAG-GUIDE.md)  
-**LangGraph (thay agent loop):** [LANGGRAPH-GUIDE.md](./LANGGRAPH-GUIDE.md)
+**LangGraph (thay agent loop):** [LANGGRAPH-GUIDE.md](./LANGGRAPH-GUIDE.md)  
+**MCP Phase 2 (tool auto-discovery từ data-miner):** [../../docs/MCP-PHASE2-GUIDE.md](../../docs/MCP-PHASE2-GUIDE.md)  
+**Refactor audit + lộ trình:** [REFACTOR-AUDIT.md](./REFACTOR-AUDIT.md)
 
 ## Stack
 
@@ -22,7 +24,7 @@ Review social chỉ từ YouTube/TikTok. Giá FPT/Tiki chatbot nhét vào prompt
 chatbot POST /agent/run/stream
   → bootstrap_agent → prepare_tools_for_task
        (platform filter → movie context → RAG cache-first)
-  → OpenAI Responses API (vòng lặp tool, loop.py)
+  → LLM tool loop (chat completions adapter, `stream.py` / `loop.py`)
   → RAG L1/L2/L3 hoặc crawl data-miner
   → schedule_tool_ingest (nền, mỗi tool crawl)
   → SSE text_delta + status + done
@@ -127,15 +129,16 @@ Cần: `DATABASE_URL`, `OPENAI_API_KEY`, `RAG_ENABLED=true` (mặc định code 
 
 ---
 
-## Lỗi OpenAI hay gặp
+## Lỗi LLM hay gặp
 
-Message kiểu *"An error occurred while processing your request... req_xxx"* là **500 phía OpenAI**, không phải bug Python.
+Message kiểu *"An error occurred while processing your request... req_xxx"* là **500 phía upstream**, không phải bug Python.
 
 Đã xử lý trong code:
 
 1. **Thu hẹp tool** khi có `[Phim đang xem]` (~27 → ~9) hoặc cache-first (~4 RAG)
-2. **Retry 1 lần** stream/sync nếu 5xx/timeout — `openai_responses.py`
-3. **Message tiếng Việt** + log `request_id` — `openai_errors.py`
+2. **Retry tại provider** (`providers.py` `_with_retry`) — không lặp retry ở `stream.py` / `synthesis.py`
+3. **Synthesis stream fallback** — gateway lỗi SSE (vd. xah + opus) → non-stream `run_synthesis`
+4. **Message tiếng Việt** + log `request_id` — `llm_errors.py`
 
 ---
 
@@ -143,5 +146,5 @@ Message kiểu *"An error occurred while processing your request... req_xxx"* l�
 
 - Mongo đã bỏ hẳn.
 - Supabase `config` ghi đè `AGENT_SYSTEM` — prod khác local là do đó.
-- Python 3.9: `from __future__ import annotations` ở file dùng `str | None`.
+- Python 3.14+: dùng cú pháp hiện đại (`str | None`, `list[str]`, `dict[str, Any]`).
 - SSE: `text_delta`, `status`, `tool_start`/`tool_done` (có `detail_vi`), `data_preview`, `done` — không còn event `review_summary` riêng.

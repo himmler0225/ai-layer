@@ -1,14 +1,9 @@
-from __future__ import annotations
-
-from typing import Optional
-
-
 class AiLayerError(Exception):
     """Base exception for ai-layer."""
 
     http_status: int = 500
 
-    def __init__(self, message: str, *, cause: Optional[Exception] = None) -> None:
+    def __init__(self, message: str, *, cause: Exception | None = None) -> None:
         super().__init__(message)
         self.message = message
         self.cause = cause
@@ -24,6 +19,12 @@ class AiLayerAuthError(AiLayerError):
     """Authentication or authorization failure."""
 
     http_status = 401
+
+
+class AiLayerForbiddenError(AiLayerError):
+    """Authorization failure — authenticated but not permitted."""
+
+    http_status = 403
 
 
 class AiLayerNotFoundError(AiLayerError):

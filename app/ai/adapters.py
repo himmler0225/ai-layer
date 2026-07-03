@@ -1,9 +1,16 @@
-from __future__ import annotations
 import uuid
-from typing import Any, Dict, List
-from app.ai.types import FunctionCallItem, IncompleteDetails, LLMResponse, MessageOutputItem, OutputTextContent, StreamTextDelta
+from typing import Any
+from app.ai.types import (
+    FunctionCallItem,
+    IncompleteDetails,
+    LLMResponse,
+    MessageOutputItem,
+    OutputTextContent,
+    StreamTextDelta,
+)
 
-def responses_tools_to_chat(tools: List[Dict] | None) -> List[Dict]:
+
+def responses_tools_to_chat(tools: list[dict] | None) -> list[dict]:
     """Responses tools to chat.
 
     Args:
@@ -13,14 +20,24 @@ def responses_tools_to_chat(tools: List[Dict] | None) -> List[Dict]:
         (List[Dict]) Kết quả trả về."""
     if not tools:
         return []
-    out: List[Dict] = []
+    out: list[dict] = []
     for tool in tools:
-        if tool.get('type') != 'function':
+        if tool.get("type") != "function":
             continue
-        out.append({'type': 'function', 'function': {'name': tool['name'], 'description': tool.get('description', ''), 'parameters': tool.get('parameters') or {'type': 'object', 'properties': {}}}})
+        out.append(
+            {
+                "type": "function",
+                "function": {
+                    "name": tool["name"],
+                    "description": tool.get("description", ""),
+                    "parameters": tool.get("parameters") or {"type": "object", "properties": {}},
+                },
+            }
+        )
     return out
 
-def _append_user_message(messages: List[Dict], content: str) -> None:
+
+def _append_user_message(messages: list[dict], content: str) -> None:
     """(Nội bộ) Append user message.
 
     Args:
@@ -29,12 +46,13 @@ def _append_user_message(messages: List[Dict], content: str) -> None:
 
     Returns:
         (None) Kết quả trả về."""
-    if messages and messages[-1].get('role') == 'user' and isinstance(messages[-1].get('content'), str):
-        messages[-1]['content'] = f"{messages[-1]['content']}\n{content}"
+    if messages and messages[-1].get("role") == "user" and isinstance(messages[-1].get("content"), str):
+        messages[-1]["content"] = f"{messages[-1]['content']}\n{content}"
     else:
-        messages.append({'role': 'user', 'content': content})
+        messages.append({"role": "user", "content": content})
 
-def responses_input_to_chat_messages(input_items: Any, *, instructions: str | None=None) -> List[Dict]:
+
+def responses_input_to_chat_messages(input_items: Any, *, instructions: str | None = None) -> list[dict]:
     """Responses input to chat messages.
 
     Args:
@@ -43,57 +61,67 @@ def responses_input_to_chat_messages(input_items: Any, *, instructions: str | No
 
     Returns:
         (List[Dict]) Kết quả trả về."""
-    messages: List[Dict] = []
+    messages: list[dict] = []
     if instructions:
-        messages.append({'role': 'system', 'content': instructions})
+        messages.append({"role": "system", "content": instructions})
     items = input_items if isinstance(input_items, list) else [input_items]
-    pending_tool_calls: List[Dict] = []
-    pending_call_ids: List[str] = []
+    pending_tool_calls: list[dict] = []
+    pending_call_ids: list[str] = []
 
     def flush_assistant_tool_calls() -> None:
         """Flush assistant tool calls.
 
-    Returns:
-        (None) Kết quả trả về."""
+        Returns:
+            (None) Kết quả trả về."""
         nonlocal pending_tool_calls, pending_call_ids
         if not pending_tool_calls:
             return
-        messages.append({'role': 'assistant', 'tool_calls': pending_tool_calls})
+        messages.append({"role": "assistant", "tool_calls": pending_tool_calls})
         pending_tool_calls = []
         pending_call_ids = []
+
     for item in items:
         if isinstance(item, dict):
-            item_type = item.get('type')
-            role = item.get('role')
-            if role == 'user' and item.get('content') is not None:
+            item_type = item.get("type")
+            role = item.get("role")
+            if role == "user" and item.get("content") is not None:
                 flush_assistant_tool_calls()
-                _append_user_message(messages, str(item['content']))
+                _append_user_message(messages, str(item["content"]))
                 continue
-            if item_type == 'function_call':
-                call_id = item.get('call_id') or f'call_{uuid.uuid4().hex[:12]}'
-                pending_tool_calls.append({'id': call_id, 'type': 'function', 'function': {'name': item.get('name', ''), 'arguments': item.get('arguments') or '{}'}})
+            if item_type == "function_call":
+                call_id = item.get("call_id") or f"call_{uuid.uuid4().hex[:12]}"
+                pending_tool_calls.append(
+                    {
+                        "id": call_id,
+                        "type": "function",
+                        "function": {"name": item.get("name", ""), "arguments": item.get("arguments") or "{}"},
+                    }
+                )
                 pending_call_ids.append(call_id)
                 continue
-            if item_type == 'function_call_output':
+            if item_type == "function_call_output":
                 flush_assistant_tool_calls()
-                messages.append({'role': 'tool', 'tool_call_id': item.get('call_id', ''), 'content': str(item.get('output', ''))})
+                messages.append(
+                    {"role": "tool", "tool_call_id": item.get("call_id", ""), "content": str(item.get("output", ""))}
+                )
                 continue
-            if item_type == 'message':
+            if item_type == "message":
                 flush_assistant_tool_calls()
                 text_parts = []
-                for block in item.get('content') or []:
-                    if isinstance(block, dict) and block.get('type') == 'output_text':
-                        text_parts.append(block.get('text', ''))
+                for block in item.get("content") or []:
+                    if isinstance(block, dict) and block.get("type") == "output_text":
+                        text_parts.append(block.get("text", ""))
                 if text_parts:
-                    messages.append({'role': item.get('role', 'assistant'), 'content': ''.join(text_parts)})
+                    messages.append({"role": item.get("role", "assistant"), "content": "".join(text_parts)})
                 continue
-        role = getattr(item, 'role', None)
-        content = getattr(item, 'content', None)
-        if role == 'user' and content is not None:
+        role = getattr(item, "role", None)
+        content = getattr(item, "content", None)
+        if role == "user" and content is not None:
             flush_assistant_tool_calls()
             _append_user_message(messages, str(content))
     flush_assistant_tool_calls()
     return messages
+
 
 def chat_completion_to_llm_response(completion: Any) -> LLMResponse:
     """Chat completion to llm response.
@@ -105,60 +133,63 @@ def chat_completion_to_llm_response(completion: Any) -> LLMResponse:
         (LLMResponse) Kết quả trả về."""
     choice = completion.choices[0]
     message = choice.message
-    output: List[Any] = []
-    text = (message.content or '').strip()
+    output: list[Any] = []
+    text = (message.content or "").strip()
     if message.tool_calls:
         for call in message.tool_calls:
-            output.append(FunctionCallItem(call_id=call.id, name=call.function.name, arguments=call.function.arguments or '{}'))
+            output.append(
+                FunctionCallItem(call_id=call.id, name=call.function.name, arguments=call.function.arguments or "{}")
+            )
     elif text:
-        output.append(MessageOutputItem(role='assistant', content=[OutputTextContent(text=text)]))
-    status = 'completed'
+        output.append(MessageOutputItem(role="assistant", content=[OutputTextContent(text=text)]))
+    status = "completed"
     incomplete = None
-    finish = getattr(choice, 'finish_reason', None)
-    if finish == 'length':
-        status = 'incomplete'
-        incomplete = IncompleteDetails(reason='max_output_tokens')
+    finish = getattr(choice, "finish_reason", None)
+    if finish == "length":
+        status = "incomplete"
+        incomplete = IncompleteDetails(reason="max_output_tokens")
     return LLMResponse(status=status, output=output, output_text=text, incomplete_details=incomplete)
 
-class ChatCompletionStreamAdapter:
 
-    """    Lớp `ChatCompletionStreamAdapter` (kế thừa object)."""
+class ChatCompletionStreamAdapter:
+    """Lớp `ChatCompletionStreamAdapter` (kế thừa object)."""
+
     def __init__(self, stream: Any):
         """Khởi tạo instance.
 
-    Args:
-        stream: (Any) Tham số `stream`."""
+        Args:
+            stream: (Any) Tham số `stream`."""
         self._stream = stream
         self._final: LLMResponse | None = None
-        self._text = ''
-        self._tool_calls: Dict[int, Dict[str, str]] = {}
+        self._text = ""
+        self._tool_calls: dict[int, dict[str, str]] = {}
         self._finish_reason: str | None = None
 
     async def __aenter__(self) -> ChatCompletionStreamAdapter:
         """Vào async context manager (async).
 
-    Returns:
-        (ChatCompletionStreamAdapter) Kết quả trả về."""
+        Returns:
+            (ChatCompletionStreamAdapter) Kết quả trả về."""
         return self
 
     async def __aexit__(self, *args: Any) -> None:
         """Thoát async context manager (async).
 
-    Args:
-        args: (Any) Tham số `args`.
+        Args:
+            args: (Any) Tham số `args`.
 
-    Returns:
-        (None) Kết quả trả về."""
-        close = getattr(self._stream, 'close', None)
+        Returns:
+            (None) Kết quả trả về."""
+        close = getattr(self._stream, "close", None)
         if close:
             await close()
 
     def __aiter__(self):
-        """    Trả về async iterator."""
+        """Trả về async iterator."""
         return self._event_iter()
 
     async def _event_iter(self):
-        """    (Nội bộ) Event iter (async)."""
+        """(Nội bộ) Event iter (async)."""
         async for chunk in self._stream:
             if not chunk.choices:
                 continue
@@ -170,13 +201,13 @@ class ChatCompletionStreamAdapter:
             if delta.tool_calls:
                 for tc in delta.tool_calls:
                     idx = tc.index
-                    slot = self._tool_calls.setdefault(idx, {'id': '', 'name': '', 'arguments': ''})
+                    slot = self._tool_calls.setdefault(idx, {"id": "", "name": "", "arguments": ""})
                     if tc.id:
-                        slot['id'] = tc.id
+                        slot["id"] = tc.id
                     if tc.function and tc.function.name:
-                        slot['name'] = tc.function.name
+                        slot["name"] = tc.function.name
                     if tc.function and tc.function.arguments:
-                        slot['arguments'] += tc.function.arguments
+                        slot["arguments"] += tc.function.arguments
             if choice.finish_reason:
                 self._finish_reason = choice.finish_reason
         self._build_final()
@@ -184,29 +215,35 @@ class ChatCompletionStreamAdapter:
     def _build_final(self) -> None:
         """(Nội bộ) Xây dựng final.
 
-    Returns:
-        (None) Kết quả trả về."""
+        Returns:
+            (None) Kết quả trả về."""
         if self._final is not None:
             return
-        output: List[Any] = []
+        output: list[Any] = []
         if self._tool_calls:
             for idx in sorted(self._tool_calls):
                 slot = self._tool_calls[idx]
-                output.append(FunctionCallItem(call_id=slot['id'] or f'call_{uuid.uuid4().hex[:12]}', name=slot['name'], arguments=slot['arguments'] or '{}'))
+                output.append(
+                    FunctionCallItem(
+                        call_id=slot["id"] or f"call_{uuid.uuid4().hex[:12]}",
+                        name=slot["name"],
+                        arguments=slot["arguments"] or "{}",
+                    )
+                )
         elif self._text:
             output.append(MessageOutputItem(content=[OutputTextContent(text=self._text)]))
-        status = 'completed'
+        status = "completed"
         incomplete = None
-        if self._finish_reason == 'length':
-            status = 'incomplete'
-            incomplete = IncompleteDetails(reason='max_output_tokens')
+        if self._finish_reason == "length":
+            status = "incomplete"
+            incomplete = IncompleteDetails(reason="max_output_tokens")
         self._final = LLMResponse(status=status, output=output, output_text=self._text, incomplete_details=incomplete)
 
     async def get_final_response(self) -> LLMResponse:
         """Lấy final response (async).
 
-    Returns:
-        (LLMResponse) Kết quả trả về."""
+        Returns:
+            (LLMResponse) Kết quả trả về."""
         if self._final is None:
             self._build_final()
         return self._final

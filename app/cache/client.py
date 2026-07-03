@@ -1,7 +1,8 @@
-from __future__ import annotations
 import redis.asyncio as aioredis
 from app.config.settings import REDIS_DB, REDIS_HOST, REDIS_PORT
+
 _redis: aioredis.Redis | None = None
+
 
 async def get_redis() -> aioredis.Redis | None:
     """Lấy redis (async).
@@ -17,6 +18,7 @@ async def get_redis() -> aioredis.Redis | None:
         except Exception:
             _redis = None
     return _redis
+
 
 async def close_redis() -> None:
     """Đóng redis (async).

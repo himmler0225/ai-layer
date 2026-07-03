@@ -1,9 +1,7 @@
-from __future__ import annotations
-
 import json
 import os
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 _SCHEMA_PATH = Path(__file__).resolve().parents[2] / "config" / "remote-schema.json"
 
@@ -74,15 +72,11 @@ def build_settings_defaults(schema: dict[str, Any]) -> dict[str, Any]:
             prefix = bind["prefix"]
             for field_name in key_schema.get("fields") or []:
                 if field_name in _INT_FIELD_DEFAULTS:
-                    defaults[f"{prefix}{_screaming(field_name)}"] = _INT_FIELD_DEFAULTS[
-                        field_name
-                    ]
+                    defaults[f"{prefix}{_screaming(field_name)}"] = _INT_FIELD_DEFAULTS[field_name]
                 else:
                     defaults[f"{prefix}{_screaming(field_name)}"] = empty
             for field_name in key_schema.get("bool_fields") or []:
-                defaults[f"{prefix}{_screaming(field_name)}"] = _BOOL_FIELD_DEFAULTS.get(
-                    field_name, False
-                )
+                defaults[f"{prefix}{_screaming(field_name)}"] = _BOOL_FIELD_DEFAULTS.get(field_name, False)
 
         elif bind_type == "provider" and bind.get("module") == "settings":
             providers = bind.get("providers") or {}
@@ -128,7 +122,7 @@ def build_prompt_defaults(schema: dict[str, Any]) -> dict[str, str]:
     return defaults
 
 
-def env_override(name: str, type_name: str = "str") -> Optional[Any]:
+def env_override(name: str, type_name: str = "str") -> Any | None:
     """Env override.
 
     Args:

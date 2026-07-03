@@ -1,11 +1,7 @@
-from __future__ import annotations
-
-from typing import Dict
-
 from app.config.service_auth import AI_LAYER_SERVICE_NAME
 
 
-def get_data_miner_headers(api_key: str, service_token: str = "") -> Dict[str, str]:
+def get_data_miner_headers(api_key: str, service_token: str = "") -> dict[str, str]:
     """Lấy data miner headers.
 
     Args:
@@ -23,7 +19,7 @@ def get_data_miner_headers(api_key: str, service_token: str = "") -> Dict[str, s
     return headers
 
 
-def get_supabase_rest_headers(service_key: str) -> Dict[str, str]:
+def get_supabase_rest_headers(service_key: str) -> dict[str, str]:
     """Lấy supabase rest headers.
 
     Args:
@@ -37,7 +33,7 @@ def get_supabase_rest_headers(service_key: str) -> Dict[str, str]:
     }
 
 
-def get_supabase_auth_headers(token: str, anon_key: str) -> Dict[str, str]:
+def get_supabase_auth_headers(token: str, anon_key: str) -> dict[str, str]:
     """Lấy supabase auth headers.
 
     Args:

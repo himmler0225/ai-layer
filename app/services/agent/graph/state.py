@@ -1,6 +1,7 @@
 from typing import Annotated, Any, TypedDict
 import operator
 
+
 class AgentState(TypedDict, total=False):
     session_id: str
     task: str

@@ -1,11 +1,7 @@
-from __future__ import annotations
-
-from typing import Dict
-
 from app.ai.base import BaseLLM
 from app.ai.providers import ConfiguredLLM, get_provider_spec, normalize_provider, reset_clients
 
-_instances: Dict[str, BaseLLM] = {}
+_instances: dict[str, BaseLLM] = {}
 
 
 class LLMFactory:
@@ -15,11 +11,11 @@ class LLMFactory:
     def get(provider: str) -> BaseLLM:
         """Lấy hoặc tạo client LLM cho provider.
 
-    Args:
-        provider: Tên provider (openai, deepseek, xah, ...).
+        Args:
+            provider: Tên provider (openai, deepseek, xah, ...).
 
-    Returns:
-        Instance LLM đã cache hoặc mới khởi tạo."""
+        Returns:
+            Instance LLM đã cache hoặc mới khởi tạo."""
         key = normalize_provider(provider)
         if key in _instances:
             return _instances[key]

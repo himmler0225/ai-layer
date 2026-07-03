@@ -1,8 +1,16 @@
-from __future__ import annotations
-from typing import Any, Dict, List
+from typing import Any
 from app.services.enricher import enrich_agent_result
 
-async def finish(*, session_id: str, task: str, iteration: int, tool_call_log: List[Dict], final_text: str, include_summary: bool=True) -> Dict[str, Any]:
+
+async def finish(
+    *,
+    session_id: str,
+    task: str,
+    iteration: int,
+    tool_call_log: list[dict],
+    final_text: str,
+    include_summary: bool = True,
+) -> dict[str, Any]:
     """Hoàn tất `finish` (async).
 
     Args:

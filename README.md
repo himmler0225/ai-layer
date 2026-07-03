@@ -2,7 +2,7 @@
 
 Orchestration service for **CineFlow AI** — turns a movie question into a researched answer from **YouTube and TikTok** (search, transcripts, comments) with optional **RAG** over previously ingested reviews.
 
-Built on the **OpenAI Responses API** (tool calling). The model plans tool use; this service executes tools against **data-miner**, streams the answer to the chatbot, and runs a background **ingest → RAG** pipeline into PostgreSQL.
+Built on **OpenAI-compatible chat completions** (Responses-shaped adapter). The model plans tool use; this service executes tools against **data-miner**, streams the answer to the chatbot, and runs a background **ingest → RAG** pipeline into PostgreSQL.
 
 ```
    ai-chatbot (Next.js)
@@ -16,7 +16,7 @@ Built on the **OpenAI Responses API** (tool calling). The model plans tool use; 
         └─ Supabase             Auth, profiles, runtime config table only
 ```
 
-Further reading: [docs/FLOW.md](docs/FLOW.md) (luồng end-to-end) · [docs/RAG-GUIDE.md](docs/RAG-GUIDE.md) (pipeline RAG) · [docs/LANGGRAPH-GUIDE.md](docs/LANGGRAPH-GUIDE.md) (migrate LangGraph, tự làm)
+Further reading: [docs/FLOW.md](docs/FLOW.md) · [docs/RAG-GUIDE.md](docs/RAG-GUIDE.md) · [docs/REFACTOR-AUDIT.md](docs/REFACTOR-AUDIT.md) · [docs/LANGGRAPH-GUIDE.md](docs/LANGGRAPH-GUIDE.md) · [../docs/MCP-PHASE2-GUIDE.md](../docs/MCP-PHASE2-GUIDE.md)
 
 ---
 
@@ -34,7 +34,7 @@ Further reading: [docs/FLOW.md](docs/FLOW.md) (luồng end-to-end) · [docs/RAG-
 
 ## Tech stack
 
-FastAPI · OpenAI Responses API · SQLAlchemy 2 (async) · asyncpg · pgvector · Redis · RabbitMQ · Supabase · slowapi · Uvicorn
+FastAPI · OpenAI-compatible LLM (chat completions adapter) · SQLAlchemy 2 (async) · asyncpg · pgvector · Redis · RabbitMQ · Supabase · slowapi · Uvicorn
 
 ---
 
@@ -70,14 +70,12 @@ app/
 │   ├── loader.py          # schema binders
 │   └── remote.py          # Supabase config load + validate
 ├── ai/
-│   ├── providers.py       # ConfiguredLLM + PROVIDER_SPECS (openai, deepseek, xah)
+│   ├── providers.py       # ConfiguredLLM (chat completions + stream adapter)
 │   ├── factory.py
 │   └── router.py
 └── utils/
     ├── llm_responses.py   # LLM response helpers (stream, create_response)
-    ├── llm_errors.py      # user-facing LLM error messages
-    ├── openai_responses.py  # deprecated alias
-    └── openai_errors.py     # deprecated alias
+    └── llm_errors.py      # user-facing LLM error messages
 ```
 
 ---
@@ -190,7 +188,7 @@ OpenAI model values are **not** defaulted in code; they must exist in Supabase `
 
 ```bash
 cd ai-layer
-python -m venv .venv && source .venv/bin/activate   # use ai-layer venv, not data-miner
+python3 -m venv .venv && source .venv/bin/activate   # Python 3.14+; use ai-layer venv, not data-miner
 pip install -r requirements.txt
 cp .env.example .env
 # Fill API_KEYS, DATABASE_URL, SUPABASE_*, RABBITMQ_URL

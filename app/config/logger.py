@@ -4,7 +4,7 @@ import logging.handlers
 import re
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 _RESET = "\x1b[0m"
 _BOLD = "\x1b[1m"
@@ -19,11 +19,7 @@ _LEVEL_COLOR = {
 }
 
 _EMOJI_RE = re.compile(
-    "["
-    "\U0001F300-\U0001FAFF"
-    "\u2600-\u27BF"
-    "\uFE0F"
-    "]+",
+    "[\U0001f300-\U0001faff\u2600-\u27bf\ufe0f]+",
     flags=re.UNICODE,
 )
 
@@ -57,17 +53,18 @@ def _display_logger(name: str, root: str) -> str:
 
 
 class _ColorFormatter(logging.Formatter):
-    """    Lớp `_ColorFormatter` (kế thừa logging.Formatter)."""
+    """Lớp `_ColorFormatter` (kế thừa logging.Formatter)."""
+
     root_name: str = "ai_layer"
 
     def format(self, record: logging.LogRecord) -> str:
         """Định dạng `format`.
 
-    Args:
-        record: (logging.LogRecord) Tham số `record`.
+        Args:
+            record: (logging.LogRecord) Tham số `record`.
 
-    Returns:
-        (str) Kết quả trả về."""
+        Returns:
+            (str) Kết quả trả về."""
         ts = datetime.fromtimestamp(record.created).strftime("%Y-%m-%d %H:%M:%S")
         color = _LEVEL_COLOR.get(record.levelname, "\x1b[37m")
         short = _display_logger(record.name, self.root_name)
@@ -81,16 +78,17 @@ class _ColorFormatter(logging.Formatter):
 
 
 class _JSONFormatter(logging.Formatter):
-    """    Lớp `_JSONFormatter` (kế thừa logging.Formatter)."""
+    """Lớp `_JSONFormatter` (kế thừa logging.Formatter)."""
+
     def format(self, record: logging.LogRecord) -> str:
         """Định dạng `format`.
 
-    Args:
-        record: (logging.LogRecord) Tham số `record`.
+        Args:
+            record: (logging.LogRecord) Tham số `record`.
 
-    Returns:
-        (str) Kết quả trả về."""
-        data: Dict[str, Any] = {
+        Returns:
+            (str) Kết quả trả về."""
+        data: dict[str, Any] = {
             "timestamp": datetime.utcnow().isoformat(),
             "level": record.levelname,
             "logger": record.name,
@@ -105,7 +103,8 @@ class _JSONFormatter(logging.Formatter):
 
 
 class Logger:
-    """    Lớp `Logger` (kế thừa object)."""
+    """Lớp `Logger` (kế thừa object)."""
+
     _root: str = "ai_layer"
     _configured: bool = False
 
@@ -119,14 +118,14 @@ class Logger:
     ) -> None:
         """Cấu hình `setup`.
 
-    Args:
-        level: (str, mặc định 'INFO') Tham số `level`.
-        log_dir: (str, mặc định 'logs') Tham số `log_dir`.
-        max_bytes: (int, mặc định 10 * 1024 * 1024) Tham số `max_bytes`.
-        backup_count: (int, mặc định 5) Tham số `backup_count`.
+        Args:
+            level: (str, mặc định 'INFO') Tham số `level`.
+            log_dir: (str, mặc định 'logs') Tham số `log_dir`.
+            max_bytes: (int, mặc định 10 * 1024 * 1024) Tham số `max_bytes`.
+            backup_count: (int, mặc định 5) Tham số `backup_count`.
 
-    Returns:
-        (None) Kết quả trả về."""
+        Returns:
+            (None) Kết quả trả về."""
         if cls._configured:
             return
         log_path = Path(log_dir)
@@ -166,22 +165,22 @@ class Logger:
     def sync_uvicorn(cls, level: str = "INFO") -> None:
         """Đồng bộ uvicorn.
 
-    Args:
-        level: (str, mặc định 'INFO') Tham số `level`.
+        Args:
+            level: (str, mặc định 'INFO') Tham số `level`.
 
-    Returns:
-        (None) Kết quả trả về."""
+        Returns:
+            (None) Kết quả trả về."""
         cls._configure_uvicorn(level)
 
     @classmethod
     def _configure_uvicorn(cls, level: str) -> None:
         """(Nội bộ) Cấu hình uvicorn.
 
-    Args:
-        level: (str) Tham số `level`.
+        Args:
+            level: (str) Tham số `level`.
 
-    Returns:
-        (None) Kết quả trả về."""
+        Returns:
+            (None) Kết quả trả về."""
         log_level = getattr(logging, level.upper(), logging.INFO)
         formatter = _ColorFormatter()
         formatter.root_name = cls._root
@@ -203,10 +202,10 @@ class Logger:
     def get(cls, name: str) -> logging.Logger:
         """Lấy `get`.
 
-    Args:
-        name: (str) Tham số `name`.
+        Args:
+            name: (str) Tham số `name`.
 
-    Returns:
-        (logging.Logger) Kết quả trả về."""
+        Returns:
+            (logging.Logger) Kết quả trả về."""
         short = name.removeprefix("app.")
         return logging.getLogger(f"{cls._root}.{short}")

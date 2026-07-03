@@ -1,7 +1,5 @@
-from __future__ import annotations
-
 import json
-from typing import Any, Dict, List, Set
+from typing import Any
 
 from app.config.logger import Logger
 
@@ -18,24 +16,25 @@ _MAX_TOOL_ROUNDS_NO_EVIDENCE = 10
 # Model vẫn gọi search sau khi bị chặn budget.
 _MAX_STUBBORN_SEARCH = 4
 
-_SEARCH_TOOLS: Set[str] = frozenset({"youtube_search", "tiktok_search"})
+_SEARCH_TOOLS: set[str] = frozenset({"youtube_search", "tiktok_search"})
 # Mỗi nền tảng chỉ search tối đa 1 lần; lần sau gỡ khỏi menu tool.
 _MAX_SEARCH_PER_PLATFORM = 1
 
-_EVIDENCE_TOOLS: Set[str] = frozenset({
-    "youtube_get_comments_batch",
-    "youtube_get_comments",
-    "youtube_get_transcript",
-    "youtube_get_transcript_batch",
-    "tiktok_get_comments_batch",
-    "tiktok_comments",
-    "search_movie_summary",
-    "search_aspect_evidence",
-    "get_raw_reviews",
-})
+_EVIDENCE_TOOLS: set[str] = frozenset(
+    {
+        "youtube_get_comments_batch",
+        "youtube_get_comments",
+        "youtube_get_transcript",
+        "youtube_get_transcript_batch",
+        "tiktok_comments",
+        "search_movie_summary",
+        "search_aspect_evidence",
+        "get_raw_reviews",
+    }
+)
 
 
-def tool_signature(name: str, inputs: Dict[str, Any]) -> str:
+def tool_signature(name: str, inputs: dict[str, Any]) -> str:
     try:
         payload = json.dumps(inputs or {}, sort_keys=True, ensure_ascii=False)
     except TypeError:
@@ -43,16 +42,16 @@ def tool_signature(name: str, inputs: Dict[str, Any]) -> str:
     return f"{name}:{payload}"
 
 
-def count_tool_name(log: List[Dict[str, Any]], name: str) -> int:
+def count_tool_name(log: list[dict[str, Any]], name: str) -> int:
     return sum(1 for entry in log if entry.get("tool") == name)
 
 
-def is_budget_block(entry: Dict[str, Any]) -> bool:
+def is_budget_block(entry: dict[str, Any]) -> bool:
     result = entry.get("result") or {}
     return result.get("error") == "search_budget_exhausted"
 
 
-def _result_payload(result: Any) -> Dict[str, Any]:
+def _result_payload(result: Any) -> dict[str, Any]:
     if not isinstance(result, dict):
         return {}
     data = result.get("data")
@@ -61,7 +60,7 @@ def _result_payload(result: Any) -> Dict[str, Any]:
     return result
 
 
-def extract_video_items(result: Any) -> List[Dict[str, Any]]:
+def extract_video_items(result: Any) -> list[dict[str, Any]]:
     payload = _result_payload(result)
     for key in ("results", "videos", "items"):
         items = payload.get(key)
@@ -70,8 +69,8 @@ def extract_video_items(result: Any) -> List[Dict[str, Any]]:
     return []
 
 
-def video_ids_from_log(log: List[Dict[str, Any]], *, tool_name: str = "youtube_search") -> List[str]:
-    ids: List[str] = []
+def video_ids_from_log(log: list[dict[str, Any]], *, tool_name: str = "youtube_search") -> list[str]:
+    ids: list[str] = []
     for entry in log:
         if entry.get("tool") != tool_name or is_budget_block(entry):
             continue
@@ -82,7 +81,7 @@ def video_ids_from_log(log: List[Dict[str, Any]], *, tool_name: str = "youtube_s
     return ids[:8]
 
 
-def has_evidence_data(log: List[Dict[str, Any]]) -> bool:
+def has_evidence_data(log: list[dict[str, Any]]) -> bool:
     for entry in log:
         if is_budget_block(entry):
             continue
@@ -101,7 +100,7 @@ def has_evidence_data(log: List[Dict[str, Any]]) -> bool:
     return False
 
 
-def count_last_signature(log: List[Dict[str, Any]]) -> int:
+def count_last_signature(log: list[dict[str, Any]]) -> int:
     if not log:
         return 0
     last = log[-1]
@@ -109,23 +108,22 @@ def count_last_signature(log: List[Dict[str, Any]]) -> int:
     return sum(
         1
         for entry in log
-        if not is_budget_block(entry)
-        and tool_signature(str(entry.get("tool") or ""), entry.get("inputs") or {}) == sig
+        if not is_budget_block(entry) and tool_signature(str(entry.get("tool") or ""), entry.get("inputs") or {}) == sig
     )
 
 
-def count_last_tool_name(log: List[Dict[str, Any]]) -> int:
+def count_last_tool_name(log: list[dict[str, Any]]) -> int:
     if not log:
         return 0
     name = str(log[-1].get("tool") or "")
     return count_tool_name(log, name)
 
 
-def apply_tool_budget(ctx: Dict[str, Any]) -> None:
+def apply_tool_budget(ctx: dict[str, Any]) -> None:
     """Sau mỗi vòng tool: bỏ search tool đã dùng đủ để model chuyển sang comments/RAG."""
-    log: List[Dict[str, Any]] = ctx.get("tool_call_log") or []
-    tools: List[Dict[str, Any]] = ctx.get("tools") or []
-    remove: Set[str] = set()
+    log: list[dict[str, Any]] = ctx.get("tool_call_log") or []
+    tools: list[dict[str, Any]] = ctx.get("tools") or []
+    remove: set[str] = set()
     for name in _SEARCH_TOOLS:
         if count_tool_name(log, name) >= _MAX_SEARCH_PER_PLATFORM:
             remove.add(name)
@@ -137,7 +135,7 @@ def apply_tool_budget(ctx: Dict[str, Any]) -> None:
         ctx["tools"] = filtered
 
 
-def is_search_budget_exhausted(tool_name: str, tool_call_log: List[Dict[str, Any]]) -> bool:
+def is_search_budget_exhausted(tool_name: str, tool_call_log: list[dict[str, Any]]) -> bool:
     if tool_name not in _SEARCH_TOOLS:
         return False
     return count_tool_name(tool_call_log, tool_name) >= _MAX_SEARCH_PER_PLATFORM
@@ -145,18 +143,14 @@ def is_search_budget_exhausted(tool_name: str, tool_call_log: List[Dict[str, Any
 
 def search_budget_message(
     tool_name: str,
-    tool_call_log: List[Dict[str, Any]] | None = None,
-) -> Dict[str, Any]:
-    follow = (
-        "youtube_get_comments_batch"
-        if tool_name == "youtube_search"
-        else "tiktok_get_comments_batch"
-    )
+    tool_call_log: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    follow = "youtube_get_comments_batch" if tool_name == "youtube_search" else "tiktok_comments"
     message = (
         f"Đã gọi {tool_name} đủ lần cho phiên này. "
         f"Dùng {follow} với video_id từ kết quả search trước, hoặc search_movie_summary nếu có RAG."
     )
-    out: Dict[str, Any] = {
+    out: dict[str, Any] = {
         "error": "search_budget_exhausted",
         "message": message,
         "next_tool": follow,
@@ -170,7 +164,7 @@ def search_budget_message(
 
 
 def should_force_synthesis(
-    tool_call_log: List[Dict[str, Any]],
+    tool_call_log: list[dict[str, Any]],
     iteration: int,
     max_iter: int,
 ) -> bool:

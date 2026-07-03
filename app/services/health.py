@@ -1,10 +1,10 @@
-from __future__ import annotations
-
 import httpx
 
 import app.config.settings as settings
 from app.config.constants import HEALTH_CHECK_TIMEOUT
-from app.config.headers import get_data_miner_headers
+from app.config.defaults import load_schema
+from app.config.loader import provider_settings_prefix, runtime
+from app.ingest.config import INGEST_ENABLED, RABBITMQ_URL
 
 
 async def check_postgres() -> str:
@@ -49,15 +49,15 @@ async def check_rabbitmq() -> str:
 
     Returns:
         (str) Kết quả trả về."""
-    if not settings.INGEST_ENABLED:
+    if not INGEST_ENABLED:
         return "skipped"
-    if not settings.RABBITMQ_URL:
+    if not RABBITMQ_URL:
         return "missing RABBITMQ_URL"
     try:
         import aio_pika
 
         conn = await aio_pika.connect_robust(
-            settings.RABBITMQ_URL,
+            RABBITMQ_URL,
             timeout=HEALTH_CHECK_TIMEOUT,
         )
         async with conn:
@@ -73,33 +73,29 @@ async def check_data_miner() -> str:
 
     Returns:
         (str) Kết quả trả về."""
+    if not settings.DATA_MINER_URL:
+        return "missing DATA_MINER_URL"
     if not settings.DATA_MINER_KEY:
         return "missing DATA_MINER_KEY"
     try:
         async with httpx.AsyncClient(timeout=HEALTH_CHECK_TIMEOUT) as client:
-            r = await client.get(
-                f"{settings.DATA_MINER_URL}/api/videos/search",
-                params={"q": "_health", "max_results": 1},
-                headers=get_data_miner_headers(
-                    settings.DATA_MINER_KEY,
-                    settings.DATA_MINER_SERVICE_TOKEN,
-                ),
-            )
-        if r.status_code == 401:
-            return "auth: missing key"
-        if r.status_code == 403:
-            return "auth: invalid key or service token"
-        return "ok" if r.is_success else f"status {r.status_code}"
+            r = await client.get(f"{settings.DATA_MINER_URL.rstrip('/')}/health")
+        if r.is_success:
+            return "ok"
+        return f"status {r.status_code}"
     except Exception as exc:
-        return f"unreachable: {exc}"
+        msg = str(exc).strip() or type(exc).__name__
+        return f"unreachable: {msg}"
 
 
-def check_openai_key() -> str:
-    """Check openai key.
-
-    Returns:
-        (str) Kết quả trả về."""
-    return "set" if settings.OPENAI_API_KEY else "missing"
+def check_llm_key() -> str:
+    """API key của provider đang active trong AI_MODELS."""
+    active = (runtime.active_provider or "").strip()
+    if not active:
+        return "missing AI_MODELS.is_active"
+    prefix = provider_settings_prefix(active, load_schema())
+    val = getattr(settings, f"{prefix}_API_KEY", None)
+    return "set" if str(val or "").strip() else "missing"
 
 
 async def collect_checks() -> dict[str, str]:
@@ -112,7 +108,7 @@ async def collect_checks() -> dict[str, str]:
         "redis": await check_redis(),
         "rabbitmq": await check_rabbitmq(),
         "data_miner": await check_data_miner(),
-        "openai_key": check_openai_key(),
+        "llm_key": check_llm_key(),
     }
 
 
@@ -130,8 +126,8 @@ def is_healthy(checks: dict[str, str]) -> bool:
         return False
     if checks.get("data_miner") != "ok":
         return False
-    if checks.get("openai_key") != "set":
+    if checks.get("llm_key") != "set":
         return False
-    if settings.INGEST_ENABLED and checks.get("rabbitmq") != "ok":
+    if INGEST_ENABLED and checks.get("rabbitmq") != "ok":
         return False
     return True
