@@ -10,7 +10,7 @@ from app.middleware.rate_limit import limiter
 from app.schemas.response import ApiResponse
 from app.services.agent.runner import run_agent
 from app.services.agent.stream import run_agent_stream
-from app.tools.definitions import TOOL_SETS
+from app.tools.definitions import resolve_tool_set
 
 router = APIRouter(prefix="/agent", dependencies=[Depends(verify_api_key)])
 
@@ -32,7 +32,7 @@ async def run(request: Request, body: AgentRequest):
     Args:
         request: (Request) Tham số `request`.
         body: (AgentRequest) Tham số `body`."""
-    tools = TOOL_SETS.get(body.tools, TOOL_SETS["all"])
+    tools = await resolve_tool_set(body.tools)
     max_iter = body.max_iter or settings.AGENT_MAX_ITER
     kwargs = {"system": body.system} if body.system else {}
     return ApiResponse.ok(await run_agent(body.task, tools, max_iter=max_iter, **kwargs))
@@ -46,23 +46,31 @@ async def run_stream(request: Request, body: AgentRequest):
     Args:
         request: (Request) Tham số `request`.
         body: (AgentRequest) Tham số `body`."""
-    tools = TOOL_SETS.get(body.tools, TOOL_SETS["all"])
+    tools = await resolve_tool_set(body.tools)
     max_iter = body.max_iter or settings.AGENT_MAX_ITER
     kwargs = {"system": body.system} if body.system else {}
 
     async def generate():
         """Generate `generate` (async)."""
+        from app.i18n.responses import client_message
+
         try:
             async for chunk in run_agent_stream(body.task, tools, max_iter=max_iter, **kwargs):
                 yield chunk
         except AiLayerError as e:
             import json
 
-            yield f"data: {json.dumps({'type': 'error', 'message': e.message})}\n\n"
+            vi = client_message(e, "vi")
+            en = client_message(e, "en")
+            yield f"data: {json.dumps({'type': 'error', 'detail_vi': vi, 'detail_en': en, 'message': vi}, ensure_ascii=False)}\n\n"
         except Exception as e:
             import json
 
-            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+            from app.i18n import t
+
+            vi = t("errors.generic", "vi")
+            en = t("errors.generic", "en")
+            yield f"data: {json.dumps({'type': 'error', 'detail_vi': vi, 'detail_en': en, 'message': vi}, ensure_ascii=False)}\n\n"
 
     return StreamingResponse(
         generate(), media_type="text/event-stream", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}

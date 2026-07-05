@@ -25,10 +25,7 @@ LLM_EMBEDDING_PROVIDER: str = os.getenv("LLM_EMBEDDING_PROVIDER", "").strip().lo
 API_KEYS: list[str] = _env_list("API_KEYS")
 CORS_ORIGINS: list[str] = _env_list("CORS_ORIGINS", "http://localhost:3000")
 
-DATABASE_URL: str = os.getenv(
-    "DATABASE_URL",
-    "postgresql://postgres:postgres@localhost:5432/youtube",
-)
+DATABASE_URL: str = os.getenv("DATABASE_URL", "").strip()
 
 REDIS_HOST: str = os.getenv("REDIS_HOST", "localhost")
 REDIS_PORT: int = int(os.getenv("REDIS_PORT", "6379"))

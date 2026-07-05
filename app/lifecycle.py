@@ -96,6 +96,16 @@ async def startup() -> None:
 
     await init_producer()
     await _start_inline_ingest_worker()
+    from app.mcp.config import AGENT_CRAWL_BACKEND
+
+    if AGENT_CRAWL_BACKEND == "mcp":
+        from app.mcp.catalog import crawl_catalog
+
+        try:
+            loaded = await crawl_catalog.refresh()
+            logger.info("[startup] MCP catalog ready tools=%d", len(loaded))
+        except Exception as exc:
+            logger.warning("[startup] MCP catalog preload failed (will retry on request): %s", exc)
 
 
 async def shutdown() -> None:

@@ -7,11 +7,11 @@ from mcp.client.stdio import stdio_client
 
 from app.mcp.config import (
     MCP_SERVICE_TOKEN,
-    MCP_SSE_URL,
     MCP_STDIO_ARGS,
     MCP_STDIO_COMMAND,
     MCP_TRANSPORT,
     MCPTransport,
+    mcp_sse_url,
 )
 
 
@@ -19,7 +19,7 @@ from app.mcp.config import (
 async def mcp_session():
     if MCP_TRANSPORT == MCPTransport.SSE:
         headers = {"Authorization": f"Bearer {MCP_SERVICE_TOKEN}"} if MCP_SERVICE_TOKEN else {}
-        async with sse_client(url=MCP_SSE_URL, headers=headers) as (read, write):
+        async with sse_client(url=mcp_sse_url(), headers=headers) as (read, write):
             async with ClientSession(read, write) as session:
                 await session.initialize()
                 yield session

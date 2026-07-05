@@ -144,7 +144,10 @@ async def admin_users(_ctx: dict = Depends(require_admin)):
 @router.patch("/admin/users/{user_id}")
 async def admin_patch_user(user_id: str, body: RolePatchBody, ctx: dict = Depends(require_admin)):
     if user_id == ctx["user"]["id"] and body.role != "admin":
-        raise AiLayerValidationError("Cannot demote your own admin account")
+        raise AiLayerValidationError(
+            "Không thể hạ quyền tài khoản của chính bạn",
+            message_key="errors.cannot_demote_self",
+        )
     row = await update_profile_role(user_id, body.role)
     return ApiResponse.ok(row)
 
@@ -170,7 +173,7 @@ async def admin_get_config(_ctx: dict = Depends(require_admin)):
 @router.patch("/admin/config")
 async def admin_patch_config(body: ConfigPatchBody, _ctx: dict = Depends(require_admin)):
     if not body.updates:
-        raise AiLayerValidationError("No updates")
+        raise AiLayerValidationError("Không có trường nào để cập nhật", message_key="errors.no_updates")
     saved = await patch_config(body.updates)
     return ApiResponse.ok({"saved": saved})
 

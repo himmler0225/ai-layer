@@ -3,7 +3,16 @@ from app.rag.config import RAG_ENABLED
 from app.config.logger import Logger
 from app.ingest.mappers.social_review import slugify_movie_id
 from app.rag.knowledge import is_movie_fresh, movie_has_knowledge
-from app.rag.movie_hint import current_question, extract_movie_name, has_movie_context
+from app.rag.movie_hint import (
+    context_for_filtering,
+    current_question,
+    extract_movie_name,
+    has_movie_context,
+    is_short_followup,
+    wants_catalog,
+    wants_raw_comments,
+    wants_review,
+)
 from app.services.agent.constants import _TIKTOK, _YOUTUBE
 
 logger = Logger.get(__name__)
@@ -20,6 +29,15 @@ _MOVIE_CORE = frozenset(
         "extract_id_from_url",
     }
 )
+_COMMENT_TOOLS = frozenset(
+    {
+        "extract_id_from_url",
+        "youtube_get_comments",
+        "youtube_get_comments_batch",
+        "tiktok_comments",
+        "tiktok_video_info",
+    }
+)
 _RAG_CACHE_TOOLS = frozenset(
     {"search_movie_summary", "search_aspect_evidence", "get_raw_reviews", "extract_id_from_url"}
 )
@@ -29,15 +47,12 @@ _REVIEW_QUERY = re.compile(
 )
 
 
+def _is_catalog_tool(name: str) -> bool:
+    return name.startswith("movie_") or name == "extract_id_from_url"
+
+
 def detect_platform(task: str) -> str | None:
-    """Phát hiện platform.
-
-    Args:
-        task: (str) Tham số `task`.
-
-    Returns:
-        (str | None) Kết quả trả về."""
-    question = current_question(task)
+    question = context_for_filtering(task)
     has_tiktok = bool(_TIKTOK.search(question))
     has_youtube = bool(_YOUTUBE.search(question))
     if has_tiktok and (not has_youtube):
@@ -48,14 +63,6 @@ def detect_platform(task: str) -> str | None:
 
 
 def filter_tools_by_platform(tools: list[dict], task: str) -> list[dict]:
-    """Lọc tools by platform.
-
-    Args:
-        tools: (List[Dict]) Tham số `tools`.
-        task: (str) Tham số `task`.
-
-    Returns:
-        (List[Dict]) Kết quả trả về."""
     platform = detect_platform(task)
     if platform is None:
         return tools
@@ -66,8 +73,32 @@ def filter_tools_by_platform(tools: list[dict], task: str) -> list[dict]:
     return filtered
 
 
+def _narrow_for_raw_comments(tools: list[dict], task: str) -> list[dict] | None:
+    ctx = context_for_filtering(task)
+    if not wants_raw_comments(ctx) and not wants_raw_comments(current_question(task)):
+        return None
+    narrowed = [t for t in tools if t.get("name") in _COMMENT_TOOLS]
+    if narrowed and len(narrowed) < len(tools):
+        logger.info("[agent] raw comments intent: tools %d → %d", len(tools), len(narrowed))
+        return narrowed
+    return None
+
+
+def _narrow_for_catalog_query(tools: list[dict], task: str) -> list[dict] | None:
+    ctx = context_for_filtering(task)
+    question = current_question(task)
+    if not wants_catalog(ctx) and not wants_catalog(question):
+        return None
+    if wants_review(ctx) or wants_review(question):
+        return None
+    narrowed = [t for t in tools if _is_catalog_tool(t.get("name", ""))]
+    if narrowed and len(narrowed) < len(tools):
+        logger.info("[agent] catalog intent: tools %d → %d", len(tools), len(narrowed))
+        return narrowed
+    return narrowed if narrowed else None
+
+
 def _narrow_for_movie_context(tools: list[dict], task: str) -> list[dict]:
-    """Thu hẹp tool khi task có ngữ cảnh phim."""
     if not has_movie_context(task):
         return tools
     if detect_platform(task):
@@ -80,11 +111,10 @@ def _narrow_for_movie_context(tools: list[dict], task: str) -> list[dict]:
 
 
 def _narrow_for_review_query(tools: list[dict], task: str) -> list[dict]:
-    """Thu hẹp tool khi câu hỏi dạng review phim (không có block phim)."""
     if has_movie_context(task):
         return tools
-    question = current_question(task)
-    if not _REVIEW_QUERY.search(question):
+    ctx = context_for_filtering(task)
+    if not wants_review(ctx) and not _REVIEW_QUERY.search(current_question(task)):
         return tools
     narrowed = [t for t in tools if t.get("name") in _MOVIE_CORE]
     if narrowed and len(narrowed) < len(tools):
@@ -94,14 +124,6 @@ def _narrow_for_review_query(tools: list[dict], task: str) -> list[dict]:
 
 
 async def _narrow_for_rag_cache(tools: list[dict], task: str) -> list[dict]:
-    """(Nội bộ) Narrow for rag cache (async).
-
-    Args:
-        tools: (List[Dict]) Tham số `tools`.
-        task: (str) Tham số `task`.
-
-    Returns:
-        (List[Dict]) Kết quả trả về."""
     if not RAG_ENABLED:
         return tools
     movie_name = extract_movie_name(task)
@@ -120,15 +142,13 @@ async def _narrow_for_rag_cache(tools: list[dict], task: str) -> list[dict]:
 
 
 async def prepare_tools_for_task(tools: list[dict], task: str) -> list[dict]:
-    """Chuẩn bị tools for task (async).
-
-    Args:
-        tools: (List[Dict]) Tham số `tools`.
-        task: (str) Tham số `task`.
-
-    Returns:
-        (List[Dict]) Kết quả trả về."""
     tools = filter_tools_by_platform(tools, task)
+    comments = _narrow_for_raw_comments(tools, task)
+    if comments is not None:
+        return comments
+    catalog = _narrow_for_catalog_query(tools, task)
+    if catalog is not None:
+        return catalog
     tools = _narrow_for_review_query(tools, task)
     tools = _narrow_for_movie_context(tools, task)
     tools = await _narrow_for_rag_cache(tools, task)
@@ -136,13 +156,11 @@ async def prepare_tools_for_task(tools: list[dict], task: str) -> list[dict]:
 
 
 def prepare_tools(tools: list[dict], task: str) -> list[dict]:
-    """Chuẩn bị tools.
-
-    Args:
-        tools: (List[Dict]) Tham số `tools`.
-        task: (str) Tham số `task`.
-
-    Returns:
-        (List[Dict]) Kết quả trả về."""
     tools = filter_tools_by_platform(tools, task)
+    comments = _narrow_for_raw_comments(tools, task)
+    if comments is not None:
+        return comments
+    catalog = _narrow_for_catalog_query(tools, task)
+    if catalog is not None:
+        return catalog
     return _narrow_for_movie_context(tools, task)

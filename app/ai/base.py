@@ -50,7 +50,7 @@ class BaseLLM(ABC):
         input: Any = None,
         max_output_tokens: int | None = None,
         tools: list[dict] | None = None,
-        tool_choice: str | None = None,
+        tool_choice: str | dict[str, Any] | None = None,
     ) -> Any:
         """Tạo response (async).
 

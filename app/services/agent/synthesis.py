@@ -138,15 +138,17 @@ async def run_synthesis(
                 )
                 continue
             log_error(logger, exc, where="synthesis")
-            raise AiLayerLLMError(user_message(exc), cause=exc) from exc
+            vi, en = user_message(exc)
+            raise AiLayerLLMError(vi, message_en=en, cause=exc) from exc
 
         err = status_error(response)
         if err:
-            raise AiLayerLLMError(err)
+            raise AiLayerLLMError(f"Lỗi LLM: {err}", message_en=f"LLM error: {err}")
         return extract_response_text(response)
 
     log_error(logger, last_exc or AiLayerLLMError("synthesis failed"), where="synthesis")
-    raise AiLayerLLMError(user_message(last_exc or AiLayerLLMError("synthesis failed")), cause=last_exc) from last_exc
+    vi, en = user_message(last_exc or AiLayerLLMError("synthesis failed"))
+    raise AiLayerLLMError(vi, message_en=en, cause=last_exc) from last_exc
 
 
 async def iter_synthesis_deltas(
@@ -209,9 +211,11 @@ async def iter_synthesis_deltas(
         )
     except Exception as exc:
         if last_exc is not None:
-            raise AiLayerLLMError(user_message(last_exc), cause=last_exc) from exc
+            vi, en = user_message(last_exc)
+            raise AiLayerLLMError(vi, message_en=en, cause=last_exc) from exc
         log_error(logger, exc, where="synthesis_stream")
-        raise AiLayerLLMError(user_message(exc), cause=exc) from exc
+        vi, en = user_message(exc)
+        raise AiLayerLLMError(vi, message_en=en, cause=exc) from exc
 
     if text:
         yield text

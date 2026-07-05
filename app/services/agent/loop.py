@@ -1,13 +1,17 @@
 import uuid
 from typing import Any
+from app.config.logger import Logger
 from app.exceptions import AiLayerConfigError
 from app.services.agent import config
 from app.services.agent.finalize import finish
+from app.rag.movie_hint import enrich_short_followup_task
 from app.services.agent.platform import prepare_tools_for_task
 from app.services.agent.guards import apply_tool_budget, extract_video_items
 from app.services.agent.synthesis import run_synthesis
 from app.services.agent.tools import execute_parallel, extract_function_calls
 from app.utils.llm_responses import extract_response_text, is_incomplete_for, output_items_to_input
+
+logger = Logger.get(__name__)
 
 
 def new_context(*, task: str, tools: list[dict], system: str, max_iter: int) -> dict[str, Any]:
@@ -47,8 +51,17 @@ async def bootstrap_agent(task: str, tools: list[dict], system: str | None, max_
 
     resolved_system = system or _prompts.AGENT_SYSTEM
     if not (resolved_system or "").strip():
-        raise AiLayerConfigError("AGENT_SYSTEM chưa cấu hình — thêm key trên Supabase config")
+        raise AiLayerConfigError(
+            "AGENT_SYSTEM chưa cấu hình — thêm key trên Supabase config",
+            message_key="errors.config_agent_system",
+        )
+    task = enrich_short_followup_task(task)
     prepared = await prepare_tools_for_task(tools, task)
+    logger.info(
+        "[agent] bootstrap tools=%d movie=%d",
+        len(prepared),
+        sum(1 for t in prepared if t.get("name", "").startswith("movie_")),
+    )
     return new_context(task=task, tools=prepared, system=resolved_system, max_iter=max_iter)
 
 

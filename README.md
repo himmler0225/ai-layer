@@ -10,10 +10,10 @@ Built on **OpenAI-compatible chat completions** (Responses-shaped adapter). The 
         ▼
    AI Layer ── agent loop (SSE) ──► data-miner (YouTube / TikTok crawl)
         │
-        ├─ PostgreSQL (local)   chat, video cache, movies, RAG vectors
+        ├─ Supabase Postgres      chat, video cache, movies, RAG vectors (DATABASE_URL)
         ├─ Redis                auth + history cache
         ├─ RabbitMQ             ingest jobs (comments → RAG → summarize)
-        └─ Supabase             Auth, profiles, runtime config table only
+        └─ Supabase REST        Auth, profiles, runtime config table
 ```
 
 Further reading: [docs/FLOW.md](docs/FLOW.md) · [docs/RAG-GUIDE.md](docs/RAG-GUIDE.md) · [docs/REFACTOR-AUDIT.md](docs/REFACTOR-AUDIT.md) · [docs/LANGGRAPH-GUIDE.md](docs/LANGGRAPH-GUIDE.md) · [../docs/MCP-PHASE2-GUIDE.md](../docs/MCP-PHASE2-GUIDE.md)
@@ -144,7 +144,11 @@ Prompts and limits come from **Supabase `config`**, not hardcoded in the repo.
 
 ## Database
 
-PostgreSQL (local `DATABASE_URL`). Schema via SQLAlchemy models.
+**Supabase Postgres** via `DATABASE_URL` (pooler port 6543 khuyến nghị). Auth + `config` vẫn qua Supabase REST (`SUPABASE_*`).
+
+**Setup một lần:**
+1. Supabase SQL Editor: chạy `config/supabase-setup.sql` (bật `vector`)
+2. `cd ai-layer && alembic upgrade head`
 
 **Migrations (Alembic)** — `alembic/`:
 - Fresh DB: `alembic upgrade head`
@@ -191,8 +195,8 @@ cd ai-layer
 python3 -m venv .venv && source .venv/bin/activate   # Python 3.14+; use ai-layer venv, not data-miner
 pip install -r requirements.txt
 cp .env.example .env
-# Fill API_KEYS, DATABASE_URL, SUPABASE_*, RABBITMQ_URL
-# Fill Supabase config table (prompts + OPENAI_*)
+# Fill API_KEYS, DATABASE_URL (Supabase Postgres), SUPABASE_*, RABBITMQ_URL
+# Supabase: config/supabase-setup.sql → alembic upgrade head
 
 fastapi dev app/main.py --port 8001
 ```
@@ -200,7 +204,7 @@ fastapi dev app/main.py --port 8001
 - **Inline ingest** (dev): `INGEST_WORKER_INLINE=true` — one process runs API + RabbitMQ consumer.
 - **Separate worker**: `INGEST_WORKER_INLINE=false` + `python -m app.ingest`.
 
-Docker stack lives in the parent monorepo (`docker-compose.yml`): postgres (pgvector), redis, rabbitmq, `ai-layer`, `ingest-worker`.
+Docker stack lives in the parent monorepo (`docker-compose.yml`): redis, rabbitmq, `ai-layer`, `ingest-worker`, `data-miner`. Postgres = Supabase (không còn container local).
 
 Docs UI: `http://localhost:8001/docs`
 

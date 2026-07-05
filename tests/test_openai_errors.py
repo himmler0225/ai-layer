@@ -23,6 +23,7 @@ def test_should_retry_on_connection_drop():
 
 def test_user_message_400_vietnamese():
     exc = APIStatusError("bad", response=_FakeResponse(400), body={})
-    msg = user_message(exc)
-    assert "LLM" in msg
-    assert "prompt" in msg.lower() or "tool" in msg.lower()
+    vi, en = user_message(exc)
+    assert "LLM" in vi
+    assert "prompt" in vi.lower() or "tool" in vi.lower()
+    assert "LLM" in en

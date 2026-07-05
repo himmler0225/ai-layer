@@ -5,6 +5,7 @@ from app.exceptions import AiLayerConfigError
 import app.config.settings as settings
 from app.config.logger import Logger
 from app.config.db.models import Base
+from app.config.db.url import database_url_label, resolve_database_url
 
 logger = Logger.get(__name__)
 _engine: AsyncEngine | None = None
@@ -12,18 +13,20 @@ _session_factory: async_sessionmaker[AsyncSession] | None = None
 
 
 def _database_url() -> str:
-    """(Nội bộ) Database url.
-
-    Returns:
-        (str) Kết quả trả về."""
     url = settings.DATABASE_URL
     if not url:
-        raise AiLayerConfigError("DATABASE_URL is not configured")
-    if url.startswith("postgresql://"):
-        return url.replace("postgresql://", "postgresql+asyncpg://", 1)
-    if url.startswith("postgres://"):
-        return url.replace("postgres://", "postgresql+asyncpg://", 1)
-    return url
+        raise AiLayerConfigError(
+            "DATABASE_URL chưa cấu hình — lấy connection string từ Supabase Dashboard → Database"
+        )
+    async_url, _ = resolve_database_url(url)
+    return async_url
+
+
+def _connect_args() -> dict:
+    if not settings.DATABASE_URL:
+        return {}
+    _, connect_args = resolve_database_url(settings.DATABASE_URL)
+    return connect_args
 
 
 async def get_session_factory() -> async_sessionmaker[AsyncSession]:
@@ -34,10 +37,28 @@ async def get_session_factory() -> async_sessionmaker[AsyncSession]:
     global _engine, _session_factory
     if _session_factory is None:
         _engine = create_async_engine(
-            _database_url(), pool_size=5, max_overflow=15, json_serializer=json.dumps, json_deserializer=json.loads
+            _database_url(),
+            pool_size=5,
+            max_overflow=15,
+            connect_args=_connect_args(),
+            json_serializer=json.dumps,
+            json_deserializer=json.loads,
         )
         _session_factory = async_sessionmaker(_engine, expire_on_commit=False)
     return _session_factory
+
+
+async def _verify_connection() -> None:
+    assert _engine is not None
+    label = database_url_label(settings.DATABASE_URL)
+    try:
+        async with _engine.connect() as conn:
+            version = (await conn.execute(text("SELECT version()"))).scalar_one()
+            version_short = str(version).split(",")[0].strip()
+        logger.info("[db] connected %s (%s)", label, version_short)
+    except Exception as exc:
+        logger.error("[db] connection failed %s: %s", label, exc)
+        raise
 
 
 async def init_db() -> None:
@@ -47,6 +68,7 @@ async def init_db() -> None:
         (None) Kết quả trả về."""
     await get_session_factory()
     assert _engine is not None
+    await _verify_connection()
     async with _engine.begin() as conn:
         has_vector = False
         try:
@@ -54,7 +76,7 @@ async def init_db() -> None:
             has_vector = True
         except Exception as exc:
             logger.warning(
-                "[db] pgvector unavailable (%s) - video_chunks table skipped; use pgvector/pgvector image or install pgvector on PostgreSQL",
+                "[db] pgvector unavailable (%s) - video_chunks table skipped; enable extension on Supabase (config/supabase-setup.sql)",
                 exc,
             )
         tables = list(Base.metadata.sorted_tables)

@@ -14,7 +14,11 @@ _client: httpx.AsyncClient | None = None
 
 
 def _headers() -> dict[str, str]:
-    return get_data_miner_headers(dm_config.api_key(), dm_config.service_token())
+    from app.i18n import get_locale
+
+    headers = get_data_miner_headers(dm_config.api_key(), dm_config.service_token())
+    headers["X-Locale"] = get_locale()
+    return headers
 
 
 def _get_client() -> httpx.AsyncClient:

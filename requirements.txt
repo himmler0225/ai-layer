@@ -30,6 +30,9 @@ qrcode[pil]>=8.0
 # GeoIP — optional local DB when GEOIP_DB_PATH is set
 geoip2>=4.8.0
 
+# MCP client (data-miner crawl tools)
+mcp[cli]>=1.0
+
 # Langgraph
 langgraph>=0.2.0
 langchain-core>=0.3.0

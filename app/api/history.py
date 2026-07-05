@@ -165,7 +165,7 @@ async def patch_session(session_id: str, body: SessionPatch, authorization: str 
     user_id = await get_user_id(_parse_token(authorization))
     owner_id = await chat_repo.get_session_user_id(session_id)
     if owner_id != user_id:
-        raise AiLayerNotFoundError("Session not found")
+        raise AiLayerNotFoundError("Không tìm thấy phiên chat", message_key="errors.session_not_found")
     await chat_repo.patch_session(session_id, title=body.title)
     await _bust_sessions(await get_redis(), user_id)
     return ApiResponse.ok({"id": session_id})
@@ -181,7 +181,7 @@ async def delete_session(session_id: str, authorization: str = Header(...)):
     user_id = await get_user_id(_parse_token(authorization))
     owner_id = await chat_repo.get_session_user_id(session_id)
     if owner_id != user_id:
-        raise AiLayerNotFoundError("Session not found")
+        raise AiLayerNotFoundError("Không tìm thấy phiên chat", message_key="errors.session_not_found")
     await chat_repo.delete_session(session_id)
     redis = await get_redis()
     await _bust_sessions(redis, user_id)
@@ -205,7 +205,7 @@ async def get_messages(session_id: str, authorization: str = Header(...)):
             return ApiResponse.ok(json.loads(cached))
     owner_id = await chat_repo.get_session_user_id(session_id)
     if owner_id != user_id:
-        raise AiLayerNotFoundError("Session not found")
+        raise AiLayerNotFoundError("Không tìm thấy phiên chat", message_key="errors.session_not_found")
     msgs = await chat_repo.list_messages(session_id)
     data = [
         {
@@ -233,7 +233,7 @@ async def save_messages(session_id: str, body: list[MessageSave], authorization:
     user_id = await get_user_id(_parse_token(authorization))
     owner_id = await chat_repo.get_session_user_id(session_id)
     if owner_id != user_id:
-        raise AiLayerNotFoundError("Session not found")
+        raise AiLayerNotFoundError("Không tìm thấy phiên chat", message_key="errors.session_not_found")
     await chat_repo.save_messages(
         session_id,
         [

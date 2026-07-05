@@ -9,10 +9,10 @@ from app.exceptions import AiLayerAuthError, AiLayerForbiddenError
 
 def parse_bearer(authorization: str | None) -> str:
     if not authorization or not authorization.startswith("Bearer "):
-        raise AiLayerAuthError("Missing authorization")
+        raise AiLayerAuthError("Thiếu header Authorization", message_key="errors.missing_authorization")
     token = authorization[7:].strip()
     if not token:
-        raise AiLayerAuthError("Missing authorization")
+        raise AiLayerAuthError("Thiếu header Authorization", message_key="errors.missing_authorization")
     return token
 
 
@@ -35,5 +35,5 @@ async def require_admin(
     ctx = await get_current_user(authorization)
     profile = ctx.get("profile")
     if not profile or profile.get("role") != "admin":
-        raise AiLayerForbiddenError("Admin access required")
+        raise AiLayerForbiddenError("Cần quyền admin", message_key="errors.admin_required")
     return ctx

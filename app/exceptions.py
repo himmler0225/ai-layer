@@ -3,9 +3,20 @@ class AiLayerError(Exception):
 
     http_status: int = 500
 
-    def __init__(self, message: str, *, cause: Exception | None = None) -> None:
+    def __init__(
+        self,
+        message: str,
+        *,
+        message_key: str | None = None,
+        message_en: str | None = None,
+        message_params: dict | None = None,
+        cause: Exception | None = None,
+    ) -> None:
         super().__init__(message)
         self.message = message
+        self.message_key = message_key
+        self.message_en = message_en
+        self.message_params = message_params or {}
         self.cause = cause
 
 

@@ -3,6 +3,8 @@ import logging
 
 from openai import APIError, APIStatusError, APITimeoutError, RateLimitError
 
+from app.i18n import t
+
 
 def request_id(exc: Exception) -> str | None:
     rid = getattr(exc, "request_id", None)
@@ -16,46 +18,55 @@ def request_id(exc: Exception) -> str | None:
     return None
 
 
-def user_message(exc: Exception) -> str:
+def user_message(exc: Exception) -> tuple[str, str]:
     rid = request_id(exc)
-    tag = f" Mã lỗi: {rid}." if rid else ""
+    tag_vi = f" Mã lỗi: {rid}." if rid else ""
+    tag_en = f" Error code: {rid}." if rid else ""
+    tag = {"tag": tag_vi}
+    tag_en_kw = {"tag": tag_en}
+
     if isinstance(exc, RateLimitError):
-        return f"LLM provider đang chặn rate limit — đợi vài giây rồi thử lại.{tag}"
+        return t("llm.rate_limit", "vi", **tag), t("llm.rate_limit", "en", **tag_en_kw)
     if isinstance(exc, APITimeoutError):
-        return f"LLM provider phản hồi quá lâu. Thử gửi lại.{tag}"
+        return t("llm.timeout", "vi", **tag), t("llm.timeout", "en", **tag_en_kw)
     if isinstance(exc, APIStatusError):
         code = getattr(exc, "status_code", 0)
         raw = str(exc)
         if code == 401:
-            return "API key LLM sai hoặc hết hạn — kiểm tra Supabase AI_MODELS / .env."
+            return t("llm.invalid_key", "vi"), t("llm.invalid_key", "en")
         if code == 402 or "quota" in raw.lower() or "billing" in raw.lower():
-            return (
-                f"Hết quota hoặc billing LLM provider — kiểm tra key/plan hoặc bật provider khác trong AI_MODELS.{tag}"
-            )
+            return t("llm.quota", "vi", **tag), t("llm.quota", "en", **tag_en_kw)
         if code in (502, 503, 504):
-            return (
-                f"LLM gateway/upstream đang lỗi ({code}) — thử lại sau vài phút "
-                f"hoặc đổi model nhẹ hơn trên Supabase.{tag}"
-            )
+            kw = {"code": code, "tag": tag_vi}
+            kw_en = {"code": code, "tag": tag_en}
+            return t("llm.gateway", "vi", **kw), t("llm.gateway", "en", **kw_en)
         if code >= 500:
-            return f"LLM provider lỗi phía server ({code}). Gửi lại tin nhắn.{tag}"
+            kw = {"code": code, "tag": tag_vi}
+            kw_en = {"code": code, "tag": tag_en}
+            return t("llm.server", "vi", **kw), t("llm.server", "en", **kw_en)
         if code == 400:
             if "upstream" in raw.lower() or "từ chối" in raw.lower():
                 return (
-                    "Model synthesis từ chối request (context quá dài hoặc model upstream lỗi). "
-                    f"Thử hỏi ngắn hơn hoặc giảm số vòng tool.{tag}"
+                    t("llm.bad_request_upstream", "vi", **tag),
+                    t("llm.bad_request_upstream", "en", **tag_en_kw),
                 )
-            return f"LLM không xử lý được request (prompt/context quá nặng). Thử hỏi ngắn hơn.{tag}"
+            return t("llm.bad_request", "vi", **tag), t("llm.bad_request", "en", **tag_en_kw)
     if isinstance(exc, APIError):
         raw = str(exc)
         if "quota" in raw.lower() or "billing" in raw.lower():
-            return (
-                f"Hết quota hoặc billing LLM provider — kiểm tra key/plan hoặc bật provider khác trong AI_MODELS.{tag}"
-            )
+            return t("llm.quota", "vi", **tag), t("llm.quota", "en", **tag_en_kw)
         if "error occurred while processing" in raw.lower():
-            return f"LLM crash giữa chừng — thử lại. Nếu lặp lại, báo dev kèm mã lỗi.{tag}"
-        return f"Lỗi LLM: {raw[:200]}{tag}"
-    return f"Lỗi không xác định: {exc}{tag}"
+            return t("llm.crash", "vi", **tag), t("llm.crash", "en", **tag_en_kw)
+        detail = raw[:200]
+        return (
+            t("llm.raw", "vi", detail=detail, tag=tag_vi),
+            t("llm.raw", "en", detail=detail, tag=tag_en),
+        )
+    detail = str(exc)
+    return (
+        t("llm.unknown", "vi", detail=detail, tag=tag_vi),
+        t("llm.unknown", "en", detail=detail, tag=tag_en),
+    )
 
 
 def _is_connection_drop(exc: Exception) -> bool:

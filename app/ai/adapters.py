@@ -195,12 +195,12 @@ class ChatCompletionStreamAdapter:
                 continue
             choice = chunk.choices[0]
             delta = choice.delta
-            if delta.content:
+            if delta and delta.content:
                 self._text += delta.content
                 yield StreamTextDelta(delta=delta.content)
-            if delta.tool_calls:
+            if delta and delta.tool_calls:
                 for tc in delta.tool_calls:
-                    idx = tc.index
+                    idx = tc.index if tc.index is not None else 0
                     slot = self._tool_calls.setdefault(idx, {"id": "", "name": "", "arguments": ""})
                     if tc.id:
                         slot["id"] = tc.id
@@ -208,6 +208,16 @@ class ChatCompletionStreamAdapter:
                         slot["name"] = tc.function.name
                     if tc.function and tc.function.arguments:
                         slot["arguments"] += tc.function.arguments
+            message = getattr(choice, "message", None)
+            if message and getattr(message, "tool_calls", None):
+                for idx, tc in enumerate(message.tool_calls):
+                    slot = self._tool_calls.setdefault(idx, {"id": "", "name": "", "arguments": ""})
+                    if tc.id:
+                        slot["id"] = tc.id
+                    if tc.function and tc.function.name:
+                        slot["name"] = tc.function.name
+                    if tc.function and tc.function.arguments:
+                        slot["arguments"] = tc.function.arguments
             if choice.finish_reason:
                 self._finish_reason = choice.finish_reason
         self._build_final()

@@ -23,8 +23,8 @@ def status(detail_vi: str, detail_en: str) -> AgentEvent:
     return AgentEvent("status", {"detail_vi": detail_vi, "detail_en": detail_en})
 
 
-def tool_start(tool: str, detail_vi: str, detail_en: str) -> AgentEvent:
-    return AgentEvent("tool_start", {"tool": tool, "detail_vi": detail_vi, "detail_en": detail_en})
+def tool_start(tool: str, detail_vi: str, detail_en: str, args) -> AgentEvent:
+    return AgentEvent("tool_start", {"tool": tool, "detail_vi": detail_vi, "detail_en": detail_en, "args": args})
 
 
 def tool_done(tool: str) -> AgentEvent:
@@ -50,5 +50,27 @@ def done(enriched: dict[str, Any]) -> AgentEvent:
     )
 
 
-def error(message: str) -> AgentEvent:
-    return AgentEvent("error", {"message": message})
+def error(message_vi: str, message_en: str) -> AgentEvent:
+    return AgentEvent(
+        "error",
+        {
+            "detail_vi": message_vi,
+            "detail_en": message_en,
+            "message": message_vi,
+        },
+    )
+
+
+def error_key(key: str, **params) -> AgentEvent:
+    from app.i18n import t
+
+    return AgentEvent(
+        "error",
+        {
+            "detail_vi": t(key, "vi", **params),
+            "detail_en": t(key, "en", **params),
+            "message": t(key, "vi", **params),
+            "message_key": key,
+            "message_params": params,
+        },
+    )

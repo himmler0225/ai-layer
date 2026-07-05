@@ -337,7 +337,7 @@ File: `app/ingest/processing/embeddings.py`
 
 ## 7. Schema Postgres
 
-Tất cả qua `DATABASE_URL` (Postgres local). Supabase **chỉ** auth + `config`.
+Tất cả qua `DATABASE_URL` (Supabase Postgres + pgvector). Supabase REST dùng cho auth + `config`.
 
 ### 7.1 Movie RAG
 
@@ -429,7 +429,7 @@ INGEST_WORKER_INLINE=true
 
 | Biến | Ý nghĩa |
 |------|---------|
-| `DATABASE_URL` | Postgres + extension `vector` |
+| `DATABASE_URL` | Supabase Postgres + extension `vector` |
 | `OPENAI_API_KEY` / provider keys | LLM + embedding (qua `AI_MODELS` hoặc env) |
 
 Agent prompt: Supabase `PROMPTS.agent.system` → mirror `AGENT_SYSTEM`.  

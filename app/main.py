@@ -20,8 +20,10 @@ from app.api.utilities import router as utilities_router
 from app.api.youtube import router as youtube_router
 from app.config.logger import Logger
 from app.exceptions import AiLayerError
+from app.i18n.responses import client_message, localize_detail
 from app.lifecycle import shutdown, startup
 from app.middleware.ip_address import GeoIPMiddleware
+from app.middleware.locale import LocaleMiddleware
 from app.middleware.rate_limit import RateLimitExceeded, limiter, rate_limit_exceeded_handler
 from app.schemas.response import ApiResponse
 from app.services.health import collect_checks, is_healthy
@@ -56,22 +58,32 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(LocaleMiddleware)
 app.add_middleware(GeoIPMiddleware)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
 
 
 @app.exception_handler(AiLayerError)
-async def ai_layer_error_handler(_request: Request, exc: AiLayerError) -> JSONResponse:
+async def ai_layer_error_handler(request: Request, exc: AiLayerError) -> JSONResponse:
+    from app.i18n.locale import resolve_locale
+
+    locale = resolve_locale(request)
     return JSONResponse(
         status_code=exc.http_status,
-        content=ApiResponse.fail(exc.message).model_dump(),
+        content=ApiResponse.fail(client_message(exc, locale)).model_dump(),
     )
 
 
 @app.exception_handler(HTTPException)
-async def http_exception_handler(_request: Request, exc: HTTPException) -> JSONResponse:
-    return JSONResponse(status_code=exc.status_code, content=ApiResponse.fail(str(exc.detail)).model_dump())
+async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
+    from app.i18n.locale import resolve_locale
+
+    locale = resolve_locale(request)
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=ApiResponse.fail(localize_detail(str(exc.detail), locale)).model_dump(),
+    )
 
 
 @app.middleware("http")

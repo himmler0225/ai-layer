@@ -117,8 +117,8 @@ def test_should_fallback_on_502(monkeypatch):
 
 def test_user_message_502_mentions_gateway():
     exc = _make_status_error(502, {"error": {"message": "AI gateway upstream đang lỗi."}})
-    msg = user_message(exc)
-    assert "502" in msg
+    vi, _en = user_message(exc)
+    assert "502" in vi
 
 
 def test_is_stream_open_failure():

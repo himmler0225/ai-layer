@@ -16,7 +16,7 @@ _AUTH_HEADERS = {
 
 def _require_supabase() -> None:
     if not SUPABASE_URL or not SUPABASE_ANON_KEY:
-        raise AiLayerAuthError("Supabase auth is not configured")
+        raise AiLayerAuthError("Supabase auth chưa cấu hình", message_key="errors.supabase_auth_not_configured")
 
 
 async def sign_in_email(email: str, password: str) -> dict[str, Any]:
@@ -137,8 +137,8 @@ async def get_user(token: str) -> dict[str, Any]:
             headers=get_supabase_auth_headers(token, SUPABASE_ANON_KEY),
         )
     if r.status_code != 200:
-        raise AiLayerAuthError("Invalid or expired token")
+        raise AiLayerAuthError("Token không hợp lệ hoặc đã hết hạn", message_key="errors.invalid_token")
     user = r.json()
     if not user.get("id"):
-        raise AiLayerAuthError("Cannot extract user from token")
+        raise AiLayerAuthError("Không lấy được thông tin user từ token", message_key="errors.cannot_extract_user")
     return user

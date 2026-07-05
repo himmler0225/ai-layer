@@ -9,4 +9,4 @@ async def verify_api_key(x_api_key: str = Header(...)):
     Args:
         x_api_key: (str, mặc định Header(...)) Tham số `x_api_key`."""
     if not API_KEYS or x_api_key not in API_KEYS:
-        raise AiLayerAuthError("Invalid API key")
+        raise AiLayerAuthError("API key không hợp lệ", message_key="errors.invalid_api_key")

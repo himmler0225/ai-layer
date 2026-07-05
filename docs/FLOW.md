@@ -10,8 +10,8 @@
 - **ai-chatbot** — UI, gửi `task` + block `[Phim đang xem]`
 - **ai-layer** — agent OpenAI, tool, ingest, RAG search
 - **data-miner** — crawl YouTube/TikTok
-- **Postgres** — hết dữ liệu app (video, comments, movies, RAG)
-- **Supabase** — auth + `config` (có thể override prompt prod)
+- **Supabase Postgres** (`DATABASE_URL`) — dữ liệu app (video, comments, movies, RAG)
+- **Supabase REST** — auth + `config` (có thể override prompt prod)
 - **RabbitMQ** — job ingest nền
 
 Review social chỉ từ YouTube/TikTok. Giá FPT/Tiki chatbot nhét vào prompt, không crawl TMĐT.
