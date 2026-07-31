@@ -49,7 +49,13 @@ app/
 │   ├── utilities.py       # URL shortener, QR
 │   └── admin.py           # health detail, ingest queue stats
 ├── services/
-│   ├── agent/             # runner, stream, engine, synthesis, tools, platform filter
+│   ├── agent/
+│   │   ├── core/          # context, engine, iterate, runner, stream, langgraph_runner/stream
+│   │   ├── events/        # SSE event schema, tool_status
+│   │   ├── guards/        # budget, fallback
+│   │   ├── synthesis/     # finalize, generate
+│   │   ├── tooling/       # dispatch, platform filter, serialize
+│   │   └── graph/         # LangGraph nodes/state (see Roadmap below)
 │   ├── enricher.py        # orchestrate UI metadata
 │   ├── enricher_collect.py # parse tool_call_log → reviews/videos/sources
 │   ├── review_summarizer.py
