@@ -161,6 +161,13 @@ def _apply_group_field(data: dict, bind: dict) -> None:
 
 
 def _coerce_bool(value: Any) -> bool:
+    """(Nội bộ) Coerce bool `_coerce_bool`.
+
+    Args:
+        value: (Any) Tham số `value`.
+
+    Returns:
+        (bool) Kết quả trả về."""
     if isinstance(value, bool):
         return value
     if isinstance(value, str):
@@ -391,6 +398,13 @@ def value_for_required(key: str, schema: dict[str, Any]) -> str | int:
 
 
 def _provider_prefix_map(schema: dict[str, Any]) -> dict[str, str]:
+    """(Nội bộ) Provider prefix map `_provider_prefix_map`.
+
+    Args:
+        schema: (dict[str, Any]) Tham số `schema`.
+
+    Returns:
+        (dict[str, str]) Kết quả trả về."""
     bind = (schema.get("keys", {}).get("AI_MODELS") or {}).get("bind") or {}
     return bind.get("providers") or {}
 
@@ -404,6 +418,13 @@ def provider_settings_prefix(provider_id: str, schema: dict[str, Any] | None = N
 
 
 def _provider_required_setting_keys(prefix: str) -> list[str]:
+    """(Nội bộ) Provider required setting keys `_provider_required_setting_keys`.
+
+    Args:
+        prefix: (str) Tham số `prefix`.
+
+    Returns:
+        (list[str]) Kết quả trả về."""
     return [
         f"{prefix}_API_KEY",
         f"{prefix}_BASE_URL",
@@ -415,6 +436,13 @@ def _provider_required_setting_keys(prefix: str) -> list[str]:
 
 
 def _all_provider_setting_keys(schema: dict[str, Any]) -> set[str]:
+    """(Nội bộ) All provider setting keys `_all_provider_setting_keys`.
+
+    Args:
+        schema: (dict[str, Any]) Tham số `schema`.
+
+    Returns:
+        (set[str]) Kết quả trả về."""
     keys: set[str] = set()
     seen_prefixes: set[str] = set()
     for provider_id in _provider_prefix_map(schema):
@@ -438,6 +466,13 @@ def _all_provider_setting_keys(schema: dict[str, Any]) -> set[str]:
 
 
 def _configured_provider_prefixes(schema: dict[str, Any]) -> list[str]:
+    """(Nội bộ) Configured provider prefixes `_configured_provider_prefixes`.
+
+    Args:
+        schema: (dict[str, Any]) Tham số `schema`.
+
+    Returns:
+        (list[str]) Kết quả trả về."""
     configured: list[str] = []
     seen: set[str] = set()
     candidates = list(_provider_prefix_map(schema)) + [

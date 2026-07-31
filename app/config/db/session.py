@@ -13,6 +13,10 @@ _session_factory: async_sessionmaker[AsyncSession] | None = None
 
 
 def _database_url() -> str:
+    """(Nội bộ) Database url `_database_url`.
+
+    Returns:
+        (str) Kết quả trả về."""
     url = settings.DATABASE_URL
     if not url:
         raise AiLayerConfigError(
@@ -23,6 +27,10 @@ def _database_url() -> str:
 
 
 def _connect_args() -> dict:
+    """(Nội bộ) Kết nối args `_connect_args`.
+
+    Returns:
+        (dict) Kết quả trả về."""
     if not settings.DATABASE_URL:
         return {}
     _, connect_args = resolve_database_url(settings.DATABASE_URL)
@@ -49,6 +57,10 @@ async def get_session_factory() -> async_sessionmaker[AsyncSession]:
 
 
 async def _verify_connection() -> None:
+    """(Nội bộ) Xác minh connection (async) `_verify_connection`.
+
+    Returns:
+        (None) Kết quả trả về."""
     assert _engine is not None
     label = database_url_label(settings.DATABASE_URL)
     try:

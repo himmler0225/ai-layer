@@ -4,6 +4,14 @@ import os
 
 
 def _env_bool(key: str, default: str = "false") -> bool:
+    """(Nội bộ) Env bool `_env_bool`.
+
+    Args:
+        key: (str) Tham số `key`.
+        default: (str, mặc định 'false') Tham số `default`.
+
+    Returns:
+        (bool) Kết quả trả về."""
     return os.getenv(key, default).lower() in {"1", "true", "yes", "on"}
 
 

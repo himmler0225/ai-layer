@@ -13,6 +13,13 @@ DEFAULT_SYSTEM_PROMPT = "You are a helpful assistant that can answer questions a
 
 
 def _parse_system_prompt(prompts_raw: str) -> str:
+    """(Nội bộ) Phân tích system prompt `_parse_system_prompt`.
+
+    Args:
+        prompts_raw: (str) Tham số `prompts_raw`.
+
+    Returns:
+        (str) Kết quả trả về."""
     if not prompts_raw.strip():
         return DEFAULT_SYSTEM_PROMPT
     try:

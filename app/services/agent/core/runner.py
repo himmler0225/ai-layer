@@ -1,10 +1,17 @@
 from typing import Any
 
 from app.exceptions import AiLayerConfigError, AiLayerLLMError, AiLayerTimeoutError
-from app.services.agent.iterate import run_agent_events
+from app.services.agent.core.iterate import run_agent_events
 
 
 def _raise_from_error_event(data: dict[str, Any]) -> None:
+    """(Nội bộ) Raise from error event `_raise_from_error_event`.
+
+    Args:
+        data: (dict[str, Any]) Tham số `data`.
+
+    Returns:
+        (None) Kết quả trả về."""
     vi = data.get("detail_vi") or data.get("message", "")
     en = data.get("detail_en") or vi
     key = data.get("message_key")

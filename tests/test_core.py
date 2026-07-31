@@ -3,8 +3,7 @@ import pytest
 from app.ingest.processing.curate import curate_review_rows, merge_curated
 from app.ingest.processing.quality import is_indexable_comment
 from app.rag.movie_hint import enrich_short_followup_task, is_short_followup, wants_catalog
-from app.services.agent.platform import filter_tools_by_platform, prepare_tools
-from app.services.agent.serialize import serialize_result
+from app.services.agent.tooling import filter_tools_by_platform, prepare_tools, serialize_result
 
 
 def test_filter_tools_youtube_only():
@@ -169,7 +168,7 @@ def test_prepare_tools_catalog_narrows_to_movie():
 
 
 def test_catalog_fallback_romance_china():
-    from app.services.agent.fallback import catalog_fallback_call, catalog_forced_tool_choice
+    from app.services.agent.guards import catalog_fallback_call, catalog_forced_tool_choice
 
     task = "Tôi muốn xem 1 phim tình cảm của Trung"
     tools = [

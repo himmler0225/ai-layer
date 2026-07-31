@@ -26,6 +26,13 @@ _STATIC_SCHEMAS: dict[str, dict] = {
 
 
 async def _schema_for(name: str) -> dict | None:
+    """(Nội bộ) Schema for (async) `_schema_for`.
+
+    Args:
+        name: (str) Tham số `name`.
+
+    Returns:
+        (dict | None) Kết quả trả về."""
     if AGENT_CRAWL_BACKEND == "mcp":
         from app.mcp.catalog import crawl_catalog
 
@@ -36,6 +43,13 @@ async def _schema_for(name: str) -> dict | None:
 
 
 async def _is_crawl_tool(name: str) -> bool:
+    """(Nội bộ) Is crawl tool (async) `_is_crawl_tool`.
+
+    Args:
+        name: (str) Tham số `name`.
+
+    Returns:
+        (bool) Kết quả trả về."""
     if name in _UTIL_TOOL_NAMES:
         return False
     if AGENT_CRAWL_BACKEND == "mcp":
@@ -46,6 +60,14 @@ async def _is_crawl_tool(name: str) -> bool:
 
 
 def _unwrap_data_miner_result(result: Any, name: str) -> dict:
+    """(Nội bộ) Unwrap data miner result `_unwrap_data_miner_result`.
+
+    Args:
+        result: (Any) Tham số `result`.
+        name: (str) Tham số `name`.
+
+    Returns:
+        (dict) Kết quả trả về."""
     if isinstance(result, dict):
         if result.get("success") is True and isinstance(result.get("data"), (dict, list)):
             return result["data"]
@@ -55,6 +77,14 @@ def _unwrap_data_miner_result(result: Any, name: str) -> dict:
 
 
 async def _execute_http_tool(name: str, inputs: dict) -> dict:
+    """(Nội bộ) Thực thi http tool (async) `_execute_http_tool`.
+
+    Args:
+        name: (str) Tham số `name`.
+        inputs: (dict) Tham số `inputs`.
+
+    Returns:
+        (dict) Kết quả trả về."""
     fn = TOOL_HANDLERS.get(name)
     if fn is None:
         return {"error": f"Unknown tool: {name}"}
@@ -65,6 +95,14 @@ async def _execute_http_tool(name: str, inputs: dict) -> dict:
 
 
 async def _execute_mcp_tool(name: str, inputs: dict) -> dict:
+    """(Nội bộ) Thực thi mcp tool (async) `_execute_mcp_tool`.
+
+    Args:
+        name: (str) Tham số `name`.
+        inputs: (dict) Tham số `inputs`.
+
+    Returns:
+        (dict) Kết quả trả về."""
     from app.mcp.client import call_tool
 
     try:
@@ -79,6 +117,15 @@ async def _execute_mcp_tool(name: str, inputs: dict) -> dict:
 
 
 async def execute_tool(name: str, inputs: dict, **kwargs) -> dict:
+    """Thực thi tool (async).
+
+    Args:
+        name: (str) Tham số `name`.
+        inputs: (dict) Tham số `inputs`.
+        **kwargs: (Any) Tham số `**kwargs`.
+
+    Returns:
+        (dict) Kết quả trả về."""
     schema = await _schema_for(name)
     if schema:
         try:

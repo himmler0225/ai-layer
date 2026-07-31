@@ -3,12 +3,10 @@ from typing import Any
 from app.config.logger import Logger
 from app.exceptions import AiLayerConfigError
 from app.services.agent import config
-from app.services.agent.finalize import finish
 from app.rag.movie_hint import enrich_short_followup_task
-from app.services.agent.platform import prepare_tools_for_task
+from app.services.agent.tooling import execute_parallel, extract_function_calls, prepare_tools_for_task
 from app.services.agent.guards import apply_tool_budget, extract_video_items
-from app.services.agent.synthesis import run_synthesis
-from app.services.agent.tools import execute_parallel, extract_function_calls
+from app.services.agent.synthesis import finish, run_synthesis
 from app.utils.llm_responses import extract_response_text, is_incomplete_for, output_items_to_input
 
 logger = Logger.get(__name__)

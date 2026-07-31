@@ -35,6 +35,14 @@ _EVIDENCE_TOOLS: set[str] = frozenset(
 
 
 def tool_signature(name: str, inputs: dict[str, Any]) -> str:
+    """Tool signature.
+
+    Args:
+        name: (str) Tham số `name`.
+        inputs: (dict[str, Any]) Tham số `inputs`.
+
+    Returns:
+        (str) Kết quả trả về."""
     try:
         payload = json.dumps(inputs or {}, sort_keys=True, ensure_ascii=False)
     except TypeError:
@@ -43,15 +51,37 @@ def tool_signature(name: str, inputs: dict[str, Any]) -> str:
 
 
 def count_tool_name(log: list[dict[str, Any]], name: str) -> int:
+    """Count tool name.
+
+    Args:
+        log: (list[dict[str, Any]]) Tham số `log`.
+        name: (str) Tham số `name`.
+
+    Returns:
+        (int) Kết quả trả về."""
     return sum(1 for entry in log if entry.get("tool") == name)
 
 
 def is_budget_block(entry: dict[str, Any]) -> bool:
+    """Is budget block.
+
+    Args:
+        entry: (dict[str, Any]) Tham số `entry`.
+
+    Returns:
+        (bool) Kết quả trả về."""
     result = entry.get("result") or {}
     return result.get("error") == "search_budget_exhausted"
 
 
 def _result_payload(result: Any) -> dict[str, Any]:
+    """(Nội bộ) Result payload `_result_payload`.
+
+    Args:
+        result: (Any) Tham số `result`.
+
+    Returns:
+        (dict[str, Any]) Kết quả trả về."""
     if not isinstance(result, dict):
         return {}
     data = result.get("data")
@@ -61,6 +91,13 @@ def _result_payload(result: Any) -> dict[str, Any]:
 
 
 def extract_video_items(result: Any) -> list[dict[str, Any]]:
+    """Trích xuất video items.
+
+    Args:
+        result: (Any) Tham số `result`.
+
+    Returns:
+        (list[dict[str, Any]]) Kết quả trả về."""
     payload = _result_payload(result)
     for key in ("results", "videos", "items"):
         items = payload.get(key)
@@ -70,6 +107,14 @@ def extract_video_items(result: Any) -> list[dict[str, Any]]:
 
 
 def video_ids_from_log(log: list[dict[str, Any]], *, tool_name: str = "youtube_search") -> list[str]:
+    """Video ids from log.
+
+    Args:
+        log: (list[dict[str, Any]]) Tham số `log`.
+        tool_name: (str, mặc định 'youtube_search') Tham số `tool_name`.
+
+    Returns:
+        (list[str]) Kết quả trả về."""
     ids: list[str] = []
     for entry in log:
         if entry.get("tool") != tool_name or is_budget_block(entry):
@@ -82,6 +127,13 @@ def video_ids_from_log(log: list[dict[str, Any]], *, tool_name: str = "youtube_s
 
 
 def has_evidence_data(log: list[dict[str, Any]]) -> bool:
+    """Has evidence data.
+
+    Args:
+        log: (list[dict[str, Any]]) Tham số `log`.
+
+    Returns:
+        (bool) Kết quả trả về."""
     for entry in log:
         if is_budget_block(entry):
             continue
@@ -101,6 +153,13 @@ def has_evidence_data(log: list[dict[str, Any]]) -> bool:
 
 
 def count_last_signature(log: list[dict[str, Any]]) -> int:
+    """Count last signature.
+
+    Args:
+        log: (list[dict[str, Any]]) Tham số `log`.
+
+    Returns:
+        (int) Kết quả trả về."""
     if not log:
         return 0
     last = log[-1]
@@ -113,6 +172,13 @@ def count_last_signature(log: list[dict[str, Any]]) -> int:
 
 
 def count_last_tool_name(log: list[dict[str, Any]]) -> int:
+    """Count last tool name.
+
+    Args:
+        log: (list[dict[str, Any]]) Tham số `log`.
+
+    Returns:
+        (int) Kết quả trả về."""
     if not log:
         return 0
     name = str(log[-1].get("tool") or "")
@@ -136,6 +202,14 @@ def apply_tool_budget(ctx: dict[str, Any]) -> None:
 
 
 def is_search_budget_exhausted(tool_name: str, tool_call_log: list[dict[str, Any]]) -> bool:
+    """Is search budget exhausted.
+
+    Args:
+        tool_name: (str) Tham số `tool_name`.
+        tool_call_log: (list[dict[str, Any]]) Tham số `tool_call_log`.
+
+    Returns:
+        (bool) Kết quả trả về."""
     if tool_name not in _SEARCH_TOOLS:
         return False
     return count_tool_name(tool_call_log, tool_name) >= _MAX_SEARCH_PER_PLATFORM
@@ -145,6 +219,14 @@ def search_budget_message(
     tool_name: str,
     tool_call_log: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
+    """Search budget message.
+
+    Args:
+        tool_name: (str) Tham số `tool_name`.
+        tool_call_log: (list[dict[str, Any]] | None, mặc định None) Tham số `tool_call_log`.
+
+    Returns:
+        (dict[str, Any]) Kết quả trả về."""
     follow = "youtube_get_comments_batch" if tool_name == "youtube_search" else "tiktok_comments"
     message = (
         f"Đã gọi {tool_name} đủ lần cho phiên này. "

@@ -168,7 +168,7 @@ Review phim này giúp tôi
 
 ### 5.2 Lọc tool trước OpenAI — `prepare_tools_for_task()`
 
-File: `app/services/agent/platform.py` — gọi từ `app/services/agent/loop.py` → `bootstrap_agent()`.
+File: `app/services/agent/tooling/platform.py` — gọi từ `app/services/agent/core/context.py` → `bootstrap_agent()`.
 
 Thứ tự lọc:
 
@@ -226,7 +226,7 @@ L3: sort `likes DESC`, không vector — `coverage` = `sufficient` nếu có row
 
 ### 5.5 Sau mỗi tool crawl — ingest nền
 
-`app/services/agent/tools.py` → `schedule_tool_ingest()` sau mỗi tool thành công.
+`app/services/agent/tooling/dispatch.py` → `schedule_tool_ingest()` sau mỗi tool thành công.
 
 `movie_hint` = `extract_movie_name(task)` (tối đa 120 ký tự).
 
@@ -444,11 +444,11 @@ Ingest LLM (aspect group/summary): hardcoded `app/services/prompts.py` — **kh�
 | Bước | File |
 |------|------|
 | API entry (sync/stream) | `app/api/agent.py` |
-| Runner vòng lặp | `app/services/agent/runner.py` |
-| SSE stream | `app/services/agent/stream.py` |
-| Một bước iteration | `app/services/agent/engine.py` |
-| Bootstrap agent | `app/services/agent/loop.py` |
-| Lọc tool | `app/services/agent/platform.py` |
+| Runner vòng lặp | `app/services/agent/core/runner.py` |
+| SSE stream | `app/services/agent/core/stream.py` |
+| Một bước iteration | `app/services/agent/core/engine.py` |
+| Bootstrap agent | `app/services/agent/core/context.py` |
+| Lọc tool | `app/services/agent/tooling/platform.py` |
 | Cache check | `app/rag/knowledge.py` |
 | Product name | `app/rag/movie_hint.py` |
 | Tool schema | `app/tools/rag_definitions.py` |
@@ -458,7 +458,7 @@ Ingest LLM (aspect group/summary): hardcoded `app/services/prompts.py` — **kh�
 | L3 list | `app/repositories/raw_reviews.py` |
 | Vector literal | `app/repositories/pgvector.py` |
 | Embed query | `app/ingest/processing/embeddings.py` |
-| Schedule ingest sau crawl | `app/services/agent/tools.py` |
+| Schedule ingest sau crawl | `app/services/agent/tooling/dispatch.py` |
 
 ### Ghi (ingest pipeline)
 
@@ -511,7 +511,7 @@ Hiện `ASPECT_GROUP_*` / `ASPECT_SUMMARY_*` trong `services/prompts.py`. Patter
 
 ### LangGraph / checkpoint (roadmap)
 
-Loop hiện tại: `services/agent/runner.py` + `stream.py` dùng chung `loop.py`. Khi cần branching phức tạp → [LANGGRAPH-GUIDE.md](./LANGGRAPH-GUIDE.md).
+Loop hiện tại: `services/agent/core/runner.py` + `core/stream.py` dùng chung `core/context.py`. Khi cần branching phức tạp → [LANGGRAPH-GUIDE.md](./LANGGRAPH-GUIDE.md).
 
 ---
 

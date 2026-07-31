@@ -5,8 +5,8 @@ from app.ai.router import TASK_AGENT_TOOL
 from app.config.logger import Logger
 from app.exceptions import AiLayerError
 from app.services.agent import config
-from app.services.agent.engine import tool_round_action
-from app.services.agent.fallback import catalog_fallback_call, catalog_forced_tool_choice
+from app.services.agent.core.engine import tool_round_action
+from app.services.agent.guards.fallback import catalog_fallback_call, catalog_forced_tool_choice
 from app.services.agent.events import (
     AgentEvent,
     data_preview as ev_data_preview,
@@ -17,8 +17,10 @@ from app.services.agent.events import (
     text_delta as ev_text_delta,
     tool_done as ev_tool_done,
     tool_start as ev_tool_start,
+    tool_status,
+    _parse_args,
 )
-from app.services.agent.loop import (
+from app.services.agent.core.context import (
     begin_tool_round,
     bootstrap_agent,
     complete_tool_round,
@@ -27,7 +29,7 @@ from app.services.agent.loop import (
     video_preview,
 )
 from app.services.agent.synthesis import iter_synthesis_deltas, run_synthesis
-from app.services.agent.tool_status import _parse_args, tool_status
+from app.i18n import both, t
 from app.utils.llm_errors import log_error, user_message
 from app.utils.llm_responses import create_response, extract_response_text, response_stream, status_error
 
@@ -37,19 +39,19 @@ logger = Logger.get(__name__)
 async def _yield_synthesis(
     ctx: dict, *, forced: bool, stream_llm: bool
 ) -> AsyncGenerator[AgentEvent, None]:
+    """(Nội bộ) Yield synthesis (async) `_yield_synthesis`.
+
+    Args:
+        ctx: (dict) Tham số `ctx`.
+        forced: (bool) Tham số `forced`.
+        stream_llm: (bool) Tham số `stream_llm`.
+
+    Returns:
+        (AsyncGenerator[AgentEvent, None]) Kết quả trả về."""
     if not ctx["tool_call_log"]:
         return
     if stream_llm:
-        detail_vi = (
-            "Đang tổng hợp câu trả lời từ dữ liệu đã thu…"
-            if forced
-            else "Đang viết câu trả lời từ dữ liệu đã thu…"
-        )
-        detail_en = (
-            "Summarizing answer from collected data…"
-            if forced
-            else "Writing answer from collected data…"
-        )
+        detail_vi, detail_en = both("agent.status.synthesizing" if forced else "agent.status.writing")
         logger.info("[agent] synthesis_stream model=%s (forced=%s)", config.synth_model(), forced)
         yield ev_status(detail_vi, detail_en)
         collected_text = ""
@@ -79,6 +81,17 @@ async def _handle_incomplete(
     *,
     stream_llm: bool,
 ) -> AsyncGenerator[AgentEvent, None]:
+    """(Nội bộ) Xử lý incomplete (async) `_handle_incomplete`.
+
+    Args:
+        ctx: (dict) Tham số `ctx`.
+        final: (Any) Tham số `final`.
+        iteration: (int) Tham số `iteration`.
+        text_streamed: (bool) Tham số `text_streamed`.
+        stream_llm: (bool) Tham số `stream_llm`.
+
+    Returns:
+        (AsyncGenerator[AgentEvent, None]) Kết quả trả về."""
     if config.dual_mode() and ctx["tool_call_log"]:
         logger.warning("[agent] max_output_tokens iteration=%d mode=dual_synthesis_stream", iteration)
         if stream_llm:
@@ -166,6 +179,16 @@ async def _invoke_llm(
 
 
 def _log_llm_round(final: Any, *, iteration: int, attempt: int, tool_choice: Any) -> None:
+    """(Nội bộ) Log llm round `_log_llm_round`.
+
+    Args:
+        final: (Any) Tham số `final`.
+        iteration: (int) Tham số `iteration`.
+        attempt: (int) Tham số `attempt`.
+        tool_choice: (Any) Tham số `tool_choice`.
+
+    Returns:
+        (None) Kết quả trả về."""
     output = getattr(final, "output", None) or []
     names = [getattr(item, "name", None) for item in output if getattr(item, "type", None) == "function_call"]
     logger.info(
@@ -186,6 +209,16 @@ def _should_retry_empty_tool_round(
     call_items: list,
     collected_text: str,
 ) -> bool:
+    """(Nội bộ) Should retry empty tool round `_should_retry_empty_tool_round`.
+
+    Args:
+        ctx: (dict) Tham số `ctx`.
+        iteration: (int) Tham số `iteration`.
+        call_items: (list) Tham số `call_items`.
+        collected_text: (str) Tham số `collected_text`.
+
+    Returns:
+        (bool) Kết quả trả về."""
     if iteration != 1 or ctx["tool_call_log"]:
         return False
     if call_items or collected_text.strip():
@@ -225,6 +258,13 @@ def _resolve_empty_tool_round(
 
 
 def _error_from_ai_layer(exc: AiLayerError) -> AgentEvent:
+    """(Nội bộ) Error from ai layer `_error_from_ai_layer`.
+
+    Args:
+        exc: (AiLayerError) Tham số `exc`.
+
+    Returns:
+        (AgentEvent) Kết quả trả về."""
     if exc.message_key:
         return ev_error_key(exc.message_key, **exc.message_params)
     if exc.message_en:
@@ -252,7 +292,7 @@ async def run_agent_events(
         text_streamed = False
 
         if stream_llm and iteration == 1 and (not ctx["tool_call_log"]):
-            yield ev_status("Đang phân tích câu hỏi…", "Analyzing your question…")
+            yield ev_status(*both("agent.status.analyzing"))
 
         tool_choice: Any = "auto"
         final = None
@@ -295,7 +335,7 @@ async def run_agent_events(
 
             err = status_error(final)
             if err:
-                yield ev_error(f"Lỗi LLM: {err}", f"LLM error: {err}")
+                yield ev_error(t("llm.raw", "vi", detail=err, tag=""), t("llm.raw", "en", detail=err, tag=""))
                 return
 
             if is_max_tokens_incomplete(final):
@@ -319,16 +359,18 @@ async def run_agent_events(
             )
             if next_choice is not None:
                 if stream_llm:
-                    yield ev_status("Đang gọi tool dữ liệu…", "Calling data tools…")
+                    yield ev_status(*both("agent.status.calling_tools"))
                 tool_choice = next_choice
                 continue
             break
 
+        used_fallback = False
         if not call_items:
             fallback = catalog_fallback_call(ctx["task"], ctx["tools"])
             if fallback:
                 logger.warning("[agent] catalog fallback execute tool=%s", fallback.name)
                 call_items = await begin_tool_round(ctx, [fallback])
+                used_fallback = True
 
         if call_items:
             round_output = list(call_items)
@@ -342,7 +384,10 @@ async def run_agent_events(
             preview = video_preview(ctx["tool_call_log"])
             if preview:
                 yield ev_data_preview(preview)
-            if tool_round_action(ctx, iteration) == "force_synthesis":
+            # Fallback nghĩa là vòng này model không gọi tool thật — text (nếu có)
+            # đã stream ra client rồi nhưng không phải câu trả lời cuối, nên ép
+            # synthesis ngay thay vì cho model thêm 1 vòng dễ lặp lại y hệt.
+            if used_fallback or tool_round_action(ctx, iteration) == "force_synthesis":
                 async for event in _yield_synthesis(ctx, forced=True, stream_llm=stream_llm):
                     yield event
                 return

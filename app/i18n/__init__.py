@@ -1,8 +1,9 @@
 from app.i18n.locale import DEFAULT_LOCALE, get_locale, normalize_locale, resolve_locale, set_locale
-from app.i18n.messages import localize, pick, t
+from app.i18n.messages import both, localize, pick, t
 
 __all__ = [
     "DEFAULT_LOCALE",
+    "both",
     "get_locale",
     "localize",
     "normalize_locale",

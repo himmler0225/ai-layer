@@ -13,6 +13,10 @@ _VALID_ROLES = {"user", "admin"}
 
 
 def _require_service_key() -> None:
+    """(Nội bộ) Require service key `_require_service_key`.
+
+    Returns:
+        (None) Kết quả trả về."""
     if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
         raise AiLayerError("Supabase service key is not configured")
 
@@ -97,6 +101,13 @@ async def count_profiles() -> tuple[int, int]:
 
 
 def _parse_content_range(value: str | None) -> int:
+    """(Nội bộ) Phân tích content range `_parse_content_range`.
+
+    Args:
+        value: (str | None) Tham số `value`.
+
+    Returns:
+        (int) Kết quả trả về."""
     if not value or "/" not in value:
         return 0
     try:

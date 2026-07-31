@@ -7,6 +7,13 @@ from app.i18n import t
 
 
 def request_id(exc: Exception) -> str | None:
+    """Request id.
+
+    Args:
+        exc: (Exception) Tham số `exc`.
+
+    Returns:
+        (str | None) Kết quả trả về."""
     rid = getattr(exc, "request_id", None)
     if rid:
         return str(rid)
@@ -19,6 +26,13 @@ def request_id(exc: Exception) -> str | None:
 
 
 def user_message(exc: Exception) -> tuple[str, str]:
+    """User message.
+
+    Args:
+        exc: (Exception) Tham số `exc`.
+
+    Returns:
+        (tuple[str, str]) Kết quả trả về."""
     rid = request_id(exc)
     tag_vi = f" Mã lỗi: {rid}." if rid else ""
     tag_en = f" Error code: {rid}." if rid else ""
@@ -91,6 +105,13 @@ def _is_connection_drop(exc: Exception) -> bool:
 
 
 def should_retry(exc: Exception) -> bool:
+    """Should retry.
+
+    Args:
+        exc: (Exception) Tham số `exc`.
+
+    Returns:
+        (bool) Kết quả trả về."""
     if isinstance(exc, (RateLimitError, APITimeoutError)):
         return True
     if isinstance(exc, APIStatusError) and getattr(exc, "status_code", 0) in (
@@ -106,6 +127,13 @@ def should_retry(exc: Exception) -> bool:
 
 
 def is_upstream_gateway_error(exc: Exception) -> bool:
+    """Is upstream gateway error.
+
+    Args:
+        exc: (Exception) Tham số `exc`.
+
+    Returns:
+        (bool) Kết quả trả về."""
     return isinstance(exc, APIStatusError) and getattr(exc, "status_code", 0) in (
         502,
         503,
@@ -114,6 +142,15 @@ def is_upstream_gateway_error(exc: Exception) -> bool:
 
 
 def log_error(logger: logging.Logger, exc: Exception, *, where: str = "") -> None:
+    """Log error.
+
+    Args:
+        logger: (logging.Logger) Tham số `logger`.
+        exc: (Exception) Tham số `exc`.
+        where: (str, mặc định '') Tham số `where`.
+
+    Returns:
+        (None) Kết quả trả về."""
     logger.error(
         "[llm] %s err=%s request_id=%s",
         where or "call",

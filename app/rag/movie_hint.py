@@ -39,12 +39,14 @@ _REVIEW_INTENT = re.compile(
 _CATALOG_INTENT = re.compile(
     r"(?:"
     r"\b(?:tìm|gợi ý|recommend)\s+phim\b|"
-    r"\bmuốn xem (?:một |1 )?phim\b|"
+    r"\bmuốn xem\b.{0,12}?\bphim\b|"
     r"\b(?:cho|đề xuất)\s+xem phim\b|"
     r"\bphim\s+(?:hàn|trung|mỹ|nhật|thái|việt|anh|pháp|đài|ấn)\b|"
     r"\bphim\s+\S+.*(?:tình cảm|hành động|kinh dị|hài|viễn tưởng|hoạt hình|lãng mạn|"
     r"phiêu lưu|tâm lý|bí ẩn|gia đình)\b|"
-    r"\b(?:tình cảm|hành động|kinh dị|hài|lãng mạn)\b.*\bphim\b"
+    r"\b(?:tình cảm|hành động|kinh dị|hài|lãng mạn)\b.*\bphim\b|"
+    r"\bphim\b.{0,15}?\b(?:nữa|thêm|khác)\b|"
+    r"\b(?:thêm|nhiều)\b.{0,15}?\bphim\b"
     r")",
     re.IGNORECASE,
 )
@@ -56,6 +58,13 @@ _TOPIC_HINTS = ("phim", "video", "youtube", "tiktok", "review", "bình luận", 
 
 
 def _movie_block(task: str) -> str:
+    """(Nội bộ) Movie block `_movie_block`.
+
+    Args:
+        task: (str) Tham số `task`.
+
+    Returns:
+        (str) Kết quả trả về."""
     text = task or ""
     for marker in (MOVIE_BLOCK_MARKER, _LEGACY_PRODUCT_BLOCK):
         if marker in text:
@@ -67,6 +76,13 @@ def _movie_block(task: str) -> str:
 
 
 def conversation_history(task: str) -> str:
+    """Conversation history.
+
+    Args:
+        task: (str) Tham số `task`.
+
+    Returns:
+        (str) Kết quả trả về."""
     text = task or ""
     if CHAT_HISTORY_BLOCK not in text:
         return ""
@@ -77,12 +93,26 @@ def conversation_history(task: str) -> str:
 
 
 def current_question(task: str) -> str:
+    """Current question.
+
+    Args:
+        task: (str) Tham số `task`.
+
+    Returns:
+        (str) Kết quả trả về."""
     if HISTORY_MARKER in task:
         return task.split(HISTORY_MARKER)[-1].strip()
     return (task or "").strip()
 
 
 def is_short_followup(question: str) -> bool:
+    """Is short followup.
+
+    Args:
+        question: (str) Tham số `question`.
+
+    Returns:
+        (bool) Kết quả trả về."""
     q = (question or "").strip()
     if not q or len(q) > 35:
         return False
@@ -106,14 +136,35 @@ def context_for_filtering(task: str) -> str:
 
 
 def wants_raw_comments(text: str) -> bool:
+    """Wants raw comments.
+
+    Args:
+        text: (str) Tham số `text`.
+
+    Returns:
+        (bool) Kết quả trả về."""
     return bool(_RAW_COMMENTS_INTENT.search(text or ""))
 
 
 def wants_review(text: str) -> bool:
+    """Wants review.
+
+    Args:
+        text: (str) Tham số `text`.
+
+    Returns:
+        (bool) Kết quả trả về."""
     return bool(_REVIEW_INTENT.search(text or ""))
 
 
 def wants_catalog(text: str) -> bool:
+    """Wants catalog.
+
+    Args:
+        text: (str) Tham số `text`.
+
+    Returns:
+        (bool) Kết quả trả về."""
     t = text or ""
     if _CATALOG_INTENT.search(t) or _COUNTRY_PHIM.search(t):
         return True
@@ -123,6 +174,13 @@ def wants_catalog(text: str) -> bool:
 
 
 def extract_youtube_video_id(text: str) -> str:
+    """Trích xuất youtube video id.
+
+    Args:
+        text: (str) Tham số `text`.
+
+    Returns:
+        (str) Kết quả trả về."""
     from app.services.url_extractor import extract_id_from_url
 
     for url in _YOUTUBE_URL.findall(text or ""):
@@ -137,6 +195,13 @@ def extract_youtube_video_id(text: str) -> str:
 
 
 def detect_intent(text: str) -> str | None:
+    """Detect intent.
+
+    Args:
+        text: (str) Tham số `text`.
+
+    Returns:
+        (str | None) Kết quả trả về."""
     if wants_raw_comments(text):
         return "raw_comments"
     if wants_review(text):
@@ -147,6 +212,13 @@ def detect_intent(text: str) -> str | None:
 
 
 def extract_movie_name(task: str) -> str:
+    """Trích xuất movie name.
+
+    Args:
+        task: (str) Tham số `task`.
+
+    Returns:
+        (str) Kết quả trả về."""
     block = _movie_block(task)
     if block:
         match = _NAME_LINE.search(block)
@@ -169,6 +241,13 @@ def extract_movie_name(task: str) -> str:
 
 
 def has_movie_context(task: str) -> bool:
+    """Has movie context.
+
+    Args:
+        task: (str) Tham số `task`.
+
+    Returns:
+        (bool) Kết quả trả về."""
     text = task or ""
     if MOVIE_BLOCK_MARKER in text or _LEGACY_PRODUCT_BLOCK in text:
         return True

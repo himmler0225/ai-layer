@@ -88,6 +88,17 @@ def _parse_dt(s: str) -> datetime:
     return datetime.fromisoformat(s.replace("Z", "+00:00"))
 
 
+async def _resolve_user_id(authorization: str | None, x_user_id: str | None) -> str:
+    """Resolve user id từ header `X-User-Id` (trusted service-to-service caller,
+    đã được xác thực bởi bên gọi — router này đã được `verify_api_key` bảo vệ)
+    hoặc từ Supabase bearer token (client gọi trực tiếp, hành vi cũ)."""
+    if x_user_id:
+        return x_user_id
+    if not authorization:
+        raise AiLayerAuthError("Thiếu thông tin xác thực", message_key="errors.invalid_token")
+    return await get_user_id(_parse_token(authorization))
+
+
 @router.get("/history/admin/stats")
 async def admin_session_stats(days: int = 7):
     """Admin session stats (async).
@@ -103,13 +114,17 @@ async def admin_session_stats(days: int = 7):
 
 
 @router.get("/history/sessions")
-async def list_sessions(authorization: str = Header(...)):
+async def list_sessions(
+    authorization: str | None = Header(None),
+    x_user_id: str | None = Header(None, alias="X-User-Id"),
+):
     """List sessions (async).
 
     Args:
-        authorization: (str, mặc định Header(...)) Tham số `authorization`."""
+        authorization: (str | None) Tham số `authorization`.
+        x_user_id: (str | None) Trusted user id từ service caller."""
     try:
-        user_id = await get_user_id(_parse_token(authorization))
+        user_id = await _resolve_user_id(authorization, x_user_id)
     except AiLayerAuthError:
         raise
     except Exception as e:
@@ -136,13 +151,18 @@ async def list_sessions(authorization: str = Header(...)):
 
 
 @router.post("/history/sessions")
-async def upsert_session(body: SessionUpsert, authorization: str = Header(...)):
+async def upsert_session(
+    body: SessionUpsert,
+    authorization: str | None = Header(None),
+    x_user_id: str | None = Header(None, alias="X-User-Id"),
+):
     """Upsert session (async).
 
     Args:
         body: (SessionUpsert) Tham số `body`.
-        authorization: (str, mặc định Header(...)) Tham số `authorization`."""
-    user_id = await get_user_id(_parse_token(authorization))
+        authorization: (str | None) Tham số `authorization`.
+        x_user_id: (str | None) Trusted user id từ service caller."""
+    user_id = await _resolve_user_id(authorization, x_user_id)
     await chat_repo.upsert_session(
         session_id=body.id,
         user_id=user_id,
@@ -155,14 +175,20 @@ async def upsert_session(body: SessionUpsert, authorization: str = Header(...)):
 
 
 @router.patch("/history/sessions/{session_id}")
-async def patch_session(session_id: str, body: SessionPatch, authorization: str = Header(...)):
+async def patch_session(
+    session_id: str,
+    body: SessionPatch,
+    authorization: str | None = Header(None),
+    x_user_id: str | None = Header(None, alias="X-User-Id"),
+):
     """Patch session (async).
 
     Args:
         session_id: (str) Tham số `session_id`.
         body: (SessionPatch) Tham số `body`.
-        authorization: (str, mặc định Header(...)) Tham số `authorization`."""
-    user_id = await get_user_id(_parse_token(authorization))
+        authorization: (str | None) Tham số `authorization`.
+        x_user_id: (str | None) Trusted user id từ service caller."""
+    user_id = await _resolve_user_id(authorization, x_user_id)
     owner_id = await chat_repo.get_session_user_id(session_id)
     if owner_id != user_id:
         raise AiLayerNotFoundError("Không tìm thấy phiên chat", message_key="errors.session_not_found")
@@ -172,13 +198,18 @@ async def patch_session(session_id: str, body: SessionPatch, authorization: str 
 
 
 @router.delete("/history/sessions/{session_id}")
-async def delete_session(session_id: str, authorization: str = Header(...)):
+async def delete_session(
+    session_id: str,
+    authorization: str | None = Header(None),
+    x_user_id: str | None = Header(None, alias="X-User-Id"),
+):
     """Delete session (async).
 
     Args:
         session_id: (str) Tham số `session_id`.
-        authorization: (str, mặc định Header(...)) Tham số `authorization`."""
-    user_id = await get_user_id(_parse_token(authorization))
+        authorization: (str | None) Tham số `authorization`.
+        x_user_id: (str | None) Trusted user id từ service caller."""
+    user_id = await _resolve_user_id(authorization, x_user_id)
     owner_id = await chat_repo.get_session_user_id(session_id)
     if owner_id != user_id:
         raise AiLayerNotFoundError("Không tìm thấy phiên chat", message_key="errors.session_not_found")
@@ -190,13 +221,18 @@ async def delete_session(session_id: str, authorization: str = Header(...)):
 
 
 @router.get("/history/sessions/{session_id}/messages")
-async def get_messages(session_id: str, authorization: str = Header(...)):
+async def get_messages(
+    session_id: str,
+    authorization: str | None = Header(None),
+    x_user_id: str | None = Header(None, alias="X-User-Id"),
+):
     """Lấy messages (async).
 
     Args:
         session_id: (str) Tham số `session_id`.
-        authorization: (str, mặc định Header(...)) Tham số `authorization`."""
-    user_id = await get_user_id(_parse_token(authorization))
+        authorization: (str | None) Tham số `authorization`.
+        x_user_id: (str | None) Trusted user id từ service caller."""
+    user_id = await _resolve_user_id(authorization, x_user_id)
     redis = await get_redis()
     key = f"history:messages:{session_id}"
     if redis:
@@ -223,14 +259,20 @@ async def get_messages(session_id: str, authorization: str = Header(...)):
 
 
 @router.post("/history/sessions/{session_id}/messages")
-async def save_messages(session_id: str, body: list[MessageSave], authorization: str = Header(...)):
+async def save_messages(
+    session_id: str,
+    body: list[MessageSave],
+    authorization: str | None = Header(None),
+    x_user_id: str | None = Header(None, alias="X-User-Id"),
+):
     """Save messages (async).
 
     Args:
         session_id: (str) Tham số `session_id`.
         body: (list[MessageSave]) Tham số `body`.
-        authorization: (str, mặc định Header(...)) Tham số `authorization`."""
-    user_id = await get_user_id(_parse_token(authorization))
+        authorization: (str | None) Tham số `authorization`.
+        x_user_id: (str | None) Trusted user id từ service caller."""
+    user_id = await _resolve_user_id(authorization, x_user_id)
     owner_id = await chat_repo.get_session_user_id(session_id)
     if owner_id != user_id:
         raise AiLayerNotFoundError("Không tìm thấy phiên chat", message_key="errors.session_not_found")

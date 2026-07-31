@@ -11,14 +11,32 @@ _locale_ctx: ContextVar[str] = ContextVar("locale", default=DEFAULT_LOCALE)
 
 
 def get_locale() -> str:
+    """Lấy locale.
+
+    Returns:
+        (str) Kết quả trả về."""
     return _locale_ctx.get()
 
 
 def set_locale(locale: str) -> None:
+    """Đặt locale.
+
+    Args:
+        locale: (str) Tham số `locale`.
+
+    Returns:
+        (None) Kết quả trả về."""
     _locale_ctx.set(normalize_locale(locale))
 
 
 def normalize_locale(value: str | None) -> str:
+    """Chuẩn hóa locale.
+
+    Args:
+        value: (str | None) Tham số `value`.
+
+    Returns:
+        (str) Kết quả trả về."""
     if not value:
         return DEFAULT_LOCALE
     raw = value.strip().lower()
@@ -32,6 +50,13 @@ def normalize_locale(value: str | None) -> str:
 
 
 def resolve_locale(request: Request) -> str:
+    """Giải quyết locale.
+
+    Args:
+        request: (Request) Tham số `request`.
+
+    Returns:
+        (str) Kết quả trả về."""
     header = request.headers.get("x-locale") or request.headers.get("X-Locale")
     if header:
         return normalize_locale(header)

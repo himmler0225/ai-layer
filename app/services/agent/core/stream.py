@@ -1,6 +1,6 @@
 from collections.abc import AsyncGenerator
 
-from app.services.agent.iterate import run_agent_events
+from app.services.agent.core.iterate import run_agent_events
 
 
 async def run_agent_stream(

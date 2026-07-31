@@ -57,10 +57,11 @@ def get_provider_spec(name: str) -> ProviderSpec:
     """Lấy provider spec từ settings (Supabase AI_MODELS)."""
     key = normalize_provider(name)
     prefix = provider_settings_prefix(key)
+    embedding_provider = normalize_provider(getattr(settings, "LLM_EMBEDDING_PROVIDER", "") or "")
     return ProviderSpec(
         name=key,
         settings_prefix=prefix,
-        supports_embeddings=False,
+        supports_embeddings=bool(embedding_provider) and key == embedding_provider,
     )
 
 

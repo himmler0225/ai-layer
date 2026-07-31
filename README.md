@@ -22,7 +22,7 @@ Further reading: [docs/FLOW.md](docs/FLOW.md) · [docs/RAG-GUIDE.md](docs/RAG-GU
 
 ## Highlights
 
-- **Agent loop** — LLM tool calling (YouTube, TikTok, RAG); platform-aware filtering; guards (search budget, force synthesis). Shared logic: `services/agent/engine.py`.
+- **Agent loop** — LLM tool calling (YouTube, TikTok, RAG); platform-aware filtering; guards (search budget, force synthesis). Shared logic: `services/agent/core/engine.py`.
 - **Dual-model mode** — optional different `tool_model` vs `model` on the same provider (e.g. XAH); synthesis streams separately when they differ.
 - **SSE streaming** — token-by-token `text_delta` (including live synthesis in dual-mode); tool progress events; metadata without blocking the text stream.
 - **Enrichment** — derives `sources`, analyzed `videos` (only videos actually crawled, not full search pages); narrative answer lives in the agent bubble only.
@@ -218,7 +218,7 @@ Docs UI: `http://localhost:8001/docs`
 
 ## Roadmap: LangGraph
 
-The agent loop today is a **custom while-loop** around OpenAI Responses API (`services/agent/runner.py`, `stream.py`). That is enough for the current flow: tool rounds → optional synthesis → enrich.
+The agent loop today is a **custom while-loop** around OpenAI Responses API (`services/agent/core/runner.py`, `core/stream.py`). That is enough for the current flow: tool rounds → optional synthesis → enrich.
 
 **Hướng dẫn migrate đầy đủ (tiếng Việt):** [docs/LANGGRAPH-GUIDE.md](docs/LANGGRAPH-GUIDE.md) — map state, graph mục tiêu, từng bước PR, streaming, flag `AGENT_BACKEND`.
 

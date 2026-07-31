@@ -21,11 +21,12 @@ Liên quan:
 | **Synthesis stream** | 1 lần stream/model; lỗi SSE → fallback `run_synthesis` (non-stream) |
 | **definitions** | Bỏ alias `_RAG_TOOLS` |
 | **data-miner client** | `get_trending()` → `search_youtube(..., sort=view_count)` (route trending YouTube không tồn tại) |
+| **Thư mục `services/agent/`** | 20 file phẳng → nhóm theo concern: `core/` (runner, stream, iterate, engine, context, langgraph stub), `guards/` (budget, fallback), `synthesis/` (generate, finalize), `tooling/` (platform, dispatch, serialize), `events/` (schema, tool_status). Public API giữ nguyên qua `__init__.py` re-export — hầu hết import path bên ngoài (`app.services.agent.guards`, `.synthesis`, `.tooling`, `.events`, `.core`) không đổi. |
 
 ### Kiến trúc LLM sau Phase A
 
 ```
-stream.py / synthesis.py / runner.py
+core/stream.py / synthesis/generate.py / core/runner.py
     → llm_responses.response_stream | create_response
         → router (TASK_AGENT_TOOL | TASK_AGENT_SYNTH)
             → ConfiguredLLM (chat completions + adapter)
@@ -75,11 +76,11 @@ Theo [LANGGRAPH-GUIDE.md](./LANGGRAPH-GUIDE.md):
 
 | Vai trò | File |
 |---------|------|
-| SSE agent | `services/agent/stream.py` |
-| Sync agent | `services/agent/runner.py` |
-| Tool round | `services/agent/loop.py`, `engine.py` |
-| Synthesis | `services/agent/synthesis.py` |
-| Platform filter | `services/agent/platform.py` |
+| SSE agent | `services/agent/core/stream.py` |
+| Sync agent | `services/agent/core/runner.py` |
+| Tool round | `services/agent/core/context.py`, `core/engine.py` |
+| Synthesis | `services/agent/synthesis/generate.py`, `synthesis/finalize.py` |
+| Platform filter | `services/agent/tooling/platform.py` |
 | LLM provider | `ai/providers.py`, `ai/router.py` |
 | Tool dispatch | `tools/executor.py`, `clients/data_miner.py` |
 

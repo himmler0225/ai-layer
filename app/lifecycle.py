@@ -13,6 +13,10 @@ _config_refresh_task: asyncio.Task | None = None
 
 
 async def _remote_config_refresher() -> None:
+    """(Nội bộ) Remote config refresher (async) `_remote_config_refresher`.
+
+    Returns:
+        (None) Kết quả trả về."""
     from app.config.remote import load_and_apply
 
     while True:
@@ -25,6 +29,10 @@ async def _remote_config_refresher() -> None:
 
 
 async def _start_config_refresher() -> None:
+    """(Nội bộ) Bắt đầu config refresher (async) `_start_config_refresher`.
+
+    Returns:
+        (None) Kết quả trả về."""
     global _config_refresh_task
     if not settings.SUPABASE_URL or not settings.SUPABASE_SERVICE_KEY:
         return
@@ -32,6 +40,10 @@ async def _start_config_refresher() -> None:
 
 
 async def _stop_config_refresher() -> None:
+    """(Nội bộ) Dừng config refresher (async) `_stop_config_refresher`.
+
+    Returns:
+        (None) Kết quả trả về."""
     global _config_refresh_task
     if _config_refresh_task is None:
         return
@@ -44,6 +56,10 @@ async def _stop_config_refresher() -> None:
 
 
 async def _start_inline_ingest_worker() -> None:
+    """(Nội bộ) Bắt đầu inline ingest worker (async) `_start_inline_ingest_worker`.
+
+    Returns:
+        (None) Kết quả trả về."""
     global _ingest_worker_task
     from app.ingest.config import INGEST_ENABLED, INGEST_WORKER_INLINE, RABBITMQ_URL
 
@@ -59,6 +75,10 @@ async def _start_inline_ingest_worker() -> None:
 
 
 async def _stop_inline_ingest_worker() -> None:
+    """(Nội bộ) Dừng inline ingest worker (async) `_stop_inline_ingest_worker`.
+
+    Returns:
+        (None) Kết quả trả về."""
     global _ingest_worker_task
     if _ingest_worker_task is None:
         return
@@ -72,6 +92,10 @@ async def _stop_inline_ingest_worker() -> None:
 
 
 def validate_startup_config() -> None:
+    """Xác thực startup config.
+
+    Returns:
+        (None) Kết quả trả về."""
     if not settings.API_KEYS:
         raise AiLayerConfigError("API_KEYS must be set before starting ai-layer")
     if not settings.DATA_MINER_URL or not settings.DATA_MINER_KEY:
@@ -81,6 +105,10 @@ def validate_startup_config() -> None:
 
 
 async def startup() -> None:
+    """Startup (async).
+
+    Returns:
+        (None) Kết quả trả về."""
     validate_startup_config()
     from app.cache.client import get_redis
     from app.config.db.session import init_db
@@ -109,6 +137,10 @@ async def startup() -> None:
 
 
 async def shutdown() -> None:
+    """Shutdown (async).
+
+    Returns:
+        (None) Kết quả trả về."""
     await _stop_inline_ingest_worker()
     await _stop_config_refresher()
     from app.cache.client import close_redis

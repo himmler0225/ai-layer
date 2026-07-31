@@ -48,10 +48,24 @@ _REVIEW_QUERY = re.compile(
 
 
 def _is_catalog_tool(name: str) -> bool:
+    """(Nội bộ) Is catalog tool `_is_catalog_tool`.
+
+    Args:
+        name: (str) Tham số `name`.
+
+    Returns:
+        (bool) Kết quả trả về."""
     return name.startswith("movie_") or name == "extract_id_from_url"
 
 
 def detect_platform(task: str) -> str | None:
+    """Detect platform.
+
+    Args:
+        task: (str) Tham số `task`.
+
+    Returns:
+        (str | None) Kết quả trả về."""
     question = context_for_filtering(task)
     has_tiktok = bool(_TIKTOK.search(question))
     has_youtube = bool(_YOUTUBE.search(question))
@@ -63,6 +77,14 @@ def detect_platform(task: str) -> str | None:
 
 
 def filter_tools_by_platform(tools: list[dict], task: str) -> list[dict]:
+    """Lọc tools by platform.
+
+    Args:
+        tools: (list[dict]) Tham số `tools`.
+        task: (str) Tham số `task`.
+
+    Returns:
+        (list[dict]) Kết quả trả về."""
     platform = detect_platform(task)
     if platform is None:
         return tools
@@ -74,6 +96,14 @@ def filter_tools_by_platform(tools: list[dict], task: str) -> list[dict]:
 
 
 def _narrow_for_raw_comments(tools: list[dict], task: str) -> list[dict] | None:
+    """(Nội bộ) Narrow for raw comments `_narrow_for_raw_comments`.
+
+    Args:
+        tools: (list[dict]) Tham số `tools`.
+        task: (str) Tham số `task`.
+
+    Returns:
+        (list[dict] | None) Kết quả trả về."""
     ctx = context_for_filtering(task)
     if not wants_raw_comments(ctx) and not wants_raw_comments(current_question(task)):
         return None
@@ -85,6 +115,14 @@ def _narrow_for_raw_comments(tools: list[dict], task: str) -> list[dict] | None:
 
 
 def _narrow_for_catalog_query(tools: list[dict], task: str) -> list[dict] | None:
+    """(Nội bộ) Narrow for catalog query `_narrow_for_catalog_query`.
+
+    Args:
+        tools: (list[dict]) Tham số `tools`.
+        task: (str) Tham số `task`.
+
+    Returns:
+        (list[dict] | None) Kết quả trả về."""
     ctx = context_for_filtering(task)
     question = current_question(task)
     if not wants_catalog(ctx) and not wants_catalog(question):
@@ -99,6 +137,14 @@ def _narrow_for_catalog_query(tools: list[dict], task: str) -> list[dict] | None
 
 
 def _narrow_for_movie_context(tools: list[dict], task: str) -> list[dict]:
+    """(Nội bộ) Narrow for movie context `_narrow_for_movie_context`.
+
+    Args:
+        tools: (list[dict]) Tham số `tools`.
+        task: (str) Tham số `task`.
+
+    Returns:
+        (list[dict]) Kết quả trả về."""
     if not has_movie_context(task):
         return tools
     if detect_platform(task):
@@ -111,6 +157,14 @@ def _narrow_for_movie_context(tools: list[dict], task: str) -> list[dict]:
 
 
 def _narrow_for_review_query(tools: list[dict], task: str) -> list[dict]:
+    """(Nội bộ) Narrow for review query `_narrow_for_review_query`.
+
+    Args:
+        tools: (list[dict]) Tham số `tools`.
+        task: (str) Tham số `task`.
+
+    Returns:
+        (list[dict]) Kết quả trả về."""
     if has_movie_context(task):
         return tools
     ctx = context_for_filtering(task)
@@ -124,6 +178,14 @@ def _narrow_for_review_query(tools: list[dict], task: str) -> list[dict]:
 
 
 async def _narrow_for_rag_cache(tools: list[dict], task: str) -> list[dict]:
+    """(Nội bộ) Narrow for rag cache (async) `_narrow_for_rag_cache`.
+
+    Args:
+        tools: (list[dict]) Tham số `tools`.
+        task: (str) Tham số `task`.
+
+    Returns:
+        (list[dict]) Kết quả trả về."""
     if not RAG_ENABLED:
         return tools
     movie_name = extract_movie_name(task)
@@ -142,6 +204,14 @@ async def _narrow_for_rag_cache(tools: list[dict], task: str) -> list[dict]:
 
 
 async def prepare_tools_for_task(tools: list[dict], task: str) -> list[dict]:
+    """Chuẩn bị tools for task (async).
+
+    Args:
+        tools: (list[dict]) Tham số `tools`.
+        task: (str) Tham số `task`.
+
+    Returns:
+        (list[dict]) Kết quả trả về."""
     tools = filter_tools_by_platform(tools, task)
     comments = _narrow_for_raw_comments(tools, task)
     if comments is not None:
@@ -156,6 +226,14 @@ async def prepare_tools_for_task(tools: list[dict], task: str) -> list[dict]:
 
 
 def prepare_tools(tools: list[dict], task: str) -> list[dict]:
+    """Chuẩn bị tools.
+
+    Args:
+        tools: (list[dict]) Tham số `tools`.
+        task: (str) Tham số `task`.
+
+    Returns:
+        (list[dict]) Kết quả trả về."""
     tools = filter_tools_by_platform(tools, task)
     comments = _narrow_for_raw_comments(tools, task)
     if comments is not None:

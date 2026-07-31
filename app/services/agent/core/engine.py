@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 from typing import Any, Literal
 
 from app.services.agent.guards import should_force_synthesis
-from app.services.agent.loop import (
+from app.services.agent.core.context import (
     begin_tool_round,
     complete_tool_round,
     is_max_tokens_incomplete,

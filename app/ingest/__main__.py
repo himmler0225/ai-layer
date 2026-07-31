@@ -11,6 +11,10 @@ logger = Logger.get(__name__)
 
 
 async def main() -> None:
+    """Main (async).
+
+    Returns:
+        (None) Kết quả trả về."""
     Logger.setup(level=settings.LOG_LEVEL)
     logger.info("[ingest-worker] starting")
     await load_and_apply()

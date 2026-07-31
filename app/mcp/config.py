@@ -23,6 +23,10 @@ MCP_STDIO_ARGS = os.getenv("MCP_STDIO_ARGS", "-m app.mcp.server").split()
 
 
 def mcp_sse_url() -> str:
+    """Mcp sse url.
+
+    Returns:
+        (str) Kết quả trả về."""
     explicit = (os.getenv("MCP_SSE_URL") or os.getenv("DATA_MINER_MCP_URL") or "").strip()
     if explicit:
         return explicit

@@ -34,6 +34,10 @@ logger = Logger.get(__name__)
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    """Lifespan (async).
+
+    Args:
+        _app: (FastAPI) Tham số `_app`."""
     Logger.sync_uvicorn(settings.LOG_LEVEL)
     logger.info("[startup] loading remote config")
     from app.config.remote import load_and_apply
@@ -66,6 +70,14 @@ app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
 
 @app.exception_handler(AiLayerError)
 async def ai_layer_error_handler(request: Request, exc: AiLayerError) -> JSONResponse:
+    """Ai layer error handler (async).
+
+    Args:
+        request: (Request) Tham số `request`.
+        exc: (AiLayerError) Tham số `exc`.
+
+    Returns:
+        (JSONResponse) Kết quả trả về."""
     from app.i18n.locale import resolve_locale
 
     locale = resolve_locale(request)
@@ -77,6 +89,14 @@ async def ai_layer_error_handler(request: Request, exc: AiLayerError) -> JSONRes
 
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
+    """Http exception handler (async).
+
+    Args:
+        request: (Request) Tham số `request`.
+        exc: (HTTPException) Tham số `exc`.
+
+    Returns:
+        (JSONResponse) Kết quả trả về."""
     from app.i18n.locale import resolve_locale
 
     locale = resolve_locale(request)
@@ -88,6 +108,11 @@ async def http_exception_handler(request: Request, exc: HTTPException) -> JSONRe
 
 @app.middleware("http")
 async def add_process_time(request: Request, call_next):
+    """Add process time (async).
+
+    Args:
+        request: (Request) Tham số `request`.
+        call_next: (Any) Tham số `call_next`."""
     start = time.perf_counter()
     response = await call_next(request)
     response.headers["X-Process-Time-Ms"] = str(round((time.perf_counter() - start) * 1000, 2))
@@ -105,5 +130,6 @@ app.include_router(runtime_router, prefix="/ai", tags=["Runtime"])
 
 @app.get("/health", tags=["Health"])
 async def health():
+    """Health (async)."""
     checks = await collect_checks()
     return ApiResponse.ok({"service": "ai-layer", "healthy": is_healthy(checks), "checks": checks})

@@ -107,6 +107,13 @@ def _unwrap(result) -> dict:
 
 
 def detect_source_label(tool_calls: list[dict]) -> str:
+    """Detect source label.
+
+    Args:
+        tool_calls: (list[dict]) Tham số `tool_calls`.
+
+    Returns:
+        (str) Kết quả trả về."""
     has_youtube = any(c.get("tool", "").startswith("youtube_") for c in tool_calls)
     has_tiktok = any(c.get("tool", "").startswith("tiktok_") for c in tool_calls)
     if has_youtube and has_tiktok:
@@ -351,6 +358,14 @@ def collect_tool_results(tool_calls: list[dict]) -> tuple[list[dict], list[dict]
 
 
 def movie_name_from_task(task: str, videos: list[dict]) -> str:
+    """Movie name from task.
+
+    Args:
+        task: (str) Tham số `task`.
+        videos: (list[dict]) Tham số `videos`.
+
+    Returns:
+        (str) Kết quả trả về."""
     from_block = extract_movie_name(task)
     if from_block:
         return from_block

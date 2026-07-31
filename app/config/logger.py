@@ -69,12 +69,15 @@ class _ColorFormatter(logging.Formatter):
         color = _LEVEL_COLOR.get(record.levelname, "\x1b[37m")
         short = _display_logger(record.name, self.root_name)
         msg = _strip_emoji(record.getMessage())
-        return (
+        rendered = (
             f"{_DIM}{ts}{_RESET}  "
             f"{color}{_BOLD}{record.levelname:<8}{_RESET}  "
             f"{_BLUE}{short:<24}{_RESET}  "
             f"{color}{msg}{_RESET}"
         )
+        if record.exc_info:
+            rendered = f"{rendered}\n{self.formatException(record.exc_info)}"
+        return rendered
 
 
 class _JSONFormatter(logging.Formatter):

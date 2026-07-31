@@ -3,15 +3,17 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 import app.config.settings as settings
+from app.config.logger import Logger
 from app.config.rate_limits import agent_rate_limit
 from app.exceptions import AiLayerError
 from app.middleware.auth import verify_api_key
 from app.middleware.rate_limit import limiter
 from app.schemas.response import ApiResponse
-from app.services.agent.runner import run_agent
-from app.services.agent.stream import run_agent_stream
+from app.services.agent.core import run_agent, run_agent_stream
 from app.tools.definitions import resolve_tool_set
+from app.utils.llm_errors import log_error
 
+logger = Logger.get(__name__)
 router = APIRouter(prefix="/agent", dependencies=[Depends(verify_api_key)])
 
 
@@ -68,6 +70,7 @@ async def run_stream(request: Request, body: AgentRequest):
 
             from app.i18n import t
 
+            log_error(logger, e, where="agent_stream unhandled")
             vi = t("errors.generic", "vi")
             en = t("errors.generic", "en")
             yield f"data: {json.dumps({'type': 'error', 'detail_vi': vi, 'detail_en': en, 'message': vi}, ensure_ascii=False)}\n\n"

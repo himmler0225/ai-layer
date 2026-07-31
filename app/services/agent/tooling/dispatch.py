@@ -4,7 +4,7 @@ from typing import Any
 from app.config.logger import Logger
 from app.ingest.dispatcher.schedule import schedule_tool_ingest
 from app.services.agent.guards import is_search_budget_exhausted, search_budget_message
-from app.services.agent.serialize import serialize_result
+from app.services.agent.tooling.serialize import serialize_result
 from app.tools.executor import execute_tool
 
 logger = Logger.get(__name__)

@@ -7,7 +7,7 @@ import app.services.prompts as _prompts
 from app.ai.router import TASK_AGENT_SYNTH
 from app.config.logger import Logger
 from app.services.agent import config
-from app.services.agent.serialize import serialize_result
+from app.services.agent.tooling import serialize_result
 from app.exceptions import AiLayerLLMError
 from app.utils.llm_errors import is_upstream_gateway_error, log_error, user_message
 from app.utils.llm_responses import (
@@ -23,6 +23,10 @@ _DEFAULT_SYNTH_INPUT_CHARS = 28_000
 
 
 def _synth_input_budget() -> int:
+    """(Nội bộ) Synth input budget `_synth_input_budget`.
+
+    Returns:
+        (int) Kết quả trả về."""
     base = getattr(settings, "AGENT_MAX_RESULT_CHARS", 8000) or 8000
     return min(max(base * 3, 12_000), _DEFAULT_SYNTH_INPUT_CHARS)
 
@@ -36,6 +40,10 @@ def models_with_fallback(primary: str, fallback: str | None = None) -> list[str]
 
 
 def synth_models_to_try() -> list[str]:
+    """Synth models to try.
+
+    Returns:
+        (list[str]) Kết quả trả về."""
     return models_with_fallback(config.synth_model())
 
 
@@ -76,6 +84,13 @@ def build_synthesis_input(task: str, tool_call_log: list[dict[str, Any]]) -> lis
 
 
 def synthesis_instructions(agent_system: str) -> str:
+    """Synthesis instructions.
+
+    Args:
+        agent_system: (str) Tham số `agent_system`.
+
+    Returns:
+        (str) Kết quả trả về."""
     custom = (_prompts.AGENT_SYNTH_SYSTEM or "").strip()
     if custom:
         return custom
@@ -91,6 +106,14 @@ def synthesis_instructions(agent_system: str) -> str:
 
 
 def _should_fallback_synth(exc: Exception, model: str) -> bool:
+    """(Nội bộ) Should fallback synth `_should_fallback_synth`.
+
+    Args:
+        exc: (Exception) Tham số `exc`.
+        model: (str) Tham số `model`.
+
+    Returns:
+        (bool) Kết quả trả về."""
     if model == config.tool_model():
         return False
     return is_upstream_gateway_error(exc)
@@ -109,6 +132,15 @@ async def run_synthesis(
     task: str,
     tool_call_log: list[dict[str, Any]],
 ) -> str:
+    """Chạy synthesis (async).
+
+    Args:
+        system: (str) Tham số `system`.
+        task: (str) Tham số `task`.
+        tool_call_log: (list[dict[str, Any]]) Tham số `tool_call_log`.
+
+    Returns:
+        (str) Kết quả trả về."""
     input_items = build_synthesis_input(task, tool_call_log)
     instructions = synthesis_instructions(system)
     last_exc: Exception | None = None
@@ -157,6 +189,15 @@ async def iter_synthesis_deltas(
     task: str,
     tool_call_log: list[dict[str, Any]],
 ) -> AsyncGenerator[str]:
+    """Iter synthesis deltas (async).
+
+    Args:
+        system: (str) Tham số `system`.
+        task: (str) Tham số `task`.
+        tool_call_log: (list[dict[str, Any]]) Tham số `tool_call_log`.
+
+    Returns:
+        (AsyncGenerator[str]) Kết quả trả về."""
     input_items = build_synthesis_input(task, tool_call_log)
     instructions = synthesis_instructions(system)
     models = synth_models_to_try()

@@ -101,6 +101,13 @@ def _movie_hint(task: str, fallback: str) -> str:
 
 
 def _movie_tokens(movie: str) -> list[str]:
+    """(Nội bộ) Movie tokens `_movie_tokens`.
+
+    Args:
+        movie: (str) Tham số `movie`.
+
+    Returns:
+        (list[str]) Kết quả trả về."""
     tokens = re.findall("[a-z0-9]{2,}", movie.lower())
     return [t for t in tokens if t not in _MOVIE_STOPWORDS]
 
@@ -136,6 +143,14 @@ def _is_noise(text: str) -> bool:
 
 
 def filter_reviews(reviews: list[dict], movie: str) -> list[dict]:
+    """Lọc reviews.
+
+    Args:
+        reviews: (list[dict]) Tham số `reviews`.
+        movie: (str) Tham số `movie`.
+
+    Returns:
+        (list[dict]) Kết quả trả về."""
     tokens = _movie_tokens(movie)
     filtered: list[dict] = []
     for review in reviews:
@@ -177,6 +192,16 @@ def _format_reviews(reviews: list[dict]) -> str:
 
 
 async def summarize_reviews(reviews: list[dict], movie: str = "", source: str = "", task: str = "") -> str | None:
+    """Summarize reviews (async).
+
+    Args:
+        reviews: (list[dict]) Tham số `reviews`.
+        movie: (str, mặc định '') Tham số `movie`.
+        source: (str, mặc định '') Tham số `source`.
+        task: (str, mặc định '') Tham số `task`.
+
+    Returns:
+        (str | None) Kết quả trả về."""
     if not reviews:
         return None
     movie_hint = _movie_hint(task, movie)

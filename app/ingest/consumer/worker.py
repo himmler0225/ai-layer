@@ -2,6 +2,7 @@ import asyncio
 import json
 from aio_pika.abc import AbstractIncomingMessage
 from app.config.logger import Logger
+from app.exceptions import AiLayerValidationError
 from app.ingest.broker.connection import get_channel
 from app.ingest.broker.topology import declare_topology
 from app.ingest.handlers.router import dispatch
@@ -38,6 +39,10 @@ async def _on_message(message: AbstractIncomingMessage) -> None:
     try:
         envelope = json.loads(message.body.decode())
         await dispatch(envelope)
+    except AiLayerValidationError:
+        logger.exception("[ingest] non-retryable handler error queue=%s", message.routing_key)
+        await message.reject(requeue=False)
+        return
     except Exception:
         retries = _retry_count(message)
         logger.exception("[ingest] handler failed queue=%s retries=%d", message.routing_key, retries)

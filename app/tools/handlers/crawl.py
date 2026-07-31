@@ -6,40 +6,96 @@ from app.services.url_extractor import extract_id_from_url as _url_extract
 
 
 def _parse_video_ids(raw) -> list[str]:
+    """(Nội bộ) Phân tích video ids `_parse_video_ids`.
+
+    Args:
+        raw: (Any) Tham số `raw`.
+
+    Returns:
+        (list[str]) Kết quả trả về."""
     if isinstance(raw, str):
         return [v.strip() for v in raw.split(",") if v.strip()]
     return [str(v).strip() for v in raw if str(v).strip()]
 
 
 async def youtube_search(inp: dict) -> Any:
+    """Youtube search (async).
+
+    Args:
+        inp: (dict) Tham số `inp`.
+
+    Returns:
+        (Any) Kết quả trả về."""
     return await data_miner.search_youtube(
         query=inp["keyword"], max_results=inp.get("max_results", 5), sort=inp.get("sort", "relevance")
     )
 
 
 async def youtube_get_by_topic(inp: dict) -> Any:
+    """Youtube get by topic (async).
+
+    Args:
+        inp: (dict) Tham số `inp`.
+
+    Returns:
+        (Any) Kết quả trả về."""
     return await data_miner.get_by_topic(topic=inp["topic"], max_results=inp.get("max_results", 20))
 
 
 async def youtube_get_shorts(inp: dict) -> Any:
+    """Youtube get shorts (async).
+
+    Args:
+        inp: (dict) Tham số `inp`.
+
+    Returns:
+        (Any) Kết quả trả về."""
     return await data_miner.get_shorts(max_results=inp.get("max_results", 20))
 
 
 async def youtube_get_live(inp: dict) -> Any:
+    """Youtube get live (async).
+
+    Args:
+        inp: (dict) Tham số `inp`.
+
+    Returns:
+        (Any) Kết quả trả về."""
     return await data_miner.get_live(query=inp.get("query", ""), max_results=inp.get("max_results", 20))
 
 
 async def youtube_get_by_region(inp: dict) -> Any:
+    """Youtube get by region (async).
+
+    Args:
+        inp: (dict) Tham số `inp`.
+
+    Returns:
+        (Any) Kết quả trả về."""
     return await data_miner.get_by_region(
         gl=inp["gl"], hl=inp.get("hl", "vi"), query=inp["query"], max_results=inp.get("max_results", 20)
     )
 
 
 async def youtube_get_detail(inp: dict) -> Any:
+    """Youtube get detail (async).
+
+    Args:
+        inp: (dict) Tham số `inp`.
+
+    Returns:
+        (Any) Kết quả trả về."""
     return await data_miner.get_video_detail(inp["video_id"])
 
 
 async def youtube_get_comments(inp: dict) -> Any:
+    """Youtube get comments (async).
+
+    Args:
+        inp: (dict) Tham số `inp`.
+
+    Returns:
+        (Any) Kết quả trả về."""
     return await data_miner.get_video_comments(
         video_id=inp["video_id"],
         max_comments=inp.get("max_comments", settings.AGENT_MAX_COMMENTS),
@@ -48,6 +104,13 @@ async def youtube_get_comments(inp: dict) -> Any:
 
 
 async def youtube_get_comments_batch(inp: dict) -> Any:
+    """Youtube get comments batch (async).
+
+    Args:
+        inp: (dict) Tham số `inp`.
+
+    Returns:
+        (Any) Kết quả trả về."""
     ids = _parse_video_ids(inp.get("video_ids", []))[:8]
     sort = inp.get("sort", "top")
     if sort not in ("top", "newest"):
@@ -58,30 +121,79 @@ async def youtube_get_comments_batch(inp: dict) -> Any:
 
 
 async def youtube_get_transcript(inp: dict) -> Any:
+    """Youtube get transcript (async).
+
+    Args:
+        inp: (dict) Tham số `inp`.
+
+    Returns:
+        (Any) Kết quả trả về."""
     return await data_miner.get_video_transcript(inp["video_id"])
 
 
 async def youtube_get_transcript_batch(inp: dict) -> Any:
+    """Youtube get transcript batch (async).
+
+    Args:
+        inp: (dict) Tham số `inp`.
+
+    Returns:
+        (Any) Kết quả trả về."""
     return await data_miner.get_video_transcript_batch(_parse_video_ids(inp.get("video_ids", []))[:8])
 
 
 async def youtube_get_channel_info(inp: dict) -> Any:
+    """Youtube get channel info (async).
+
+    Args:
+        inp: (dict) Tham số `inp`.
+
+    Returns:
+        (Any) Kết quả trả về."""
     return await data_miner.get_channel_info(inp["channel_id"])
 
 
 async def youtube_get_channel_videos(inp: dict) -> Any:
+    """Youtube get channel videos (async).
+
+    Args:
+        inp: (dict) Tham số `inp`.
+
+    Returns:
+        (Any) Kết quả trả về."""
     return await data_miner.get_channel_videos(channel_id=inp["channel_id"], max_results=inp.get("max_results", 30))
 
 
 async def youtube_get_channel_playlists(inp: dict) -> Any:
+    """Youtube get channel playlists (async).
+
+    Args:
+        inp: (dict) Tham số `inp`.
+
+    Returns:
+        (Any) Kết quả trả về."""
     return await data_miner.get_channel_playlists(inp["channel_id"])
 
 
 async def youtube_get_playlist_videos(inp: dict) -> Any:
+    """Youtube get playlist videos (async).
+
+    Args:
+        inp: (dict) Tham số `inp`.
+
+    Returns:
+        (Any) Kết quả trả về."""
     return await data_miner.get_playlist_videos(playlist_id=inp["playlist_id"], max_results=inp.get("max_results", 30))
 
 
 async def tiktok_search(inp: dict) -> Any:
+    """Tiktok search (async).
+
+    Args:
+        inp: (dict) Tham số `inp`.
+
+    Returns:
+        (Any) Kết quả trả về."""
     return await data_miner.tiktok_search(
         keyword=inp["keyword"],
         cursor=inp.get("cursor", 0),
@@ -92,42 +204,105 @@ async def tiktok_search(inp: dict) -> Any:
 
 
 async def tiktok_video_info(inp: dict) -> Any:
+    """Tiktok video info (async).
+
+    Args:
+        inp: (dict) Tham số `inp`.
+
+    Returns:
+        (Any) Kết quả trả về."""
     return await data_miner.tiktok_video_info(url=inp["url"])
 
 
 async def tiktok_comments(inp: dict) -> Any:
+    """Tiktok comments (async).
+
+    Args:
+        inp: (dict) Tham số `inp`.
+
+    Returns:
+        (Any) Kết quả trả về."""
     return await data_miner.tiktok_comments(
         aweme_id=inp["aweme_id"], cursor=inp.get("cursor", 0), count=inp.get("count", 20)
     )
 
 
 async def tiktok_profile(inp: dict) -> Any:
+    """Tiktok profile (async).
+
+    Args:
+        inp: (dict) Tham số `inp`.
+
+    Returns:
+        (Any) Kết quả trả về."""
     return await data_miner.tiktok_profile(inp["handle"])
 
 
 async def tiktok_transcript(inp: dict) -> Any:
+    """Tiktok transcript (async).
+
+    Args:
+        inp: (dict) Tham số `inp`.
+
+    Returns:
+        (Any) Kết quả trả về."""
     return await data_miner.tiktok_transcript(aweme_id=inp["aweme_id"])
 
 
 async def extract_id_from_url(inp: dict) -> Any:
+    """Trích xuất id from url (async).
+
+    Args:
+        inp: (dict) Tham số `inp`.
+
+    Returns:
+        (Any) Kết quả trả về."""
     return _url_extract(url=inp["url"])
 
 
 async def movie_search(inp: dict) -> Any:
+    """Movie search (async).
+
+    Args:
+        inp: (dict) Tham số `inp`.
+
+    Returns:
+        (Any) Kết quả trả về."""
     return await data_miner.movie_search(
         inp["keyword"], provider=inp.get("provider"), page=inp.get("page", 1), limit=inp.get("limit", 10)
     )
 
 
 async def movie_get_detail(inp: dict) -> Any:
+    """Movie get detail (async).
+
+    Args:
+        inp: (dict) Tham số `inp`.
+
+    Returns:
+        (Any) Kết quả trả về."""
     return await data_miner.movie_get_detail(inp["slug"], provider=inp.get("provider"))
 
 
 async def movie_list_new(inp: dict) -> Any:
+    """Movie list new (async).
+
+    Args:
+        inp: (dict) Tham số `inp`.
+
+    Returns:
+        (Any) Kết quả trả về."""
     return await data_miner.movie_list_new(provider=inp.get("provider"), page=inp.get("page", 1))
 
 
 async def movie_list_by_type(inp: dict) -> Any:
+    """Movie list by type (async).
+
+    Args:
+        inp: (dict) Tham số `inp`.
+
+    Returns:
+        (Any) Kết quả trả về."""
     return await data_miner.movie_list_by_type(
         inp["type"],
         provider=inp.get("provider"),
@@ -143,6 +318,13 @@ async def movie_list_by_type(inp: dict) -> Any:
 
 
 async def movie_list_by_genre(inp: dict) -> Any:
+    """Movie list by genre (async).
+
+    Args:
+        inp: (dict) Tham số `inp`.
+
+    Returns:
+        (Any) Kết quả trả về."""
     return await data_miner.movie_list_by_genre(
         inp["slug"],
         provider=inp.get("provider"),
@@ -158,6 +340,13 @@ async def movie_list_by_genre(inp: dict) -> Any:
 
 
 async def movie_list_by_country(inp: dict) -> Any:
+    """Movie list by country (async).
+
+    Args:
+        inp: (dict) Tham số `inp`.
+
+    Returns:
+        (Any) Kết quả trả về."""
     return await data_miner.movie_list_by_country(
         inp["slug"],
         provider=inp.get("provider"),
@@ -173,6 +362,13 @@ async def movie_list_by_country(inp: dict) -> Any:
 
 
 async def movie_list_by_year(inp: dict) -> Any:
+    """Movie list by year (async).
+
+    Args:
+        inp: (dict) Tham số `inp`.
+
+    Returns:
+        (Any) Kết quả trả về."""
     return await data_miner.movie_list_by_year(
         inp["year"],
         provider=inp.get("provider"),
@@ -187,6 +383,13 @@ async def movie_list_by_year(inp: dict) -> Any:
 
 
 async def movie_get_metadata(inp: dict) -> Any:
+    """Movie get metadata (async).
+
+    Args:
+        inp: (dict) Tham số `inp`.
+
+    Returns:
+        (Any) Kết quả trả về."""
     provider = inp.get("provider")
     if inp["kind"] == "genres":
         return await data_miner.movie_get_genres(provider=provider)

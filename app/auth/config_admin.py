@@ -12,10 +12,18 @@ from app.exceptions import AiLayerError, AiLayerValidationError
 
 
 def _admin_schema() -> dict[str, Any]:
+    """(Nội bộ) Admin schema `_admin_schema`.
+
+    Returns:
+        (dict[str, Any]) Kết quả trả về."""
     return load_schema().get("admin") or {}
 
 
 def whitelist_keys() -> set[str]:
+    """Whitelist keys.
+
+    Returns:
+        (set[str]) Kết quả trả về."""
     admin = _admin_schema()
     groups = admin.get("groups") or {}
     keys = {key for group in groups.values() for key in group}
@@ -24,15 +32,27 @@ def whitelist_keys() -> set[str]:
 
 
 def json_keys() -> set[str]:
+    """Json keys.
+
+    Returns:
+        (set[str]) Kết quả trả về."""
     return set(_admin_schema().get("json_keys") or [])
 
 
 async def load_config() -> dict[str, str]:
+    """Tải config (async).
+
+    Returns:
+        (dict[str, str]) Kết quả trả về."""
     bundle = await load_config_bundle()
     return bundle["config"]
 
 
 async def load_config_bundle() -> dict[str, Any]:
+    """Tải config bundle (async).
+
+    Returns:
+        (dict[str, Any]) Kết quả trả về."""
     allowed = whitelist_keys()
     if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
         return {"config": {}, "updated_at": {}, "items": {}}
@@ -65,6 +85,13 @@ async def load_config_bundle() -> dict[str, Any]:
 
 
 async def patch_config(updates: dict[str, str]) -> list[str]:
+    """Patch config (async).
+
+    Args:
+        updates: (dict[str, str]) Tham số `updates`.
+
+    Returns:
+        (list[str]) Kết quả trả về."""
     allowed = whitelist_keys()
     json_only = json_keys()
     saved: list[str] = []

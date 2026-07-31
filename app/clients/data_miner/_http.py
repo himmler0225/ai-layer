@@ -14,6 +14,10 @@ _client: httpx.AsyncClient | None = None
 
 
 def _headers() -> dict[str, str]:
+    """(Nội bộ) Headers `_headers`.
+
+    Returns:
+        (dict[str, str]) Kết quả trả về."""
     from app.i18n import get_locale
 
     headers = get_data_miner_headers(dm_config.api_key(), dm_config.service_token())
@@ -22,6 +26,10 @@ def _headers() -> dict[str, str]:
 
 
 def _get_client() -> httpx.AsyncClient:
+    """(Nội bộ) Lấy client `_get_client`.
+
+    Returns:
+        (httpx.AsyncClient) Kết quả trả về."""
     global _client
     if _client is None or _client.is_closed:
         _client = httpx.AsyncClient(
@@ -37,6 +45,10 @@ def _get_client() -> httpx.AsyncClient:
 
 
 async def close_client() -> None:
+    """Đóng client (async).
+
+    Returns:
+        (None) Kết quả trả về."""
     global _client
     if _client and (not _client.is_closed):
         await _client.aclose()
@@ -44,6 +56,14 @@ async def close_client() -> None:
 
 
 async def get(path: str, params: dict | None = None) -> Any:
+    """Lấy (async).
+
+    Args:
+        path: (str) Tham số `path`.
+        params: (dict | None, mặc định None) Tham số `params`.
+
+    Returns:
+        (Any) Kết quả trả về."""
     last_exc: Exception = AiLayerUpstreamError("Unknown error")
     for attempt in range(1, dm_config.HTTP_MAX_ATTEMPTS + 1):
         try:
@@ -51,7 +71,10 @@ async def get(path: str, params: dict | None = None) -> Any:
             if r.status_code in dm_config.HTTP_RETRY_STATUSES:
                 raise httpx.HTTPStatusError(f"{r.status_code} from data-miner", request=r.request, response=r)
             r.raise_for_status()
-            return r.json()
+            body = r.json()
+            if isinstance(body, dict) and "success" in body and "data" in body:
+                return body["data"]
+            return body
         except (httpx.NetworkError, httpx.TimeoutException) as e:
             last_exc = e
         except httpx.HTTPStatusError as e:

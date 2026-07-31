@@ -6,7 +6,7 @@ import uuid
 from typing import Any
 
 from app.ai.types import FunctionCallItem
-from app.rag.movie_hint import context_for_filtering, current_question, wants_catalog
+from app.rag.movie_hint import context_for_filtering, conversation_history, current_question, wants_catalog
 
 _GENRE_SLUGS: dict[str, str] = {
     "tình cảm": "tinh-cam",
@@ -47,14 +47,45 @@ _COUNTRY_SLUGS: dict[str, str] = {
 
 
 def _task_text(task: str) -> str:
-    return context_for_filtering(task) or current_question(task) or (task or "")
+    """(Nội bộ) Task text `_task_text`.
+
+    Args:
+        task: (str) Tham số `task`.
+
+    Returns:
+        (str) Kết quả trả về."""
+    text = context_for_filtering(task) or current_question(task) or (task or "")
+    # Follow-up ngắn kiểu "ít vậy, cho thêm phim khác đi" không tự nêu lại thể loại/quốc
+    # gia — nếu câu hiện tại chưa đủ tín hiệu catalog, gộp thêm lịch sử để dò slug.
+    if not wants_catalog(text):
+        history = conversation_history(task)
+        if history:
+            merged = f"{history}\n\n{text}"
+            if wants_catalog(merged):
+                return merged
+    return text
 
 
 def _tool_names(tools: list[dict]) -> set[str]:
+    """(Nội bộ) Tool names `_tool_names`.
+
+    Args:
+        tools: (list[dict]) Tham số `tools`.
+
+    Returns:
+        (set[str]) Kết quả trả về."""
     return {t.get("name", "") for t in tools if t.get("name")}
 
 
 def _match_slug(text: str, mapping: dict[str, str]) -> str | None:
+    """(Nội bộ) Match slug `_match_slug`.
+
+    Args:
+        text: (str) Tham số `text`.
+        mapping: (dict[str, str]) Tham số `mapping`.
+
+    Returns:
+        (str | None) Kết quả trả về."""
     lowered = text.lower()
     for label, slug in sorted(mapping.items(), key=lambda item: len(item[0]), reverse=True):
         if label in lowered:

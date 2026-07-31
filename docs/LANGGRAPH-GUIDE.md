@@ -8,9 +8,10 @@ Tài liệu **tự làm** để thay vòng lặp agent hiện tại bằng [Lang
 
 **Phạm vi PR:** chỉ `app/services/agent/` (orchestration). **Không** viết lại ingest, RAG pipeline, data-miner client.
 
-**Trạng thái repo (2026-06):**
-- Loop legacy: `runner.py`, `stream.py`, `engine.py`, `guards.py` — **đang chạy production**
-- LangGraph: `graph/state.py` (có sẵn), `graph/nodes.py` (trống) — **chưa wire vào API**
+**Trạng thái repo (2026-07, sau khi gọn thư mục `services/agent/`):**
+- Loop legacy: `core/runner.py`, `core/stream.py`, `core/engine.py`, `guards/budget.py` — **đang chạy production**
+- LangGraph: `graph/state.py` (có sẵn), `graph/nodes.py` (trống), `core/langgraph_runner.py` + `core/langgraph_stream.py` (trống, chỗ bạn viết Phase 0) — **chưa wire vào API**
+- Cấu trúc mới: `core/` (loop chính + entrypoint), `guards/` (budget, fallback), `synthesis/` (generate, finalize), `tooling/` (platform, dispatch, serialize), `events/` (schema, status). Mỗi package re-export public API qua `__init__.py`, nên import ngoài (`from app.services.agent.guards import ...` v.v.) không đổi so với trước.
 
 ---
 
@@ -20,7 +21,7 @@ Sau khi làm xong lộ trình dưới, bạn nên trả lời được:
 
 1. **State** LangGraph khác `ctx` dict hiện tại thế nào?
 2. **Node** nào map sang file Python nào trong repo?
-3. **Conditional edge** thay `if/continue` ở đâu trong `stream.py`?
+3. **Conditional edge** thay `if/continue` ở đâu trong `core/iterate.py`?
 4. Vì sao **không** đưa `executor.py` / ingest vào graph?
 5. Stream SSE (`tool_start`, `text_delta`, `done`) map từ graph event ra sao?
 
@@ -30,13 +31,13 @@ Sau khi làm xong lộ trình dưới, bạn nên trả lời được:
 
 | Khái niệm | Ý nghĩa | Tương đương code hiện tại |
 |-----------|---------|---------------------------|
-| **State** | Dict typed, merge qua các bước | `ctx` trong `loop.new_context()` |
+| **State** | Dict typed, merge qua các bước | `ctx` trong `context.new_context()` |
 | **Node** | Hàm async nhận state → trả partial update | Một “bước” trong vòng `for iteration` |
 | **Edge** | Chuyển node tiếp theo | `continue` / `return` trong loop |
 | **Conditional edge** | Hàm routing trả tên node | `if call_items: ... elif dual_mode: ...` |
 | **Reducer** | Gộp list khi nhiều node append | `tool_call_log.extend(...)` |
 
-**While-loop hiện tại** (`stream.py` ~dòng 57–140):
+**While-loop hiện tại** (`core/iterate.py`, hàm `run_agent_events`):
 
 ```
 bootstrap → [llm → tools? → guards? → synthesis? → done] × max_iter
@@ -52,8 +53,8 @@ bootstrap → [llm → tools? → guards? → synthesis? → done] × max_iter
 
 | Route | File | Backend |
 |-------|------|---------|
-| `POST /ai/agent/run` | `app/api/agent.py` | `run_agent()` → `runner.py` |
-| `POST /ai/agent/run/stream` | `app/api/agent.py` | `run_agent_stream()` → `stream.py` |
+| `POST /ai/agent/run` | `app/api/agent.py` | `run_agent()` → `core/runner.py` |
+| `POST /ai/agent/run/stream` | `app/api/agent.py` | `run_agent_stream()` → `core/stream.py` |
 
 Chatbot proxy: `ai-chatbot/src/app/api/chat/route.ts` → không gửi `max_iter` (dùng `AGENT_MAX_ITER` Supabase).
 
@@ -79,22 +80,26 @@ flowchart TD
 
 | File | Vai trò | Đưa vào graph? |
 |------|---------|----------------|
-| `platform.py` | Lọc tool, RAG cache-first | Gọi trong node `bootstrap` |
-| `loop.py` | Context, tool round helpers | Node gọi helper |
-| `engine.py` | `process_agent_step`, `tool_round_action` | **Tái dùng** trong route / node |
-| `guards.py` | Search budget, force synthesis | **Tái dùng** trong route `after_tools` |
-| `tools.py` | `execute_parallel`, ingest schedule | Node `execute_tools` |
-| `synthesis.py` | Synth + fallback model 502 | Node `synthesize` |
+| `tooling/platform.py` | Lọc tool, RAG cache-first | Gọi trong node `bootstrap` |
+| `core/context.py` | Context, tool round helpers | Node gọi helper |
+| `core/engine.py` | `process_agent_step`, `tool_round_action` | **Tái dùng** trong route / node |
+| `guards/budget.py` | Search budget, force synthesis | **Tái dùng** trong route `after_tools` |
+| `guards/fallback.py` | Catalog deterministic fallback call | **Tái dùng** khi LLM im lặng |
+| `tooling/dispatch.py` | `execute_parallel`, ingest schedule | Node `execute_tools` |
+| `synthesis/generate.py` | Synth + fallback model 502 | Node `synthesize` |
+| `synthesis/finalize.py` | `finish()` → enrich | Node `finalize` |
 | `config.py` | `tool_model()`, `dual_mode()`, `include_review_summary()` | Đọc trong node |
-| `stream.py` | SSE mapping | `langgraph_stream.py` (phase sau) |
+| `core/stream.py` | SSE mapping | `core/langgraph_stream.py` (phase sau) |
 | `tools/executor.py` | data-miner + RAG thực thi | **Không** — node chỉ gọi |
 | `ai/router.py` | `LLM_DEFAULT_PROVIDER=deepseek` | **Không** — node gọi `create_response` |
 | `utils/llm_responses.py` | Helper LLM (trước: openai_responses) | Node gọi trực tiếp |
 
+**Ghi chú:** mỗi package (`core/`, `guards/`, `synthesis/`, `tooling/`, `events/`) re-export public API qua `__init__.py`, nên `from app.services.agent.guards import should_force_synthesis` vẫn đúng dù file thật nằm ở `guards/budget.py`. Khi viết node mới, import trực tiếp từ package (`app.services.agent.guards`, không cần biết `budget.py` hay `fallback.py`).
+
 ### 2.4 Dict `ctx` → `AgentState`
 
 ```python
-# loop.new_context() / bootstrap_agent()
+# context.new_context() / bootstrap_agent()
 {
     "session_id": str,
     "task": str,
@@ -202,7 +207,7 @@ def route_after_tools(state: AgentState) -> str:
     return "llm_tool"
 ```
 
-**Học:** `should_force_synthesis` trong `guards.py` — không copy logic sang graph; **import và gọi**.
+**Học:** `should_force_synthesis` trong `guards/budget.py` (re-export qua `app.services.agent.guards`) — không copy logic sang graph; **import và gọi**.
 
 ---
 
@@ -226,14 +231,16 @@ def route_after_tools(state: AgentState) -> str:
 3. `app/api/agent.py`:
    ```python
    if getattr(settings, "AGENT_BACKEND", "legacy") == "langgraph":
-       from app.services.agent.langgraph_runner import run_agent_langgraph
+       from app.services.agent.core.langgraph_runner import run_agent_langgraph
        ...
    else:
        result = await run_agent(...)
    ```
 
-4. `langgraph_runner.py` tạm:
+4. `core/langgraph_runner.py` tạm:
    ```python
+   from app.services.agent.core.runner import run_agent
+
    async def run_agent_langgraph(...):
        return await run_agent(...)  # delegate legacy
    ```
@@ -344,7 +351,7 @@ Xem mẫu §6 bên dưới (copy-paste được).
 
 **Vấn đề:** `complete_tool_round(ctx, ...)` sửa `ctx` in-place — LangGraph thích partial return.
 
-**Refactor nhỏ trong `loop.py`:**
+**Refactor nhỏ trong `core/context.py`:**
 
 ```python
 async def complete_tool_round(...) -> tuple[list, list]:
@@ -553,19 +560,32 @@ LangGraph **không** cần key riêng.
 
 ```
 app/services/agent/
-├── engine.py              # routing dùng chung (giữ)
-├── guards.py              # budget / force synthesis (giữ)
-├── loop.py                # helpers → refactor immutable
-├── runner.py              # legacy sync
-├── stream.py              # legacy SSE
-├── langgraph_runner.py    # NEW — sync entry
-├── langgraph_stream.py    # NEW — SSE entry (phase 4)
+├── config.py, constants.py        # cross-cutting, giữ ở root
+├── core/
+│   ├── engine.py                  # routing dùng chung (giữ)
+│   ├── context.py                 # helpers → refactor immutable
+│   ├── iterate.py                 # unified loop (giữ, dùng làm tham chiếu)
+│   ├── runner.py                  # legacy sync
+│   ├── stream.py                  # legacy SSE
+│   ├── langgraph_runner.py        # NEW — sync entry
+│   └── langgraph_stream.py        # NEW — SSE entry (phase 4)
+├── guards/
+│   ├── budget.py                  # budget / force synthesis (giữ)
+│   └── fallback.py                # catalog deterministic fallback (giữ)
+├── synthesis/
+│   ├── generate.py, finalize.py   # giữ
+├── tooling/
+│   ├── platform.py, dispatch.py, serialize.py   # giữ
+├── events/
+│   ├── schema.py, tool_status.py  # giữ
 └── graph/
     ├── state.py           # có sẵn
     ├── nodes.py           # điền dần
     ├── routes.py          # NEW
     └── build.py           # NEW
 ```
+
+Đã gọn từ 20 file phẳng sang cấu trúc trên trước khi bắt đầu Phase 0 — mọi hàm cũ (`bootstrap_agent`, `execute_parallel`, `should_force_synthesis`, ...) giữ nguyên tên và hành vi, chỉ đổi chỗ ở. Import qua package (`from app.services.agent.guards import ...`) không đổi.
 
 ---
 
@@ -614,8 +634,8 @@ app/services/agent/
 | API | `app/api/agent.py` |
 | Tool schema | `app/tools/definitions.py`, `rag_definitions.py` |
 | Tool exec | `app/tools/executor.py` |
-| Platform / RAG filter | `app/services/agent/platform.py` |
-| Engine + guards | `app/services/agent/engine.py`, `guards.py` |
+| Platform / RAG filter | `app/services/agent/tooling/platform.py` |
+| Engine + guards | `app/services/agent/core/engine.py`, `guards/budget.py` |
 | LLM router | `app/ai/router.py` |
 | LLM helpers | `app/utils/llm_responses.py` |
 | Enricher | `app/services/enricher.py`, `enricher_collect.py` |

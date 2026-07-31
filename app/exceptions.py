@@ -12,6 +12,17 @@ class AiLayerError(Exception):
         message_params: dict | None = None,
         cause: Exception | None = None,
     ) -> None:
+        """(Nội bộ) Khởi tạo `__init__`.
+
+        Args:
+            message: (str) Tham số `message`.
+            message_key: (str | None, mặc định None) Tham số `message_key`.
+            message_en: (str | None, mặc định None) Tham số `message_en`.
+            message_params: (dict | None, mặc định None) Tham số `message_params`.
+            cause: (Exception | None, mặc định None) Tham số `cause`.
+
+        Returns:
+            (None) Kết quả trả về."""
         super().__init__(message)
         self.message = message
         self.message_key = message_key

@@ -15,6 +15,10 @@ _AUTH_HEADERS = {
 
 
 def _require_supabase() -> None:
+    """(Nội bộ) Require supabase `_require_supabase`.
+
+    Returns:
+        (None) Kết quả trả về."""
     if not SUPABASE_URL or not SUPABASE_ANON_KEY:
         raise AiLayerAuthError("Supabase auth chưa cấu hình", message_key="errors.supabase_auth_not_configured")
 

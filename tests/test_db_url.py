@@ -13,6 +13,27 @@ def test_supabase_ssl_connect_args():
     assert "ssl" in args
 
 
+def test_supabase_ssl_without_sslmode_param():
+    url = "postgresql://postgres.x:secret@aws-1-ap.pooler.supabase.com:6543/postgres"
+    args = database_connect_args(url)
+    assert "ssl" in args
+    assert args["ssl"].verify_mode.name == "CERT_NONE"
+
+
+def test_supabase_pooler_disables_statement_cache():
+    url = "postgresql://postgres.x:secret@aws-1-ap.pooler.supabase.com:6543/postgres"
+    args = database_connect_args(url)
+    assert args["statement_cache_size"] == 0
+    assert callable(args["prepared_statement_name_func"])
+    assert args["prepared_statement_name_func"]() != args["prepared_statement_name_func"]()
+
+
+def test_supabase_direct_port_keeps_statement_cache():
+    url = "postgresql://postgres.x:secret@aws-1-ap.pooler.supabase.com:5432/postgres"
+    args = database_connect_args(url)
+    assert "statement_cache_size" not in args
+
+
 def test_local_no_ssl_by_default():
     url = "postgresql://postgres:postgres@localhost:5432/reviewmine"
     assert database_connect_args(url) == {}

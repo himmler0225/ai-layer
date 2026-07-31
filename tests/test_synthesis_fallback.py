@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from openai import APIStatusError
 
-from app.services.agent.engine import process_agent_step, tool_round_action
+from app.services.agent.core import process_agent_step, tool_round_action
 from app.services.agent.synthesis import (
     _is_stream_open_failure,
     _should_fallback_synth,
@@ -41,7 +41,7 @@ async def test_process_agent_step_continue_after_tools():
     response.output = [call]
 
     with patch(
-        "app.services.agent.tools.execute_parallel",
+        "app.services.agent.core.context.execute_parallel",
         new_callable=AsyncMock,
         return_value=(
             [{"type": "function_call_output", "call_id": "c1", "output": "{}"}],
@@ -140,12 +140,12 @@ async def test_iter_synthesis_deltas_falls_back_to_non_stream(monkeypatch):
     stream_ctx.__aexit__.return_value = None
 
     with patch(
-        "app.services.agent.synthesis.response_stream",
+        "app.services.agent.synthesis.generate.response_stream",
         return_value=stream_ctx,
     ) as mock_stream:
         mock_stream.side_effect = json.JSONDecodeError("Expecting value", "", 0)
         with patch(
-            "app.services.agent.synthesis.run_synthesis",
+            "app.services.agent.synthesis.generate.run_synthesis",
             new_callable=AsyncMock,
             return_value="final answer",
         ) as mock_run:

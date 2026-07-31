@@ -92,8 +92,8 @@ Consumer retry 3 lần → DLQ. Chi tiết: [RAG-GUIDE §6](./RAG-GUIDE.md#6-ghi
 | Việc | File |
 |------|------|
 | API stream | `app/api/agent.py` |
-| Agent loop + guards | `app/services/agent/engine.py`, `loop.py`, `stream.py`, `runner.py` |
-| Lọc tool + cache-first | `app/services/agent/platform.py` |
+| Agent loop + guards | `app/services/agent/core/engine.py`, `core/context.py`, `core/stream.py`, `core/runner.py`, `guards/` |
+| Lọc tool + cache-first | `app/services/agent/tooling/platform.py` |
 | RAG đủ/fresh? | `app/rag/knowledge.py` |
 | Product name từ task | `app/rag/movie_hint.py` |
 | L1/L2/L3 query | `app/rag/search.py` |

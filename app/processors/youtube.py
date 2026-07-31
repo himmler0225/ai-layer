@@ -32,7 +32,7 @@ async def summarize_video(video_id: str) -> dict:
 
     Returns:
         (Dict) Kết quả trả về."""
-    detail = await data_miner.get_video_detail(video_id)
+    detail = (await data_miner.get_video_detail(video_id)).get("detail", {})
     prompt = f"""Summarize this YouTube video:\nTitle: {detail.get("title")}\nChannel: {detail.get("author")}\nDescription: {(detail.get("description") or "")[:1000]}\nDuration: {detail.get("length_seconds")}s\nViews: {detail.get("views")}\n\nReturn JSON: {{"summary": "...", "key_points": ["..."], "tags": ["..."], "sentiment": "positive|neutral|negative"}}"""
     raw = await complete_json(prompt, _SYSTEM)
     result = _parse_json(raw, "summarize_video")
@@ -71,7 +71,7 @@ async def analyze_trends(limit: int = 20) -> dict:
     Returns:
         (Dict) Kết quả trả về."""
     data = await data_miner.get_trending(max_results=limit)
-    videos: list[dict] = data.get("videos", data) if isinstance(data, dict) else data
+    videos: list[dict] = data.get("results", []) if isinstance(data, dict) else data
     titles = "\n".join(
         (f"{i + 1}. [{v.get('channel', '')}] {v.get('title', '')}" for i, v in enumerate(videos[:limit]))
     )

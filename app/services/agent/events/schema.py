@@ -12,34 +12,88 @@ class AgentEvent:
 
     @property
     def result(self) -> dict[str, Any] | None:
+        """Result.
+
+        Returns:
+            (dict[str, Any] | None) Kết quả trả về."""
         return self.data.get("_result")
 
     def to_sse(self) -> str:
+        """To sse.
+
+        Returns:
+            (str) Kết quả trả về."""
         payload = {"type": self.type, **{k: v for k, v in self.data.items() if not k.startswith("_")}}
         return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
 
 
 def status(detail_vi: str, detail_en: str) -> AgentEvent:
+    """Status.
+
+    Args:
+        detail_vi: (str) Tham số `detail_vi`.
+        detail_en: (str) Tham số `detail_en`.
+
+    Returns:
+        (AgentEvent) Kết quả trả về."""
     return AgentEvent("status", {"detail_vi": detail_vi, "detail_en": detail_en})
 
 
 def tool_start(tool: str, detail_vi: str, detail_en: str, args) -> AgentEvent:
+    """Tool start.
+
+    Args:
+        tool: (str) Tham số `tool`.
+        detail_vi: (str) Tham số `detail_vi`.
+        detail_en: (str) Tham số `detail_en`.
+        args: (Any) Tham số `args`.
+
+    Returns:
+        (AgentEvent) Kết quả trả về."""
     return AgentEvent("tool_start", {"tool": tool, "detail_vi": detail_vi, "detail_en": detail_en, "args": args})
 
 
 def tool_done(tool: str) -> AgentEvent:
+    """Tool done.
+
+    Args:
+        tool: (str) Tham số `tool`.
+
+    Returns:
+        (AgentEvent) Kết quả trả về."""
     return AgentEvent("tool_done", {"tool": tool})
 
 
 def text_delta(delta: str) -> AgentEvent:
+    """Text delta.
+
+    Args:
+        delta: (str) Tham số `delta`.
+
+    Returns:
+        (AgentEvent) Kết quả trả về."""
     return AgentEvent("text_delta", {"delta": delta})
 
 
 def data_preview(videos: list[dict]) -> AgentEvent:
+    """Data preview.
+
+    Args:
+        videos: (list[dict]) Tham số `videos`.
+
+    Returns:
+        (AgentEvent) Kết quả trả về."""
     return AgentEvent("data_preview", {"videos": videos})
 
 
 def done(enriched: dict[str, Any]) -> AgentEvent:
+    """Done.
+
+    Args:
+        enriched: (dict[str, Any]) Tham số `enriched`.
+
+    Returns:
+        (AgentEvent) Kết quả trả về."""
     return AgentEvent(
         "done",
         {
@@ -51,6 +105,14 @@ def done(enriched: dict[str, Any]) -> AgentEvent:
 
 
 def error(message_vi: str, message_en: str) -> AgentEvent:
+    """Error.
+
+    Args:
+        message_vi: (str) Tham số `message_vi`.
+        message_en: (str) Tham số `message_en`.
+
+    Returns:
+        (AgentEvent) Kết quả trả về."""
     return AgentEvent(
         "error",
         {
@@ -62,6 +124,14 @@ def error(message_vi: str, message_en: str) -> AgentEvent:
 
 
 def error_key(key: str, **params) -> AgentEvent:
+    """Error key.
+
+    Args:
+        key: (str) Tham số `key`.
+        **params: (Any) Tham số `**params`.
+
+    Returns:
+        (AgentEvent) Kết quả trả về."""
     from app.i18n import t
 
     return AgentEvent(

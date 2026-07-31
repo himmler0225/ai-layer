@@ -1,10 +1,23 @@
 """DATABASE_URL helpers — async SQLAlchemy + Supabase Postgres (SSL)."""
 
 import ssl
+from uuid import uuid4
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
 
+def _unique_statement_name() -> str:
+    """Unique prepared-statement names so pgbouncer (transaction mode) never collides."""
+    return f"__asyncpg_{uuid4().hex}__"
+
+
 def normalize_async_database_url(url: str) -> str:
+    """Chuẩn hóa async database url.
+
+    Args:
+        url: (str) Tham số `url`.
+
+    Returns:
+        (str) Kết quả trả về."""
     if url.startswith("postgresql://"):
         return url.replace("postgresql://", "postgresql+asyncpg://", 1)
     if url.startswith("postgres://"):
@@ -23,18 +36,39 @@ def strip_unsupported_query_params(url: str) -> str:
 
 
 def database_connect_args(url: str) -> dict:
+    """Database connect args.
+
+    Args:
+        url: (str) Tham số `url`.
+
+    Returns:
+        (dict) Kết quả trả về."""
     parsed = urlparse(url)
     query = parse_qs(parsed.query)
     sslmode = (query.get("sslmode") or [None])[0]
     host = (parsed.hostname or "").lower()
-    needs_ssl = sslmode in ("require", "verify-full", "verify-ca") or "supabase.co" in host
+    port = parsed.port
+    is_supabase = "supabase.com" in host
+    # Supabase pooler (6543) runs pgbouncer in transaction mode → asyncpg prepared
+    # statements clash ("__asyncpg_stmt_N__ already exists"). Disable statement cache
+    # and use unique statement names to stay compatible.
+    is_pgbouncer = is_supabase and (port == 6543 or "pgbouncer" in query)
+    args: dict = {}
+    if is_pgbouncer:
+        args["statement_cache_size"] = 0
+        args["prepared_statement_name_func"] = _unique_statement_name
+
+    needs_ssl = sslmode in ("require", "verify-full", "verify-ca") or is_supabase
     if not needs_ssl:
-        return {}
+        return args
     ctx = ssl.create_default_context()
-    if sslmode == "require":
+    # Supabase pooler / sslmode=require: encrypt without strict CA verify (avoids
+    # CERTIFICATE_VERIFY_FAILED on macOS/Python when chain includes pooler certs).
+    if sslmode in (None, "require") or is_supabase:
         ctx.check_hostname = False
         ctx.verify_mode = ssl.CERT_NONE
-    return {"ssl": ctx}
+    args["ssl"] = ctx
+    return args
 
 
 def resolve_database_url(url: str) -> tuple[str, dict]:

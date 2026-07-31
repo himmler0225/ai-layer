@@ -109,10 +109,134 @@ MESSAGES: dict[str, dict[str, str]] = {
         "vi": "Lỗi LLM: {detail}{tag}",
         "en": "LLM error: {detail}{tag}",
     },
+    # --- Agent status (SSE `status` events) ---
+    "agent.status.analyzing": {
+        "vi": "Đang phân tích câu hỏi…",
+        "en": "Analyzing your question…",
+    },
+    "agent.status.calling_tools": {
+        "vi": "Đang gọi tool dữ liệu…",
+        "en": "Calling data tools…",
+    },
+    "agent.status.synthesizing": {
+        "vi": "Đang tổng hợp câu trả lời từ dữ liệu đã thu…",
+        "en": "Summarizing answer from collected data…",
+    },
+    "agent.status.writing": {
+        "vi": "Đang viết câu trả lời từ dữ liệu đã thu…",
+        "en": "Writing answer from collected data…",
+    },
+    # --- Agent tool status (SSE `tool_start` events, app/services/agent/events/tool_status.py) ---
+    "agent.tool.youtube_search": {"vi": "Đang tìm video YouTube: «{q}»…", "en": 'Searching YouTube for "{q}"…'},
+    "agent.tool.youtube_search.generic": {"vi": "Đang tìm video trên YouTube…", "en": "Searching YouTube…"},
+    "agent.tool.youtube_get_comments": {"vi": "Đang lấy bình luận video {vid}…", "en": "Fetching comments for {vid}…"},
+    "agent.tool.youtube_get_comments.generic": {"vi": "Đang lấy bình luận YouTube…", "en": "Fetching YouTube comments…"},
+    "agent.tool.youtube_get_comments_batch.one": {
+        "vi": "Đang lấy bình luận video {id}…",
+        "en": "Fetching comments for {id}…",
+    },
+    "agent.tool.youtube_get_comments_batch.many": {
+        "vi": "Đang lấy bình luận {n} video YouTube ({id}…)…",
+        "en": "Fetching comments from {n} YouTube videos…",
+    },
+    "agent.tool.youtube_get_comments_batch.generic": {
+        "vi": "Đang lấy bình luận nhiều video YouTube…",
+        "en": "Fetching YouTube comments (batch)…",
+    },
+    "agent.tool.youtube_get_transcript": {
+        "vi": "Đang lấy transcript video {vid}…",
+        "en": "Fetching transcript for {vid}…",
+    },
+    "agent.tool.youtube_get_transcript.generic": {
+        "vi": "Đang lấy transcript YouTube…",
+        "en": "Fetching YouTube transcript…",
+    },
+    "agent.tool.youtube_get_transcript_batch.one": {
+        "vi": "Đang lấy transcript video {id}…",
+        "en": "Fetching transcript for {id}…",
+    },
+    "agent.tool.youtube_get_transcript_batch.many": {
+        "vi": "Đang lấy transcript {n} video ({id}…)…",
+        "en": "Fetching transcripts for {n} videos…",
+    },
+    "agent.tool.youtube_get_transcript_batch.generic": {
+        "vi": "Đang lấy transcript nhiều video…",
+        "en": "Fetching YouTube transcripts…",
+    },
+    "agent.tool.youtube_get_detail": {"vi": "Đang xem chi tiết video {vid}…", "en": "Loading video details {vid}…"},
+    "agent.tool.youtube_get_detail.generic": {"vi": "Đang xem chi tiết video…", "en": "Loading video details…"},
+    "agent.tool.youtube_get_by_topic": {
+        "vi": "Đang lấy video chủ đề {topic}…",
+        "en": "Browsing YouTube topic {topic}…",
+    },
+    "agent.tool.youtube_get_by_topic.generic": {"vi": "Đang lấy video theo chủ đề…", "en": "Browsing by topic…"},
+    "agent.tool.youtube_get_by_region": {"vi": "Đang tìm video {gl}: «{q}»…", "en": "Searching {gl}: {q}…"},
+    "agent.tool.youtube_get_by_region.generic": {
+        "vi": "Đang tìm video khu vực {gl}…",
+        "en": "Searching region {gl}…",
+    },
+    "agent.tool.youtube_get_channel_info": {"vi": "Đang xem kênh {ch}…", "en": "Loading channel {ch}…"},
+    "agent.tool.youtube_get_channel_info.generic": {"vi": "Đang xem thông tin kênh…", "en": "Loading channel info…"},
+    "agent.tool.youtube_get_channel_videos": {
+        "vi": "Đang lấy video của kênh {ch}…",
+        "en": "Fetching videos from {ch}…",
+    },
+    "agent.tool.youtube_get_channel_videos.generic": {
+        "vi": "Đang lấy video kênh…",
+        "en": "Fetching channel videos…",
+    },
+    "agent.tool.tiktok_search": {"vi": "Đang tìm TikTok: «{q}»…", "en": 'Searching TikTok for "{q}"…'},
+    "agent.tool.tiktok_search.generic": {"vi": "Đang tìm video TikTok…", "en": "Searching TikTok…"},
+    "agent.tool.tiktok_comments": {
+        "vi": "Đang lấy bình luận TikTok ({aweme})…",
+        "en": "Fetching TikTok comments ({aweme})…",
+    },
+    "agent.tool.tiktok_comments.generic": {"vi": "Đang lấy bình luận TikTok…", "en": "Fetching TikTok comments…"},
+    "agent.tool.tiktok_transcript": {
+        "vi": "Đang lấy transcript TikTok ({aweme})…",
+        "en": "Fetching TikTok transcript ({aweme})…",
+    },
+    "agent.tool.tiktok_transcript.generic": {
+        "vi": "Đang lấy transcript TikTok…",
+        "en": "Fetching TikTok transcript…",
+    },
+    "agent.tool.tiktok_video_info.no_url": {"vi": "Đang xem video TikTok…", "en": "Loading TikTok video…"},
+    "agent.tool.tiktok_video_info.with_url": {"vi": "Đang xem thông tin video TikTok…", "en": "Loading TikTok video…"},
+    "agent.tool.tiktok_profile": {"vi": "Đang xem profile @{handle}…", "en": "Loading @{handle}…"},
+    "agent.tool.tiktok_profile.generic": {"vi": "Đang xem profile TikTok…", "en": "Loading TikTok profile…"},
+    "agent.tool.search_movie_summary": {
+        "vi": "Đang đọc tổng quan review «{pid}»…",
+        "en": "Reading saved summary for {pid}…",
+    },
+    "agent.tool.search_movie_summary.generic": {
+        "vi": "Đang đọc tổng quan review…",
+        "en": "Reading movie summary…",
+    },
+    "agent.tool.search_aspect_evidence": {
+        "vi": "Đang tìm chi tiết {aspect} — {pid}…",
+        "en": "Searching {aspect} evidence for {pid}…",
+    },
+    "agent.tool.search_aspect_evidence.generic": {
+        "vi": "Đang tìm chi tiết review…",
+        "en": "Searching review details…",
+    },
+    "agent.tool.get_raw_reviews": {"vi": "Đang lấy review gốc «{pid}»…", "en": "Fetching raw reviews for {pid}…"},
+    "agent.tool.get_raw_reviews.generic": {"vi": "Đang lấy review gốc…", "en": "Fetching raw reviews…"},
+    "agent.tool.extract_id_from_url": {"vi": "Đang phân tích link video…", "en": "Parsing video URL…"},
+    "agent.tool.default": {"vi": "Đang chạy {tool}…", "en": "Running {tool}…"},
 }
 
 
 def t(key: str, locale: Locale, **params: Any) -> str:
+    """T.
+
+    Args:
+        key: (str) Tham số `key`.
+        locale: (Locale) Tham số `locale`.
+        **params: (Any) Tham số `**params`.
+
+    Returns:
+        (str) Kết quả trả về."""
     entry = MESSAGES.get(key)
     if not entry:
         return key
@@ -122,11 +246,34 @@ def t(key: str, locale: Locale, **params: Any) -> str:
     return text
 
 
+def both(key: str, **params: Any) -> tuple[str, str]:
+    """Lấy đồng thời (vi, en) từ MESSAGES — dùng cho payload SSE gửi cả 2 ngôn ngữ cùng lúc."""
+    return t(key, "vi", **params), t(key, "en", **params)
+
+
 def pick(vi: str, en: str, locale: Locale) -> str:
+    """Pick.
+
+    Args:
+        vi: (str) Tham số `vi`.
+        en: (str) Tham số `en`.
+        locale: (Locale) Tham số `locale`.
+
+    Returns:
+        (str) Kết quả trả về."""
     return vi if locale == "vi" else en
 
 
 def localize(text: str, locale: Locale, **params: Any) -> str:
+    """Localize.
+
+    Args:
+        text: (str) Tham số `text`.
+        locale: (Locale) Tham số `locale`.
+        **params: (Any) Tham số `**params`.
+
+    Returns:
+        (str) Kết quả trả về."""
     if text in MESSAGES:
         return t(text, locale, **params)
     return text
