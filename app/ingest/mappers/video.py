@@ -1,5 +1,7 @@
 from typing import Any
 
+from app.utils.urls import tiktok_url as _tiktok_url, youtube_url as _youtube_url
+
 
 def _as_int(value: Any) -> int:
     """(Nội bộ) As int.
@@ -13,28 +15,6 @@ def _as_int(value: Any) -> int:
         return int(value)
     except TypeError, ValueError:
         return 0
-
-
-def _youtube_url(video_id: str) -> str:
-    """(Nội bộ) Youtube url.
-
-    Args:
-        video_id: (str) Tham số `video_id`.
-
-    Returns:
-        (str) Kết quả trả về."""
-    return f"https://www.youtube.com/watch?v={video_id}"
-
-
-def _tiktok_url(aweme_id: str) -> str:
-    """(Nội bộ) Tiktok url.
-
-    Args:
-        aweme_id: (str) Tham số `aweme_id`.
-
-    Returns:
-        (str) Kết quả trả về."""
-    return f"https://www.tiktok.com/@_/video/{aweme_id}"
 
 
 def map_youtube_video(raw: dict) -> dict | None:

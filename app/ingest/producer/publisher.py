@@ -1,68 +1,36 @@
+import asyncio
 import uuid
-from datetime import datetime, UTC
-import aio_pika
-from app.ingest.config import INGEST_ENABLED, RABBITMQ_URL
+from datetime import UTC, datetime
+
 from app.config.logger import Logger
-from app.ingest.broker.connection import close_broker, get_exchange
-from app.ingest.broker.topology import declare_topology
+from app.ingest.config import INGEST_ENABLED
 from app.ingest.schemas import IngestEnvelope
 
 logger = Logger.get(__name__)
-_ready = False
+_background_tasks: set[asyncio.Task] = set()
 
 
-async def init_producer() -> None:
-    """Khởi tạo producer (async).
+async def _run_dispatch(envelope: IngestEnvelope) -> None:
+    from app.ingest.handlers.router import dispatch
 
-    Returns:
-        (None) Kết quả trả về."""
-    global _ready
-    if not INGEST_ENABLED or not RABBITMQ_URL:
-        logger.info("[ingest] producer disabled")
-        return
     try:
-        await declare_topology()
-        await get_exchange()
-        _ready = True
-        logger.info("[ingest] producer ready")
-    except Exception as exc:
-        _ready = False
-        logger.warning("[ingest] producer init failed: %s", exc)
-
-
-async def close_producer() -> None:
-    """Đóng producer (async).
-
-    Returns:
-        (None) Kết quả trả về."""
-    global _ready
-    _ready = False
-    await close_broker()
-
-
-def _enabled() -> bool:
-    """(Nội bộ) Enabled `_enabled`.
-
-    Returns:
-        (bool) Kết quả trả về."""
-    return INGEST_ENABLED and bool(RABBITMQ_URL) and _ready
+        await dispatch(envelope.model_dump())
+    except Exception:
+        logger.exception(
+            "[ingest] handler failed key=%s video=%s", envelope.routing_key, envelope.video_id or "-"
+        )
 
 
 async def publish(
     routing_key: str, *, platform: str, video_id: str = "", movie_hint: str = "", payload: dict | None = None
 ) -> None:
-    """Xuất bản `publish` (async).
+    """Xếp lịch xử lý ingest trong-process (fire-and-forget), không qua broker.
 
-    Args:
-        routing_key: (str) Tham số `routing_key`.
-        platform: (str) Tham số `platform`.
-        video_id: (str, mặc định '') Tham số `video_id`.
-        movie_hint: (str, mặc định '') Tham số `movie_hint`.
-        payload: (Optional[dict], mặc định None) Tham số `payload`.
-
-    Returns:
-        (None) Kết quả trả về."""
-    if not _enabled():
+    Chạy dispatch như một background task thay vì await trực tiếp, để không
+    chặn phản hồi của agent cho user — giữ đúng ngữ nghĩa "publish vào queue"
+    của thiết kế RabbitMQ trước đây.
+    """
+    if not INGEST_ENABLED:
         return
     envelope = IngestEnvelope(
         job_id=str(uuid.uuid4()),
@@ -73,16 +41,6 @@ async def publish(
         payload=payload or {},
         fetched_at=datetime.now(UTC).isoformat(),
     )
-    try:
-        exchange = await get_exchange()
-        await exchange.publish(
-            aio_pika.Message(
-                body=envelope.model_dump_json().encode(),
-                content_type="application/json",
-                delivery_mode=aio_pika.DeliveryMode.PERSISTENT,
-            ),
-            routing_key=routing_key,
-        )
-        logger.debug("[ingest] published key=%s video=%s", routing_key, video_id or "-")
-    except Exception as exc:
-        logger.warning("[ingest] publish failed key=%s: %s", routing_key, exc)
+    task = asyncio.create_task(_run_dispatch(envelope), name=f"ingest-{routing_key}")
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)

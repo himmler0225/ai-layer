@@ -8,7 +8,6 @@ from app.exceptions import AiLayerConfigError
 
 logger = Logger.get(__name__)
 
-_ingest_worker_task: asyncio.Task | None = None
 _config_refresh_task: asyncio.Task | None = None
 
 
@@ -55,42 +54,6 @@ async def _stop_config_refresher() -> None:
     _config_refresh_task = None
 
 
-async def _start_inline_ingest_worker() -> None:
-    """(Nội bộ) Bắt đầu inline ingest worker (async) `_start_inline_ingest_worker`.
-
-    Returns:
-        (None) Kết quả trả về."""
-    global _ingest_worker_task
-    from app.ingest.config import INGEST_ENABLED, INGEST_WORKER_INLINE, RABBITMQ_URL
-
-    if not INGEST_ENABLED or not RABBITMQ_URL:
-        return
-    if not INGEST_WORKER_INLINE:
-        logger.info("[startup] ingest worker inline disabled (INGEST_WORKER_INLINE=false)")
-        return
-    from app.ingest.consumer.worker import run_consumer
-
-    _ingest_worker_task = asyncio.create_task(run_consumer(), name="ingest-worker")
-    logger.info("[startup] ingest worker inline started")
-
-
-async def _stop_inline_ingest_worker() -> None:
-    """(Nội bộ) Dừng inline ingest worker (async) `_stop_inline_ingest_worker`.
-
-    Returns:
-        (None) Kết quả trả về."""
-    global _ingest_worker_task
-    if _ingest_worker_task is None:
-        return
-    _ingest_worker_task.cancel()
-    try:
-        await _ingest_worker_task
-    except asyncio.CancelledError:
-        pass
-    _ingest_worker_task = None
-    logger.info("[shutdown] ingest worker inline stopped")
-
-
 def validate_startup_config() -> None:
     """Xác thực startup config.
 
@@ -120,10 +83,6 @@ async def startup() -> None:
         raise AiLayerConfigError(f"Database initialization failed: {exc}", cause=exc) from exc
     await get_redis()
     await _start_config_refresher()
-    from app.ingest.producer.publisher import init_producer
-
-    await init_producer()
-    await _start_inline_ingest_worker()
     from app.mcp.config import AGENT_CRAWL_BACKEND
 
     if AGENT_CRAWL_BACKEND == "mcp":
@@ -141,14 +100,11 @@ async def shutdown() -> None:
 
     Returns:
         (None) Kết quả trả về."""
-    await _stop_inline_ingest_worker()
     await _stop_config_refresher()
     from app.cache.client import close_redis
     from app.clients.data_miner import close_client as close_dm
     from app.config.db.session import close_engine
-    from app.ingest.producer.publisher import close_producer
 
-    await close_producer()
     await close_dm()
     await close_engine()
     await close_redis()

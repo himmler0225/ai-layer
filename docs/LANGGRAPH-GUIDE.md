@@ -1,17 +1,12 @@
-# LangGraph — Hướng dẫn migrate (vừa làm vừa học)
+# LangGraph — supervisor + worker multi-agent (đã build Phase 1)
 
-Tài liệu **tự làm** để thay vòng lặp agent hiện tại bằng [LangGraph](https://langchain-ai.github.io/langgraph/).
+> **Cập nhật (2026-08):** tài liệu này ban đầu viết cho kế hoạch migrate **đơn-chain** (1 graph tuyến tính thay thế `iterate.py`). Kế hoạch thực tế đã đổi hướng sang **multi-agent: supervisor + worker riêng theo domain** (youtube/tiktok/movies), fan-out song song qua `langgraph.types.Send`. §1-§3 (khái niệm LangGraph, state/node/edge) vẫn đúng và hữu ích để đọc. Từ §4 trở đi mô tả graph 1-chuỗi cũ — **không còn khớp code thật**, xem code trực tiếp trong `app/services/agent/graph/` thay vì tin theo các node/mermaid diagram cũ ở dưới.
 
-**Đọc trước:**
-- [FLOW.md](./FLOW.md) — luồng end-to-end chatbot → ai-layer → data-miner
-- [RAG-GUIDE.md](./RAG-GUIDE.md) — L1/L2/L3, ingest (không đụng khi migrate graph)
-
-**Phạm vi PR:** chỉ `app/services/agent/` (orchestration). **Không** viết lại ingest, RAG pipeline, data-miner client.
-
-**Trạng thái repo (2026-07, sau khi gọn thư mục `services/agent/`):**
-- Loop legacy: `core/runner.py`, `core/stream.py`, `core/engine.py`, `guards/budget.py` — **đang chạy production**
-- LangGraph: `graph/state.py` (có sẵn), `graph/nodes.py` (trống), `core/langgraph_runner.py` + `core/langgraph_stream.py` (trống, chỗ bạn viết Phase 0) — **chưa wire vào API**
-- Cấu trúc mới: `core/` (loop chính + entrypoint), `guards/` (budget, fallback), `synthesis/` (generate, finalize), `tooling/` (platform, dispatch, serialize), `events/` (schema, status). Mỗi package re-export public API qua `__init__.py`, nên import ngoài (`from app.services.agent.guards import ...` v.v.) không đổi so với trước.
+**Trạng thái repo (2026-08, Phase 1 đã xong):**
+- Loop legacy: `core/runner.py`, `core/stream.py`, `core/engine.py`, `guards/budget.py` — vẫn **đang chạy production**, là mặc định (`AGENT_BACKEND` rỗng/`single`).
+- Multi-agent (LangGraph thật): `graph/state.py` (`AgentState`), `graph/supervisor.py` (routing xác định, không tốn LLM call cho case rõ ràng), `graph/workers.py` (`run_worker_loop` — vòng lặp tool-calling riêng mỗi domain, độc lập với `iterate.py`), `graph/nodes.py`, `graph/build.py` (`StateGraph` + `Send` fan-out), `core/langgraph_runner.py` (`run_agent_multi`) — **đã wire vào `/agent/run`** sau cờ `AGENT_BACKEND=multi`. `/agent/run/stream` và `core/langgraph_stream.py` **chưa làm** (Phase 3).
+- Đã verify thật: single-domain, catalog-domain (`movies`), và fan-out song song 2 domain (`youtube`+`tiktok` cùng lúc, gộp `tool_call_log` qua reducer `operator.add`) đều chạy đúng qua request thật.
+- Cấu trúc cũ (`core/`, `guards/`, `synthesis/`, `tooling/`, `events/`) không đổi, worker mới tái dùng lại phần lớn (`bootstrap_agent`, `resolve_empty_tool_round`, `catalog_fallback_call`, `run_synthesis`...) — không viết lại.
 
 ---
 

@@ -1,20 +1,10 @@
 from urllib.parse import quote
 
 from app.rag.movie_hint import extract_movie_name
+from app.utils.urls import tiktok_url as _tiktok_url, youtube_url as _youtube_url
 
 _HISTORY_MARKER = "\n[Câu hỏi hiện tại]\n"
 _MAX_UI_VIDEOS = 8
-
-
-def _youtube_url(video_id: str) -> str:
-    """(Nội bộ) Youtube url.
-
-    Args:
-        video_id: (str) Tham số `video_id`.
-
-    Returns:
-        (str) Kết quả trả về."""
-    return f"https://www.youtube.com/watch?v={video_id}"
 
 
 def _youtube_search_url(query: str) -> str:
@@ -27,16 +17,6 @@ def _youtube_search_url(query: str) -> str:
         (str) Kết quả trả về."""
     return f"https://www.youtube.com/results?search_query={quote(query)}"
 
-
-def _tiktok_url(aweme_id: str) -> str:
-    """(Nội bộ) Tiktok url.
-
-    Args:
-        aweme_id: (str) Tham số `aweme_id`.
-
-    Returns:
-        (str) Kết quả trả về."""
-    return f"https://www.tiktok.com/@_/video/{aweme_id}"
 
 
 def _best_thumb(thumbnails, video_id: str = "") -> str | None:

@@ -4,7 +4,6 @@ import app.config.settings as settings
 from app.config.constants import HEALTH_CHECK_TIMEOUT
 from app.config.defaults import load_schema
 from app.config.loader import provider_settings_prefix, runtime
-from app.ingest.config import INGEST_ENABLED, RABBITMQ_URL
 
 
 async def check_postgres() -> str:
@@ -39,30 +38,6 @@ async def check_redis() -> str:
         if redis is None:
             return "unreachable"
         await redis.ping()
-        return "ok"
-    except Exception as exc:
-        return f"error: {exc}"
-
-
-async def check_rabbitmq() -> str:
-    """Check rabbitmq (async).
-
-    Returns:
-        (str) Kết quả trả về."""
-    if not INGEST_ENABLED:
-        return "skipped"
-    if not RABBITMQ_URL:
-        return "missing RABBITMQ_URL"
-    try:
-        import aio_pika
-
-        conn = await aio_pika.connect_robust(
-            RABBITMQ_URL,
-            timeout=HEALTH_CHECK_TIMEOUT,
-        )
-        async with conn:
-            channel = await conn.channel()
-            await channel.close()
         return "ok"
     except Exception as exc:
         return f"error: {exc}"
@@ -106,7 +81,6 @@ async def collect_checks() -> dict[str, str]:
     return {
         "postgres": await check_postgres(),
         "redis": await check_redis(),
-        "rabbitmq": await check_rabbitmq(),
         "data_miner": await check_data_miner(),
         "llm_key": check_llm_key(),
     }
@@ -127,7 +101,5 @@ def is_healthy(checks: dict[str, str]) -> bool:
     if checks.get("data_miner") != "ok":
         return False
     if checks.get("llm_key") != "set":
-        return False
-    if INGEST_ENABLED and checks.get("rabbitmq") != "ok":
         return False
     return True

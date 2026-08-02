@@ -12,11 +12,11 @@ Built on **OpenAI-compatible chat completions** (Responses-shaped adapter). The 
         │
         ├─ Supabase Postgres      chat, video cache, movies, RAG vectors (DATABASE_URL)
         ├─ Redis                auth + history cache
-        ├─ RabbitMQ             ingest jobs (comments → RAG → summarize)
+        ├─ in-process ingest     background tasks (comments → RAG → summarize)
         └─ Supabase REST        Auth, profiles, runtime config table
 ```
 
-Further reading: [docs/FLOW.md](docs/FLOW.md) · [docs/RAG-GUIDE.md](docs/RAG-GUIDE.md) · [docs/REFACTOR-AUDIT.md](docs/REFACTOR-AUDIT.md) · [docs/LANGGRAPH-GUIDE.md](docs/LANGGRAPH-GUIDE.md) · [../docs/MCP-PHASE2-GUIDE.md](../docs/MCP-PHASE2-GUIDE.md)
+Further reading: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (bắt đầu từ đây) · [docs/FLOW.md](docs/FLOW.md) · [docs/RAG-GUIDE.md](docs/RAG-GUIDE.md) · [docs/REFACTOR-AUDIT.md](docs/REFACTOR-AUDIT.md) · [docs/LANGGRAPH-GUIDE.md](docs/LANGGRAPH-GUIDE.md) · [../docs/MCP-PHASE2-GUIDE.md](../docs/MCP-PHASE2-GUIDE.md)
 
 ---
 
@@ -26,7 +26,7 @@ Further reading: [docs/FLOW.md](docs/FLOW.md) · [docs/RAG-GUIDE.md](docs/RAG-GU
 - **Dual-model mode** — optional different `tool_model` vs `model` on the same provider (e.g. XAH); synthesis streams separately when they differ.
 - **SSE streaming** — token-by-token `text_delta` (including live synthesis in dual-mode); tool progress events; metadata without blocking the text stream.
 - **Enrichment** — derives `sources`, analyzed `videos` (only videos actually crawled, not full search pages); narrative answer lives in the agent bubble only.
-- **3-tier RAG** — L1 `aspect_summaries` → L2 `aspect_chunks` → L3 `raw_reviews`; vector search via pgvector; ingest worker on RabbitMQ.
+- **3-tier RAG** — L1 `aspect_summaries` → L2 `aspect_chunks` → L3 `raw_reviews`; vector search via pgvector; ingest pipeline runs as an in-process background task (fire-and-forget, no broker).
 - **Chat history** — sessions/messages in PostgreSQL, Redis cache, scoped by Supabase JWT.
 - **Remote config** — prompts, OpenAI keys, agent limits, and rate limits loaded from Supabase `config` at startup (see [Configuration](#configuration)).
 
@@ -34,7 +34,7 @@ Further reading: [docs/FLOW.md](docs/FLOW.md) · [docs/RAG-GUIDE.md](docs/RAG-GU
 
 ## Tech stack
 
-FastAPI · OpenAI-compatible LLM (chat completions adapter) · SQLAlchemy 2 (async) · asyncpg · pgvector · Redis · RabbitMQ · Supabase · slowapi · Uvicorn
+FastAPI · OpenAI-compatible LLM (chat completions adapter) · SQLAlchemy 2 (async) · asyncpg · pgvector · Redis · Supabase · slowapi · Uvicorn
 
 ---
 
@@ -66,7 +66,7 @@ app/
 │   ├── rag_definitions.py # RAG tool schemas (when RAG_ENABLED)
 │   └── executor.py        # dispatch + jsonschema validation
 ├── rag/                   # vector search, movie_id, movie_hint
-├── ingest/                # RabbitMQ consumer, handlers, RAG sync, summarize
+├── ingest/                # background dispatch, handlers, RAG sync, summarize
 ├── repositories/          # SQLAlchemy data access
 ├── config/db/models/      # chat, video, movie RAG tables
 ├── clients/data_miner.py
@@ -188,7 +188,7 @@ Manage via ai-chatbot admin `/admin/config` or Supabase SQL.
 
 ### Environment (infra)
 
-See `.env.example` — `API_KEYS`, `DATABASE_URL`, `REDIS_*`, `RABBITMQ_*`, `SUPABASE_*`, `RAG_ENABLED`, ingest flags, etc.
+See `.env.example` — `API_KEYS`, `DATABASE_URL`, `REDIS_*`, `SUPABASE_*`, `RAG_ENABLED`, `INGEST_ENABLED`, etc.
 
 OpenAI model values are **not** defaulted in code; they must exist in Supabase `config` (or env before remote load in dev).
 
@@ -201,16 +201,15 @@ cd ai-layer
 python3 -m venv .venv && source .venv/bin/activate   # Python 3.14+; use ai-layer venv, not data-miner
 pip install -r requirements.txt
 cp .env.example .env
-# Fill API_KEYS, DATABASE_URL (Supabase Postgres), SUPABASE_*, RABBITMQ_URL
+# Fill API_KEYS, DATABASE_URL (Supabase Postgres), SUPABASE_*
 # Supabase: config/supabase-setup.sql → alembic upgrade head
 
 fastapi dev app/main.py --port 8001
 ```
 
-- **Inline ingest** (dev): `INGEST_WORKER_INLINE=true` — one process runs API + RabbitMQ consumer.
-- **Separate worker**: `INGEST_WORKER_INLINE=false` + `python -m app.ingest`.
+Ingest (comments/transcript → RAG) runs as an in-process background task — no separate worker or broker to stand up; toggle with `INGEST_ENABLED`.
 
-Docker stack lives in the parent monorepo (`docker-compose.yml`): redis, rabbitmq, `ai-layer`, `ingest-worker`, `data-miner`. Postgres = Supabase (không còn container local).
+Docker stack lives in the parent monorepo (`docker-compose.yml`): redis, `ai-layer`, `data-miner`. Postgres = Supabase (không còn container local).
 
 Docs UI: `http://localhost:8001/docs`
 

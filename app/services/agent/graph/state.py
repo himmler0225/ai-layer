@@ -1,16 +1,14 @@
-from typing import Annotated, Any, TypedDict
 import operator
+from typing import Annotated, TypedDict
 
 
 class AgentState(TypedDict, total=False):
     session_id: str
     task: str
     system: str
-    tools: list[dict]
     max_iter: int
-    iteration: int
-    input_items: list[dict]
+    requested_tool_set: str
     tool_call_log: Annotated[list[dict], operator.add]
-    llm_output: Any
     final_text: str
-    error: str
+    workers_selected: list[str]
+    result: dict

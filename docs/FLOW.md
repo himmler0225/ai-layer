@@ -12,7 +12,7 @@
 - **data-miner** — crawl YouTube/TikTok
 - **Supabase Postgres** (`DATABASE_URL`) — dữ liệu app (video, comments, movies, RAG)
 - **Supabase REST** — auth + `config` (có thể override prompt prod)
-- **RabbitMQ** — job ingest nền
+- **Ingest ngầm** — background task trong-process (không broker), spawn từ `producer/publisher.py`
 
 Review social chỉ từ YouTube/TikTok. Giá FPT/Tiki chatbot nhét vào prompt, không crawl TMĐT.
 
@@ -67,7 +67,7 @@ Hai track song song mỗi batch comment (`handlers/comments.py`):
 ```
 tool crawl OK
   → schedule_tool_ingest (movie_hint từ task)
-  → RabbitMQ
+  → publish() spawn asyncio.create_task (fire-and-forget, trong process API)
   → comments handler
        ├─ FLAT:  comments + video_chunks (embed)
        └─ RAG:   sync_comments_to_movie_rag
@@ -77,13 +77,13 @@ tool crawl OK
             → LLM summary → aspect_summaries + embed
 ```
 
-| Routing key | Queue | Handler |
-|-------------|-------|---------|
-| `comments.upsert` | `ingest.comments` | dual flat + RAG |
-| `movie.summarize` | `ingest.summarize` | L1/L2 pipeline |
-| `chunks.embed` | `ingest.embed` | `video_chunks` flat |
+| Routing key | Handler |
+|-------------|---------|
+| `comments.upsert` | dual flat + RAG |
+| `movie.summarize` | L1/L2 pipeline |
+| `chunks.embed` | `video_chunks` flat |
 
-Consumer retry 3 lần → DLQ. Chi tiết: [RAG-GUIDE §6](./RAG-GUIDE.md#6-ghi--chi-tiết-từng-bước).
+Handler lỗi → log + task dừng (không retry/DLQ — đã bỏ broker, xem RAG-GUIDE §6 cho lộ trình thay bằng Kafka). Chi tiết: [RAG-GUIDE §6](./RAG-GUIDE.md#6-ghi--chi-tiết-từng-bước).
 
 ---
 
@@ -118,10 +118,9 @@ pip install -r requirements.txt
 # optional: pip install -r requirements-dev.txt
 
 fastapi dev app/main.py --port 8001
-# worker riêng: python -m app.ingest
 ```
 
-Cần: `DATABASE_URL`, `OPENAI_API_KEY`, `RAG_ENABLED=true` (mặc định code là `false` nếu không set), `RABBITMQ_URL` (nếu ingest).
+Cần: `DATABASE_URL`, `OPENAI_API_KEY`, `RAG_ENABLED=true` (mặc định code là `false` nếu không set), `INGEST_ENABLED=true` (nếu muốn ingest chạy).
 
 **Lộ trình học RAG từng bước:** [RAG-GUIDE §0](./RAG-GUIDE.md#0-lộ-trình-vừa-làm-vừa-học).
 

@@ -34,9 +34,15 @@ async def run(request: Request, body: AgentRequest):
     Args:
         request: (Request) Tham số `request`.
         body: (AgentRequest) Tham số `body`."""
-    tools = await resolve_tool_set(body.tools)
     max_iter = body.max_iter or settings.AGENT_MAX_ITER
     kwargs = {"system": body.system} if body.system else {}
+
+    if (settings.AGENT_BACKEND or "single") == "multi":
+        from app.services.agent.core.langgraph_runner import run_agent_multi
+
+        return ApiResponse.ok(await run_agent_multi(body.task, body.tools, max_iter, **kwargs))
+
+    tools = await resolve_tool_set(body.tools)
     return ApiResponse.ok(await run_agent(body.task, tools, max_iter=max_iter, **kwargs))
 
 

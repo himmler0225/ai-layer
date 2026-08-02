@@ -15,7 +15,7 @@ Tóm tắt stack: [FLOW.md](./FLOW.md) · LangGraph (riêng, không đụng RAG)
 | Bước | Làm gì | Đọc mục | Biết khi nào xong |
 |------|--------|---------|-------------------|
 | 1 | Bật Postgres + pgvector, chạy Alembic | §7.3 | `alembic current` = head |
-| 2 | Bật RabbitMQ + `INGEST_*` + `RAG_ENABLED=true` | §8 | `GET /health` OK |
+| 2 | Bật `INGEST_ENABLED=true` + `RAG_ENABLED=true` | §8 | `GET /health` OK |
 | 3 | Chạy ai-layer + data-miner | [FLOW.md § Chạy dev](./FLOW.md#chạy-dev) | API `:8001` lên |
 | 4 | Gửi 1 task có `[Phim đang xem]` từ chatbot | §5.1 | Log agent + tool crawl |
 | 5 | Theo dõi ingest → `raw_reviews` tăng | §6.2–6.3 | SQL `COUNT(*)` > 0 |
@@ -125,7 +125,7 @@ sequenceDiagram
 flowchart TD
     A[Tool crawl OK] --> B[schedule_tool_ingest]
     B --> C[route_tool]
-    C --> D[RabbitMQ comments.upsert]
+    C --> D[publish comments.upsert → asyncio task]
     D --> E[handle_comments_upsert]
     E --> F[insert_comments flat]
     E --> G[sync_comments_to_movie_rag]
@@ -232,7 +232,7 @@ L3: sort `likes DESC`, không vector — `coverage` = `sufficient` nếu có row
 
 Tool được route (`ingest/dispatcher/routes.py`):
 
-| Tool | Job RabbitMQ |
+| Tool | Job (routing key) |
 |------|----------------|
 | `youtube_search`, `tiktok_search` | search cache |
 | `youtube_get_comments`, `*_batch` | `comments.upsert` |
@@ -244,31 +244,23 @@ Tool được route (`ingest/dispatcher/routes.py`):
 
 ## 6. Ghi — chi tiết từng bước
 
-### 6.1 RabbitMQ topology
+### 6.1 Dispatch trong-process (đã bỏ RabbitMQ)
 
-File: `ingest/schemas.py`, `ingest/broker/topology.py`
+File: `ingest/schemas.py`, `ingest/producer/publisher.py`, `ingest/handlers/router.py`
 
-| Routing key | Queue | Handler |
-|-------------|-------|---------|
-| `video.upsert` | `ingest.video` | `handlers/video.py` |
-| `comments.upsert` | `ingest.comments` | `handlers/comments.py` |
-| `transcript.upsert` | `ingest.transcript` | `handlers/transcript.py` |
-| `chunks.embed` | `ingest.embed` | `handlers/embed.py` |
-| `movie.summarize` | `ingest.summarize` | `handlers/summarize.py` |
+Không còn broker/exchange/queue riêng. `publish(routing_key, ...)` build `IngestEnvelope` rồi spawn `asyncio.create_task` gọi thẳng `handlers/router.py:dispatch()` — chạy nền trong cùng process API, không chặn response cho user.
 
-Exchange: `knowledge.ingest` · DLX: `knowledge.ingest.dlx` · DLQ: `ingest.dlq`
+| Routing key | Handler |
+|-------------|---------|
+| `video.upsert` | `handlers/video.py` |
+| `comments.upsert` | `handlers/comments.py` |
+| `transcript.upsert` | `handlers/transcript.py` |
+| `chunks.embed` | `handlers/embed.py` |
+| `movie.summarize` | `handlers/summarize.py` |
 
-Consumer (`ingest/consumer/worker.py`): retry tối đa 3 lần → reject vào DLQ.
+Không có retry/DLQ — handler lỗi thì log exception và task đó dừng (xem `_run_dispatch` trong `publisher.py`). Đây là bước tạm trước khi chuyển sang **Kafka** (multi-agent crawl pipeline riêng, xem thảo luận thiết kế ở cấp monorepo) — lúc đó `publish()` sẽ produce ra topic thay vì spawn task, và cần retry/DLQ pattern lại.
 
-Chạy worker:
-
-```bash
-# Cùng process API (dev)
-INGEST_WORKER_INLINE=true
-
-# Process riêng
-python -m app.ingest
-```
+Bật/tắt toàn bộ ingest: `INGEST_ENABLED=true|false` (`.env`) — không cần chạy process/worker riêng nữa.
 
 ### 6.2 `handle_comments_upsert` — dual track
 
@@ -401,9 +393,7 @@ Config ai-layer có **hai nguồn** (xem `config/remote-schema.json` + `app/conf
 | `RAG_TOP_K` | `SERVICES.rag.top_k` | `0` → dùng logic code | Số kết quả vector search (khuyến nghị `8`) |
 | `RAG_MIN_SCORE` | `SERVICES.rag.min_score` | `0` → dùng logic code | Ngưỡng `coverage=sufficient` (khuyến nghị `0.65`) |
 | `CACHE_TTL_DAYS` | `SERVICES.cache.ttl_days` | `0` | Fresh cho cache-first (khuyến nghị `7`) |
-| `INGEST_ENABLED` | `SERVICES.ingest.enabled` | `false` | Publish RabbitMQ |
-| `INGEST_WORKER_INLINE` | `SERVICES.ingest.worker_inline` | `false` | Worker trong process API (dev: `true`) |
-| `RABBITMQ_URL` | `SERVICES.rabbitmq.url` | — | Bắt buộc nếu ingest bật |
+| `INGEST_ENABLED` | `SERVICES.ingest.enabled` | `false` | Bật ingest nền (in-process, không broker) |
 | `EMBEDDING_MODEL` | `SERVICES.embedding.model` | — | Model embed |
 | `EMBEDDING_DIM` | `SERVICES.embedding.dim` | — | Chiều vector (`1536`) |
 
@@ -415,7 +405,6 @@ RAG_TOP_K=8
 RAG_MIN_SCORE=0.65
 CACHE_TTL_DAYS=7
 INGEST_ENABLED=true
-INGEST_WORKER_INLINE=true
 ```
 
 ### 8.2 Agent limits (env hoặc Supabase `AI_AGENT`)
@@ -543,8 +532,7 @@ SELECT aspect, embedding IS NOT NULL AS has_vec FROM aspect_chunks WHERE movie_i
 
 ### 11.3 API admin
 
-- `GET /ai/admin/ingest/queues` — depth queue RabbitMQ
-- `GET /health` — Postgres, Redis, RabbitMQ, data-miner
+- `GET /health` — Postgres, Redis, data-miner (ingest không còn broker riêng để check)
 
 ### 11.4 Log prefix hay gặp
 
@@ -553,7 +541,7 @@ SELECT aspect, embedding IS NOT NULL AS has_vec FROM aspect_chunks WHERE movie_i
 | `[agent] RAG cache hit` | Cache-first đã thu tool |
 | `[rag_sync] queued summarize` | Đủ raw → job L1/L2 |
 | `[summarize] done` | L1/L2 ghi xong |
-| `[ingest] handler failed` | Consumer lỗi (retry/DLQ) |
+| `[ingest] handler failed` | Background task lỗi (không retry) |
 
 ### 11.5 Test unit
 
@@ -569,11 +557,11 @@ pytest tests/test_core.py tests/test_pgvector.py -q
 |-------------|------------------------|------------|
 | Agent luôn crawl, không dùng RAG | `RAG_ENABLED=false`; chưa có L1; `movie_id` sai slug | Bật RAG; kiểm tra SQL; đối chiếu `slugify_movie_id` |
 | Có curated ≥ 20 nhưng vẫn crawl | Cache-first cần **L1 fresh**, không chỉ curated | Đợi `[summarize] done` hoặc xem queue summarize |
-| `coverage=none` dù đã crawl | Chưa summarize; embedding NULL | Đợi worker; xem queue `ingest.summarize` |
+| `coverage=none` dù đã crawl | Chưa summarize; embedding NULL | Đợi background task; xem log `[summarize]` |
 | `raw_reviews` tăng nhưng không L1 | raw < 20 hoặc chưa đủ delta 50 | Crawl thêm hoặc hạ ngưỡng |
 | Cache-first không bật | L1 cũ hơn `CACHE_TTL_DAYS` | Re-summarize hoặc tăng TTL |
 | Không có `movie_hint` | Task thiếu `[Phim đang xem]` | Sửa chatbot payload |
-| Ingest không chạy | `RABBITMQ_URL` / worker tắt | `INGEST_WORKER_INLINE=true` hoặc `python -m app.ingest` |
+| Ingest không chạy | `INGEST_ENABLED=false` | Set `INGEST_ENABLED=true` trong `.env` |
 | Vector search lỗi | Thiếu extension `vector` | `CREATE EXTENSION vector` trên Postgres |
 
 ---
@@ -587,7 +575,7 @@ ai-layer /agent     prepare_tools → OpenAI → tools
     ↓ crawl
 data-miner          YouTube/TikTok API
     ↓
-ai-layer ingest     RabbitMQ → handlers → Postgres
+ai-layer ingest     publish() → asyncio task → handlers → Postgres
     ↓ query
 ai-layer RAG        rag/search → repositories → pgvector
 ```

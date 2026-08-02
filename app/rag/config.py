@@ -2,20 +2,9 @@
 
 import os
 
+from app.config.env import env_bool
 
-def _env_bool(key: str, default: str = "false") -> bool:
-    """(Nội bộ) Env bool `_env_bool`.
-
-    Args:
-        key: (str) Tham số `key`.
-        default: (str, mặc định 'false') Tham số `default`.
-
-    Returns:
-        (bool) Kết quả trả về."""
-    return os.getenv(key, default).lower() in {"1", "true", "yes", "on"}
-
-
-RAG_ENABLED: bool = _env_bool("RAG_ENABLED")
+RAG_ENABLED: bool = env_bool("RAG_ENABLED")
 RAG_TOP_K: int = int(os.getenv("RAG_TOP_K", "8"))
 RAG_MIN_SCORE: float = float(os.getenv("RAG_MIN_SCORE", "0.65"))
 EMBEDDING_MODEL: str = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")

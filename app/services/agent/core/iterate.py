@@ -5,8 +5,11 @@ from app.ai.router import TASK_AGENT_TOOL
 from app.config.logger import Logger
 from app.exceptions import AiLayerError
 from app.services.agent import config
-from app.services.agent.core.engine import tool_round_action
-from app.services.agent.guards.fallback import catalog_fallback_call, catalog_forced_tool_choice
+from app.services.agent.core.engine import (
+    resolve_empty_tool_round as _resolve_empty_tool_round,
+    tool_round_action,
+)
+from app.services.agent.guards.fallback import catalog_fallback_call
 from app.services.agent.events import (
     AgentEvent,
     data_preview as ev_data_preview,
@@ -200,61 +203,6 @@ def _log_llm_round(final: Any, *, iteration: int, attempt: int, tool_choice: Any
         names,
         len(extract_response_text(final)),
     )
-
-
-def _should_retry_empty_tool_round(
-    ctx: dict,
-    *,
-    iteration: int,
-    call_items: list,
-    collected_text: str,
-) -> bool:
-    """(Nội bộ) Should retry empty tool round `_should_retry_empty_tool_round`.
-
-    Args:
-        ctx: (dict) Tham số `ctx`.
-        iteration: (int) Tham số `iteration`.
-        call_items: (list) Tham số `call_items`.
-        collected_text: (str) Tham số `collected_text`.
-
-    Returns:
-        (bool) Kết quả trả về."""
-    if iteration != 1 or ctx["tool_call_log"]:
-        return False
-    if call_items or collected_text.strip():
-        return False
-    return bool(ctx["tools"])
-
-
-def _resolve_empty_tool_round(
-    ctx: dict,
-    *,
-    iteration: int,
-    attempt: int,
-    call_items: list,
-    collected_text: str,
-    tool_choice: Any,
-) -> Any:
-    """Return next tool_choice for retry, or None to stop retrying."""
-    if not _should_retry_empty_tool_round(
-        ctx, iteration=iteration, call_items=call_items, collected_text=collected_text
-    ):
-        return None
-    if attempt >= 2:
-        return None
-    if attempt == 0:
-        forced = catalog_forced_tool_choice(ctx["task"], ctx["tools"])
-        if forced:
-            logger.warning(
-                "[agent] empty tool round iter=1, retrying forced tool=%s",
-                forced.get("function", {}).get("name"),
-            )
-            return forced
-    logger.warning(
-        "[agent] empty tool round iter=1, retrying tool_choice=required tools=%d",
-        len(ctx["tools"]),
-    )
-    return "required"
 
 
 def _error_from_ai_layer(exc: AiLayerError) -> AgentEvent:

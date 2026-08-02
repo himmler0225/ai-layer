@@ -13,9 +13,14 @@ from app.rag.movie_hint import (
     wants_raw_comments,
     wants_review,
 )
-from app.services.agent.constants import _TIKTOK, _YOUTUBE
+from app.services.agent.domains import DOMAINS
 
 logger = Logger.get(__name__)
+# Domain có mention_re (nhận diện qua tên gọi trong câu hỏi) — hiện là
+# youtube/tiktok. "movies" không có mention_re nên không tham gia cơ chế
+# detect/block theo tên platform này (nó được chọn qua wants_catalog(), một
+# cơ chế khác, không phải "nhắc tên platform nào").
+_MENTIONABLE_DOMAINS = [(d["id"], d["mention_re"]) for d in DOMAINS if d.get("mention_re")]
 _MOVIE_CORE = frozenset(
     {
         "search_movie_summary",
@@ -26,6 +31,13 @@ _MOVIE_CORE = frozenset(
         "youtube_get_transcript_batch",
         "youtube_get_detail",
         "youtube_get_comments",
+        # TikTok — trước đây thiếu, khiến review-query narrowing xoá sạch tool
+        # tiktok_* của bất kỳ tool list nào chỉ có TikTok (vd multi-agent
+        # tiktok worker), chỉ còn lại extract_id_from_url.
+        "tiktok_search",
+        "tiktok_comments",
+        "tiktok_transcript",
+        "tiktok_video_info",
         "extract_id_from_url",
     }
 )
@@ -67,12 +79,9 @@ def detect_platform(task: str) -> str | None:
     Returns:
         (str | None) Kết quả trả về."""
     question = context_for_filtering(task)
-    has_tiktok = bool(_TIKTOK.search(question))
-    has_youtube = bool(_YOUTUBE.search(question))
-    if has_tiktok and (not has_youtube):
-        return "tiktok"
-    if has_youtube and (not has_tiktok):
-        return "youtube"
+    mentioned = [domain_id for domain_id, pattern in _MENTIONABLE_DOMAINS if pattern.search(question)]
+    if len(mentioned) == 1:
+        return mentioned[0]
     return None
 
 
@@ -88,10 +97,10 @@ def filter_tools_by_platform(tools: list[dict], task: str) -> list[dict]:
     platform = detect_platform(task)
     if platform is None:
         return tools
-    blocked = "tiktok_" if platform == "youtube" else "youtube_"
+    blocked = tuple(f"{domain_id}_" for domain_id, _ in _MENTIONABLE_DOMAINS if domain_id != platform)
     filtered = [t for t in tools if not t.get("name", "").startswith(blocked)]
     if len(filtered) != len(tools):
-        logger.info("[agent] platform=%s blocked=%s* tools=%d/%d", platform, blocked, len(filtered), len(tools))
+        logger.info("[agent] platform=%s blocked=%s tools=%d/%d", platform, blocked, len(filtered), len(tools))
     return filtered
 
 

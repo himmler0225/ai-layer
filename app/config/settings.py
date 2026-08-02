@@ -49,12 +49,7 @@ AGENT_BACKEND: str = os.getenv("AGENT_BACKEND", "")
 MOVIE_DEFAULT_PROVIDER: str = os.getenv("MOVIE_DEFAULT_PROVIDER", "kkphim").strip().lower()
 
 
-from app.ingest.config import (
-    INGEST_ENABLED,
-    INGEST_WORKER_INLINE,
-    RABBITMQ_EXCHANGE,
-    RABBITMQ_URL,
-)
+from app.ingest.config import INGEST_ENABLED
 from app.rag.config import (
     CACHE_TTL_DAYS,
     EMBEDDING_DIM,
