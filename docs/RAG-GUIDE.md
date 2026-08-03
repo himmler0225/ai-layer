@@ -2,7 +2,7 @@
 
 Tài liệu **trạng thái hiện tại** của pipeline Agentic RAG — dùng khi **vừa làm vừa học**, debug, hoặc nâng cấp.
 
-Tóm tắt stack: [FLOW.md](./FLOW.md) · LangGraph (riêng, không đụng RAG): [LANGGRAPH-GUIDE.md](./LANGGRAPH-GUIDE.md) · Migration: `alembic/versions/`
+Tóm tắt stack: [FLOW.md](./FLOW.md) · Kiến trúc multi-agent (riêng, không đụng RAG): [ARCHITECTURE.md](./ARCHITECTURE.md) · Migration: `alembic/versions/`
 
 **Phạm vi:** review phim từ YouTube/TikTok (`ai-chatbot` → `ai-layer` → `data-miner`). Không bao gồm movie API / cine-flow.
 
@@ -433,10 +433,9 @@ Ingest LLM (aspect group/summary): hardcoded `app/services/prompts.py` — **kh�
 | Bước | File |
 |------|------|
 | API entry (sync/stream) | `app/api/agent.py` |
-| Runner vòng lặp | `app/services/agent/core/runner.py` |
-| SSE stream | `app/services/agent/core/stream.py` |
-| Một bước iteration | `app/services/agent/core/engine.py` |
-| Bootstrap agent | `app/services/agent/core/context.py` |
+| Multi-agent entry (sync/stream) | `app/services/agent/core/langgraph_runner.py`, `core/langgraph_stream.py` |
+| Supervisor + worker | `app/services/agent/graph/supervisor.py`, `graph/workers.py`, `graph/nodes.py` |
+| Bootstrap agent (dùng lại trong mỗi worker) | `app/services/agent/core/context.py` |
 | Lọc tool | `app/services/agent/tooling/platform.py` |
 | Cache check | `app/rag/knowledge.py` |
 | Product name | `app/rag/movie_hint.py` |
@@ -498,9 +497,9 @@ Ingest LLM (aspect group/summary): hardcoded `app/services/prompts.py` — **kh�
 
 Hiện `ASPECT_GROUP_*` / `ASPECT_SUMMARY_*` trong `services/prompts.py`. Pattern giống `AGENT_SYSTEM`: thêm key vào `config/remote.py` `_PROMPT_KEYS`.
 
-### LangGraph / checkpoint (roadmap)
+### Multi-agent (LangGraph)
 
-Loop hiện tại: `services/agent/core/runner.py` + `core/stream.py` dùng chung `core/context.py`. Khi cần branching phức tạp → [LANGGRAPH-GUIDE.md](./LANGGRAPH-GUIDE.md).
+Đã migrate xong — supervisor + worker theo domain, không còn loop đơn. Chi tiết: [ARCHITECTURE.md](./ARCHITECTURE.md).
 
 ---
 

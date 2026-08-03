@@ -44,8 +44,6 @@ GEOIP_DB_PATH: str = os.getenv("GEOIP_DB_PATH", "")
 GEOIP_CACHE_TTL: int = int(os.getenv("GEOIP_CACHE_TTL", "3600"))
 GEOIP_CACHE_MAX: int = int(os.getenv("GEOIP_CACHE_MAX", "500"))
 
-AGENT_BACKEND: str = os.getenv("AGENT_BACKEND", "")
-
 MOVIE_DEFAULT_PROVIDER: str = os.getenv("MOVIE_DEFAULT_PROVIDER", "kkphim").strip().lower()
 
 

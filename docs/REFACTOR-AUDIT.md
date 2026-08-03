@@ -1,11 +1,13 @@
 # Refactor audit — ai-layer (Phase A done)
 
+> **Lịch sử (2026-08):** phần "LangGraph" nói tới ở doc này đã migrate xong — supervisor + worker theo domain, không còn loop `core/runner.py`/`core/stream.py` như mô tả bên dưới. Xem trạng thái hiện tại ở [ARCHITECTURE.md](./ARCHITECTURE.md). Nội dung dưới đây giữ nguyên làm tài liệu lịch sử, không cập nhật theo trạng thái mới.
+
 Tài liệu này ghi **đã làm gọn gì**, **còn gì cho bạn** (MCP, LangGraph), và **thứ tự đề xuất**.
 
 Liên quan:
 - [FLOW.md](./FLOW.md) — luồng runtime
 - [MCP Phase 2](../../docs/MCP-PHASE2-GUIDE.md) — tool discovery từ data-miner
-- [LANGGRAPH-GUIDE.md](./LANGGRAPH-GUIDE.md) — thay vòng lặp agent bằng graph
+- [ARCHITECTURE.md](./ARCHITECTURE.md) — kiến trúc multi-agent hiện tại
 
 ---
 

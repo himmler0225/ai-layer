@@ -39,7 +39,7 @@ def status(detail_vi: str, detail_en: str) -> AgentEvent:
     return AgentEvent("status", {"detail_vi": detail_vi, "detail_en": detail_en})
 
 
-def tool_start(tool: str, detail_vi: str, detail_en: str, args) -> AgentEvent:
+def tool_start(tool: str, detail_vi: str, detail_en: str, args, worker: str | None = None) -> AgentEvent:
     """Tool start.
 
     Args:
@@ -47,21 +47,29 @@ def tool_start(tool: str, detail_vi: str, detail_en: str, args) -> AgentEvent:
         detail_vi: (str) Tham số `detail_vi`.
         detail_en: (str) Tham số `detail_en`.
         args: (Any) Tham số `args`.
+        worker: (str | None) Domain worker phát sinh event này (multi-agent).
 
     Returns:
         (AgentEvent) Kết quả trả về."""
-    return AgentEvent("tool_start", {"tool": tool, "detail_vi": detail_vi, "detail_en": detail_en, "args": args})
+    data = {"tool": tool, "detail_vi": detail_vi, "detail_en": detail_en, "args": args}
+    if worker:
+        data["worker"] = worker
+    return AgentEvent("tool_start", data)
 
 
-def tool_done(tool: str) -> AgentEvent:
+def tool_done(tool: str, worker: str | None = None) -> AgentEvent:
     """Tool done.
 
     Args:
         tool: (str) Tham số `tool`.
+        worker: (str | None) Domain worker phát sinh event này (multi-agent).
 
     Returns:
         (AgentEvent) Kết quả trả về."""
-    return AgentEvent("tool_done", {"tool": tool})
+    data = {"tool": tool}
+    if worker:
+        data["worker"] = worker
+    return AgentEvent("tool_done", data)
 
 
 def text_delta(delta: str) -> AgentEvent:
@@ -75,15 +83,19 @@ def text_delta(delta: str) -> AgentEvent:
     return AgentEvent("text_delta", {"delta": delta})
 
 
-def data_preview(videos: list[dict]) -> AgentEvent:
+def data_preview(videos: list[dict], worker: str | None = None) -> AgentEvent:
     """Data preview.
 
     Args:
         videos: (list[dict]) Tham số `videos`.
+        worker: (str | None) Domain worker phát sinh event này (multi-agent).
 
     Returns:
         (AgentEvent) Kết quả trả về."""
-    return AgentEvent("data_preview", {"videos": videos})
+    data = {"videos": videos}
+    if worker:
+        data["worker"] = worker
+    return AgentEvent("data_preview", data)
 
 
 def done(enriched: dict[str, Any]) -> AgentEvent:

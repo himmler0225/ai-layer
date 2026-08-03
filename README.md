@@ -16,7 +16,7 @@ Built on **OpenAI-compatible chat completions** (Responses-shaped adapter). The 
         └─ Supabase REST        Auth, profiles, runtime config table
 ```
 
-Further reading: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (bắt đầu từ đây) · [docs/FLOW.md](docs/FLOW.md) · [docs/RAG-GUIDE.md](docs/RAG-GUIDE.md) · [docs/REFACTOR-AUDIT.md](docs/REFACTOR-AUDIT.md) · [docs/LANGGRAPH-GUIDE.md](docs/LANGGRAPH-GUIDE.md) · [../docs/MCP-PHASE2-GUIDE.md](../docs/MCP-PHASE2-GUIDE.md)
+Further reading: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (bắt đầu từ đây) · [docs/FLOW.md](docs/FLOW.md) · [docs/RAG-GUIDE.md](docs/RAG-GUIDE.md) · [docs/REFACTOR-AUDIT.md](docs/REFACTOR-AUDIT.md) · [../docs/MCP-PHASE2-GUIDE.md](../docs/MCP-PHASE2-GUIDE.md)
 
 ---
 
@@ -221,42 +221,11 @@ Docs UI: `http://localhost:8001/docs`
 
 ---
 
-## Roadmap: LangGraph
+## Multi-agent orchestration (LangGraph)
 
-The agent loop today is a **custom while-loop** around OpenAI Responses API (`services/agent/core/runner.py`, `core/stream.py`). That is enough for the current flow: tool rounds → optional synthesis → enrich.
+The agent is a **supervisor + per-platform worker** graph on LangGraph — supervisor routes a question to 1..N workers (YouTube/TikTok/movie catalog), workers run in parallel via `Send()` fan-out, results merge and go through one shared synthesis step. Both `/agent/run` and `/agent/run/stream` run through the same graph — there is no alternate backend/flag.
 
-**Hướng dẫn migrate đầy đủ (tiếng Việt):** [docs/LANGGRAPH-GUIDE.md](docs/LANGGRAPH-GUIDE.md) — map state, graph mục tiêu, từng bước PR, streaming, flag `AGENT_BACKEND`.
-
-**LangGraph is a reasonable next step**, but not urgent. Consider migrating when you need several of these:
-
-| Need | Why LangGraph helps |
-|------|---------------------|
-| **Explicit graph** | Nodes for `rag_lookup`, `crawl_youtube`, `synthesize`, `enrich` — easier to reason about than nested `if` in a loop |
-| **Checkpointing / resume** | Long runs (many tools) survive restarts; replay from last node |
-| **Branching** | e.g. RAG sufficient → answer; else crawl; else ask user — without prompt-only control |
-| **Human-in-the-loop** | Pause before expensive crawl, or approve TikTok branch |
-| **Observability** | LangSmith traces per node (latency, token cost per step) |
-
-**What to keep as-is during a migration**
-
-- `tools/executor.py` + `definitions.py` — tool implementations stay; LangGraph nodes call the same functions
-- `ingest/` pipeline — already async/offline; not part of the online graph
-- `enricher.py`, SSE contract toward ai-chatbot — adapt the outer `stream.py` to emit the same events from `graph.astream_events()`
-
-**Risks / costs**
-
-- Extra dependency and abstraction; team must own graph versioning
-- OpenAI **Responses API** integration may need an adapter (many LangGraph examples use Chat Completions); verify streaming + tool format before committing
-- Do not rewrite ingest/RAG at the same time — migrate **orchestration only**
-
-**Suggested order**
-
-1. Stabilize current loop (tests, RAG cache-first, Alembic autogenerate for schema changes).
-2. Draw the target graph on paper (5–7 nodes max).
-3. Spike LangGraph behind a feature flag (`AGENT_BACKEND=langgraph`) sharing the same `/agent/run/stream` API.
-4. Cut over when parity on streaming, tool filtering, and dual-model synthesis is proven.
-
-Until then, the custom loop remains simpler to debug and matches OpenAI Responses API directly — a valid choice for this stage.
+**Chi tiết kiến trúc + thứ tự đọc file:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ---
 

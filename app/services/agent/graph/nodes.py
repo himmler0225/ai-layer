@@ -1,10 +1,11 @@
+from langgraph.config import get_stream_writer
 from langgraph.types import Send
 from app.tools.definitions import resolve_tool_set
 import app.services.prompts as _prompts
 from app.services.agent.domains import DOMAIN_BY_ID, DOMAIN_IDS
 from app.services.agent.graph.supervisor import classify_workers_deterministic
 from app.services.agent.graph.workers import run_worker_loop
-from app.services.agent.synthesis.generate import run_synthesis
+from app.services.agent.synthesis.generate import iter_synthesis_deltas
 from app.services.agent.core.context import finish_agent
 
 async def supervisor_node(state: dict) -> dict:
@@ -33,7 +34,16 @@ async def worker_node(payload: dict) -> dict:
 async def synthesize_node(state: dict) -> dict:
     if not state["tool_call_log"]:
         return {"final_text": ""}
-    text = await run_synthesis(system=state["system"], task=state["task"], tool_call_log=state["tool_call_log"])
+    # get_stream_writer() an toàn dù chạy qua ainvoke() (no-op) hay astream()
+    # (writer() thật sự đẩy chunk ra ngoài) — 1 code path cho cả 2 chế độ.
+    writer = get_stream_writer()
+    text = ""
+    async for delta in iter_synthesis_deltas(
+        system=state["system"], task=state["task"], tool_call_log=state["tool_call_log"]
+    ):
+        text += delta
+        if delta:
+            writer({"kind": "text_delta", "delta": delta})
     return {"final_text": text}
 
 async def finalize_node(state: dict) -> dict:

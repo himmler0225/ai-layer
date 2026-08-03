@@ -1,7 +1,7 @@
 # Flow ai-layer (tóm tắt)
 
 **RAG chi tiết (đọc khi nâng cấp):** [RAG-GUIDE.md](./RAG-GUIDE.md)  
-**LangGraph (thay agent loop):** [LANGGRAPH-GUIDE.md](./LANGGRAPH-GUIDE.md)  
+**Kiến trúc multi-agent (LangGraph) + thứ tự đọc file:** [ARCHITECTURE.md](./ARCHITECTURE.md)  
 **MCP Phase 2 (tool auto-discovery từ data-miner):** [../../docs/MCP-PHASE2-GUIDE.md](../../docs/MCP-PHASE2-GUIDE.md)  
 **Refactor audit + lộ trình:** [REFACTOR-AUDIT.md](./REFACTOR-AUDIT.md)
 
@@ -22,12 +22,12 @@ Review social chỉ từ YouTube/TikTok. Giá FPT/Tiki chatbot nhét vào prompt
 
 ```
 chatbot POST /agent/run/stream
-  → bootstrap_agent → prepare_tools_for_task
-       (platform filter → movie context → RAG cache-first)
-  → LLM tool loop (chat completions adapter, `stream.py` / `loop.py`)
+  → run_agent_multi_stream → supervisor chọn 1..N domain (youtube/tiktok/movies)
+  → Send() fan-out song song, mỗi worker: bootstrap_agent → prepare_tools_for_task
+       (platform filter → movie context → RAG cache-first) → LLM tool loop riêng
   → RAG L1/L2/L3 hoặc crawl data-miner
   → schedule_tool_ingest (nền, mỗi tool crawl)
-  → SSE text_delta + status + done
+  → gộp tool_call_log → synthesize_node → SSE text_delta + tool_start/done (tag worker) + done
 ```
 
 **Task từ chatbot** khi bấm AI Review:
@@ -92,7 +92,7 @@ Handler lỗi → log + task dừng (không retry/DLQ — đã bỏ broker, xem 
 | Việc | File |
 |------|------|
 | API stream | `app/api/agent.py` |
-| Agent loop + guards | `app/services/agent/core/engine.py`, `core/context.py`, `core/stream.py`, `core/runner.py`, `guards/` |
+| Agent loop + guards | `app/services/agent/core/engine.py`, `core/context.py`, `core/langgraph_runner.py`, `core/langgraph_stream.py`, `graph/`, `guards/` |
 | Lọc tool + cache-first | `app/services/agent/tooling/platform.py` |
 | RAG đủ/fresh? | `app/rag/knowledge.py` |
 | Product name từ task | `app/rag/movie_hint.py` |
@@ -135,7 +135,7 @@ Message kiểu *"An error occurred while processing your request... req_xxx"* l�
 Đã xử lý trong code:
 
 1. **Thu hẹp tool** khi có `[Phim đang xem]` (~27 → ~9) hoặc cache-first (~4 RAG)
-2. **Retry tại provider** (`providers.py` `_with_retry`) — không lặp retry ở `stream.py` / `synthesis.py`
+2. **Retry tại provider** (`providers.py` `_with_retry`) — không lặp retry ở `langgraph_stream.py` / `synthesis.py`
 3. **Synthesis stream fallback** — gateway lỗi SSE (vd. xah + opus) → non-stream `run_synthesis`
 4. **Message tiếng Việt** + log `request_id` — `llm_errors.py`
 

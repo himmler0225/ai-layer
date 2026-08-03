@@ -9,8 +9,7 @@ from app.exceptions import AiLayerError
 from app.middleware.auth import verify_api_key
 from app.middleware.rate_limit import limiter
 from app.schemas.response import ApiResponse
-from app.services.agent.core import run_agent, run_agent_stream
-from app.tools.definitions import resolve_tool_set
+from app.services.agent.core import run_agent_multi, run_agent_multi_stream
 from app.utils.llm_errors import log_error
 
 logger = Logger.get(__name__)
@@ -36,14 +35,7 @@ async def run(request: Request, body: AgentRequest):
         body: (AgentRequest) Tham số `body`."""
     max_iter = body.max_iter or settings.AGENT_MAX_ITER
     kwargs = {"system": body.system} if body.system else {}
-
-    if (settings.AGENT_BACKEND or "single") == "multi":
-        from app.services.agent.core.langgraph_runner import run_agent_multi
-
-        return ApiResponse.ok(await run_agent_multi(body.task, body.tools, max_iter, **kwargs))
-
-    tools = await resolve_tool_set(body.tools)
-    return ApiResponse.ok(await run_agent(body.task, tools, max_iter=max_iter, **kwargs))
+    return ApiResponse.ok(await run_agent_multi(body.task, body.tools, max_iter, **kwargs))
 
 
 @router.post("/run/stream")
@@ -54,7 +46,6 @@ async def run_stream(request: Request, body: AgentRequest):
     Args:
         request: (Request) Tham số `request`.
         body: (AgentRequest) Tham số `body`."""
-    tools = await resolve_tool_set(body.tools)
     max_iter = body.max_iter or settings.AGENT_MAX_ITER
     kwargs = {"system": body.system} if body.system else {}
 
@@ -63,7 +54,7 @@ async def run_stream(request: Request, body: AgentRequest):
         from app.i18n.responses import client_message
 
         try:
-            async for chunk in run_agent_stream(body.task, tools, max_iter=max_iter, **kwargs):
+            async for chunk in run_agent_multi_stream(body.task, body.tools, max_iter, **kwargs):
                 yield chunk
         except AiLayerError as e:
             import json

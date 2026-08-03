@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from openai import APIStatusError
 
-from app.services.agent.core import process_agent_step, tool_round_action
+from app.services.agent.core import tool_round_action
 from app.services.agent.synthesis import (
     _is_stream_open_failure,
     _should_fallback_synth,
@@ -12,52 +12,6 @@ from app.services.agent.synthesis import (
     synth_models_to_try,
 )
 from app.utils.llm_errors import is_upstream_gateway_error, user_message
-
-
-@pytest.mark.asyncio
-async def test_process_agent_step_continue_after_tools():
-    ctx = {
-        "max_iter": 8,
-        "tool_call_log": [
-            {
-                "tool": "youtube_search",
-                "inputs": {"keyword": "iphone"},
-                "result": {"results": [{"video_id": "abc"}]},
-            }
-        ],
-        "input_items": [],
-        "tools": [{"name": "youtube_get_comments_batch"}],
-        "session_id": "s",
-        "task": "review iphone",
-        "system": "sys",
-    }
-    call = MagicMock()
-    call.type = "function_call"
-    call.name = "youtube_get_comments_batch"
-    call.arguments = '{"video_ids": ["abc"]}'
-    call.call_id = "c1"
-    response = MagicMock()
-    response.status = "completed"
-    response.output = [call]
-
-    with patch(
-        "app.services.agent.core.context.execute_parallel",
-        new_callable=AsyncMock,
-        return_value=(
-            [{"type": "function_call_output", "call_id": "c1", "output": "{}"}],
-            [
-                {
-                    "tool": "youtube_get_comments_batch",
-                    "inputs": {"video_ids": ["abc"]},
-                    "result": {"comments": [{"content": "good"}]},
-                }
-            ],
-        ),
-    ):
-        outcome = await process_agent_step(ctx, response, iteration=1)
-
-    assert outcome.action == "continue"
-    assert len(ctx["tool_call_log"]) == 2
 
 
 def test_tool_round_action_force_on_stubborn_search():

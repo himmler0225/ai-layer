@@ -6,8 +6,8 @@ from app.services.agent import config
 from app.rag.movie_hint import enrich_short_followup_task
 from app.services.agent.tooling import execute_parallel, extract_function_calls, prepare_tools_for_task
 from app.services.agent.guards import apply_tool_budget, extract_video_items
-from app.services.agent.synthesis import finish, run_synthesis
-from app.utils.llm_responses import extract_response_text, is_incomplete_for, output_items_to_input
+from app.services.agent.synthesis import finish
+from app.utils.llm_responses import is_incomplete_for, output_items_to_input
 
 logger = Logger.get(__name__)
 
@@ -121,24 +121,6 @@ async def complete_tool_round(ctx: dict[str, Any], output: Any, iteration: int) 
     ctx["tool_call_log"].extend(entries)
     ctx["input_items"].extend(outputs)
     apply_tool_budget(ctx)
-
-
-async def resolve_final_text(ctx: dict[str, Any], response: Any) -> str:
-    """Giải quyết final text (async).
-
-    Args:
-        ctx: (Dict[str, Any]) Tham số `ctx`.
-        response: (Any) Tham số `response`.
-
-    Returns:
-        (str) Kết quả trả về."""
-    if config.dual_mode() and ctx["tool_call_log"]:
-        return await run_synthesis(
-            system=ctx["system"],
-            task=ctx["task"],
-            tool_call_log=ctx["tool_call_log"],
-        )
-    return extract_response_text(response)
 
 
 async def finish_agent(

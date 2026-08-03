@@ -1,6 +1,6 @@
 # Kiến trúc & luồng logic — ai-layer
 
-Tài liệu định hướng: **đọc file nào trước để hiểu toàn bộ repo**, không phải tài liệu API. Chi tiết từng mảng đã có ở [FLOW.md](./FLOW.md), [RAG-GUIDE.md](./RAG-GUIDE.md), [LANGGRAPH-GUIDE.md](./LANGGRAPH-GUIDE.md) — doc này là bản đồ tổng để biết lúc nào nên mở file nào.
+Tài liệu định hướng: **đọc file nào trước để hiểu toàn bộ repo**, không phải tài liệu API. Chi tiết từng mảng đã có ở [FLOW.md](./FLOW.md), [RAG-GUIDE.md](./RAG-GUIDE.md) — doc này là bản đồ tổng để biết lúc nào nên mở file nào.
 
 ---
 
@@ -10,7 +10,7 @@ Tài liệu định hướng: **đọc file nào trước để hiểu toàn b�
 ai-chatbot (Next.js)
      │  X-API-Key
      ▼
-ai-layer ── agent loop ──► data-miner (crawl YouTube/TikTok)
+ai-layer ── multi-agent (LangGraph) ──► data-miner (crawl YouTube/TikTok)
      │
      ├─ Supabase Postgres   chat, video cache, movies, RAG vectors
      ├─ Redis               auth + history cache
@@ -18,7 +18,7 @@ ai-layer ── agent loop ──► data-miner (crawl YouTube/TikTok)
      └─ Supabase REST       Auth, config runtime (AI_MODELS, prompts, rate limit...)
 ```
 
-ai-layer nhận 1 câu hỏi tiếng Việt/Anh về phim → LLM tự quyết định gọi tool nào (crawl YouTube/TikTok qua data-miner, tra catalog phim, hoặc tra RAG cache) → tổng hợp thành câu trả lời. Không tự crawl — luôn qua `data-miner`.
+ai-layer nhận 1 câu hỏi tiếng Việt/Anh về phim → supervisor chọn 1..N "worker" theo nền tảng (YouTube/TikTok/movie catalog) → mỗi worker tự gọi tool qua `data-miner` → gộp lại, LLM tổng hợp thành câu trả lời. Không tự crawl — luôn qua `data-miner`.
 
 ---
 
@@ -27,7 +27,7 @@ ai-layer nhận 1 câu hỏi tiếng Việt/Anh về phim → LLM tự quyết �
 | Thư mục | Vai trò |
 |---|---|
 | `app/api/` | FastAPI router, mỏng — chỉ parse request rồi gọi vào `services/agent` |
-| `app/services/agent/` | **Trái tim của repo** — xem mục 4 |
+| `app/services/agent/` | **Trái tim của repo** — xem mục 3-4 |
 | `app/services/` (top-level) | `enricher.py`/`enricher_collect.py` (build response cuối cho client), `prompts.py` (proxy đọc prompt từ Supabase), `health.py`, `review_summarizer.py` |
 | `app/tools/` | Định nghĩa tool cho LLM (`*_definitions.py`) + `executor.py` (dispatch tên tool → hàm thật) + `handlers/` (gọi `data-miner`) |
 | `app/clients/data_miner/` | HTTP client gọi sang service `data-miner` |
@@ -44,25 +44,25 @@ ai-layer nhận 1 câu hỏi tiếng Việt/Anh về phim → LLM tự quyết �
 
 Đừng đọc theo thứ tự alphabet thư mục — hầu như chắc chắn lạc. Đọc theo đúng đường đi của 1 request thật:
 
-### 3.1 Path chính (đang chạy production — đọc trước)
-1. **`app/api/agent.py`** — 2 route (`/agent/run`, `/agent/run/stream`), điểm vào duy nhất. Nhìn nhánh `AGENT_BACKEND` để biết request đi legacy hay multi-agent.
-2. **`app/services/agent/core/context.py`** — `ctx` là gì (dict tự chứa: `session_id, task, system, tools, max_iter, input_items, tool_call_log`). Đọc `bootstrap_agent`, `begin_tool_round`, `complete_tool_round`. Đây là state mọi thứ khác thao tác lên.
-3. **`app/services/agent/core/iterate.py`** — vòng lặp thật (`run_agent_events`), dùng chung cho stream/non-stream. Đây là 90% logic của agent legacy.
-4. **`app/services/agent/tooling/platform.py`** — `prepare_tools_for_task()`: lọc tool theo platform/catalog/review/RAG-cache trước khi đưa cho LLM.
-5. **`app/services/agent/guards/budget.py`** — khi nào ép dừng gọi tool, chuyển sang tổng hợp câu trả lời.
-6. **`app/services/agent/synthesis/generate.py`** — bước cuối, gộp `tool_call_log` thành 1 prompt, gọi LLM viết câu trả lời.
-7. **`app/services/agent/tooling/dispatch.py`** — nơi tool thật sự được `execute_tool()`, và bắn `schedule_tool_ingest()` (nền, không chặn response) để đẩy dữ liệu vào RAG.
+### 3.1 Điểm vào + state dùng chung
+1. **`app/api/agent.py`** — 2 route (`/agent/run` non-stream, `/agent/run/stream` SSE), điểm vào duy nhất. Cả 2 đều gọi thẳng LangGraph, không còn nhánh backend nào khác.
+2. **`app/services/agent/core/context.py`** — `ctx` là gì (dict tự chứa: `session_id, task, system, tools, max_iter, input_items, tool_call_log`). Đọc `bootstrap_agent`, `begin_tool_round`, `complete_tool_round` — mỗi worker dựng 1 `ctx` riêng từ đây.
+3. **`app/services/agent/domains.py`** — `DOMAINS`: nguồn duy nhất cho danh sách nền tảng (youtube/tiktok/movies), mỗi entry có `tool_set`, `role_prompt`, `search_tool`, `capabilities`, `mention_re`. Thêm/xoá nền tảng chỉ sửa file này.
 
-Đọc xong 7 file này là hiểu được 1 request thường đi qua đâu.
+### 3.2 LangGraph — supervisor + worker
+4. **`app/services/agent/graph/build.py`** — hình dạng graph: `supervisor → Send() fan-out → {domain}_worker → synthesize → finalize`.
+5. **`app/services/agent/graph/supervisor.py`** — `classify_workers_deterministic()`: chọn domain nào chạy, suy ra hoàn toàn từ `DOMAINS` (không hard-code tên nền tảng).
+6. **`app/services/agent/graph/workers.py`** — `run_worker_loop()`: vòng lặp tool-calling riêng mỗi domain (LLM call + retry + fallback), độc lập với domain khác — xem §5 vì sao không dùng chung 1 hàm.
+7. **`app/services/agent/graph/nodes.py`** — các node LangGraph: `worker_node` (dùng chung cho mọi domain), `synthesize_node` (stream text qua `get_stream_writer()`), `finalize_node`.
+8. **`app/services/agent/core/langgraph_runner.py`** / **`langgraph_stream.py`** — entrypoint `run_agent_multi()` (`.ainvoke()`) và `run_agent_multi_stream()` (`.astream(stream_mode=["updates","custom"])` → map ra SSE).
 
-### 3.2 Path multi-agent (LangGraph, sau cờ `AGENT_BACKEND=multi`, chỉ `/agent/run`)
-8. **`app/services/agent/graph/build.py`** — hình dạng graph: `supervisor → Send() fan-out → {youtube,tiktok,movies}_worker → synthesize → finalize`.
-9. **`app/services/agent/graph/supervisor.py`** — chọn domain nào chạy (lọc xác định trước, không tốn LLM call cho case rõ ràng).
-10. **`app/services/agent/graph/workers.py`** — `run_worker_loop()`, vòng lặp tool-calling riêng mỗi domain — **không dùng chung code với `iterate.py`** (cố ý, xem §5).
-11. **`app/services/agent/graph/nodes.py`** — các node LangGraph, mỏng, gọi lại `workers.py`/`synthesis/generate.py`.
-12. **`app/services/agent/core/langgraph_runner.py`** — entrypoint `run_agent_multi()`, build state ban đầu, `graph.ainvoke()`.
+### 3.3 Bên trong 1 worker (tái dùng từ trước khi có multi-agent)
+9. **`app/services/agent/tooling/platform.py`** — `prepare_tools_for_task()`: lọc tiếp tool trong domain (catalog/review/RAG-cache); `detect_platform()`/`filter_tools_by_platform()` cũng suy từ `DOMAINS`.
+10. **`app/services/agent/guards/budget.py`** — khi nào ép dừng gọi tool, chuyển sang tổng hợp câu trả lời (`tool_round_action`).
+11. **`app/services/agent/synthesis/generate.py`** — bước cuối, gộp `tool_call_log` thành 1 prompt, stream câu trả lời.
+12. **`app/services/agent/tooling/dispatch.py`** — nơi tool thật sự được `execute_tool()`, và bắn `schedule_tool_ingest()` (nền, không chặn response) để đẩy dữ liệu vào RAG.
 
-### 3.3 RAG / ingest nền (chạy độc lập với request, không chặn user)
+### 3.4 RAG / ingest nền (chạy độc lập với request, không chặn user)
 13. **`app/ingest/handlers/router.py`** — `dispatch()`, map `routing_key` → handler.
 14. **`app/ingest/handlers/comments.py`**, **`transcript.py`**, **`embed.py`**, **`summarize.py`** — từng bước của pipeline, tự chain nhau qua `publish()`.
 15. **`app/rag/search.py`** — khi user hỏi lại, đọc L1→L2→L3 (`aspect_summaries` → `aspect_chunks` → `raw_reviews`).
@@ -73,31 +73,32 @@ Chi tiết đầy đủ pipeline này: [RAG-GUIDE.md](./RAG-GUIDE.md).
 
 ## 4. Luồng request end-to-end (rút gọn)
 
-**Legacy** (`AGENT_BACKEND` rỗng — mặc định):
 ```
-POST /agent/run
-  → resolve_tool_set(body.tools)         # app/tools/definitions.py
-  → run_agent() → run_agent_events()     # core/runner.py → core/iterate.py
-      → bootstrap_agent()                # prepare_tools_for_task lọc tool
-      → [LLM gọi tool] × N vòng          # begin_tool_round/complete_tool_round
-          → execute_tool() → data-miner  # tools/executor.py → clients/data_miner/
-          → schedule_tool_ingest() nền   # → ingest pipeline, không chặn response
-      → run_synthesis()                  # gộp tool_call_log → câu trả lời
-      → enrich_agent_result()            # app/services/enricher.py → response cuối
+POST /agent/run  (non-stream)                POST /agent/run/stream (SSE)
+  → run_agent_multi()                          → run_agent_multi_stream()
+      graph.ainvoke(initial_state)                  graph.astream(state, stream_mode=["updates","custom"])
+                    │                                              │
+                    ▼                                              ▼
+       supervisor_node (graph/supervisor.py)      chọn 1..N domain, suy từ DOMAINS
+                    │
+                    ▼
+       Send() fan-out song song (graph/build.py) — LangGraph tự chạy concurrent
+           worker_node(domain=youtube)  ┐
+           worker_node(domain=tiktok)   ┤ mỗi worker: ctx RIÊNG, tool list RIÊNG
+           worker_node(domain=movies)   ┘ (bootstrap_agent() + run_worker_loop())
+                    │
+                    ▼
+       gộp tool_call_log (reducer operator.add) — field DUY NHẤT được merge, xem §5
+                    │
+                    ▼
+       synthesize_node — iter_synthesis_deltas(), mỗi delta đẩy qua get_stream_writer()
+           (no-op nếu gọi qua ainvoke; thành SSE text_delta thật nếu gọi qua astream)
+                    │
+                    ▼
+       finalize_node — finish_agent() → response cuối (giống hệt 2 route)
 ```
 
-**Multi-agent** (`AGENT_BACKEND=multi`):
-```
-POST /agent/run
-  → run_agent_multi()                    # core/langgraph_runner.py
-      → supervisor_node                  # graph/supervisor.py: chọn 1..N domain
-      → Send() fan-out song song         # graph/build.py, LangGraph tự chạy concurrent
-          → worker_node(domain=youtube)  ┐
-          → worker_node(domain=tiktok)   ┤ mỗi worker: ctx RIÊNG, tool list RIÊNG,
-          → worker_node(domain=movies)   ┘ gọi bootstrap_agent() + run_worker_loop()
-      → gộp tool_call_log (reducer)      # chỉ field này được merge — xem §5
-      → synthesize_node → finalize_node  # tái dùng run_synthesis/finish_agent y hệt legacy
-```
+Với route stream, `run_agent_multi_stream()` còn dịch `updates` event (mỗi khi 1 node xong) thành SSE `tool_start`/`tool_done`/`data_preview` — gắn tag `worker` để client biết event đến từ domain nào, cho phép hiện đồng thời "đang tra cứu YouTube..." / "đang tra cứu TikTok...".
 
 ---
 
@@ -107,21 +108,20 @@ POST /agent/run
 
 **Chỉ `tool_call_log` có reducer (`operator.add`).** Worker không được trả field khác về state chung (`tools`, `input_items`...) — sẽ crash `InvalidUpdateError` khi 2 worker ghi đồng thời. Mỗi worker giữ `ctx` hoàn toàn riêng tư trong `run_worker_loop`, chỉ trả đúng 1 field ra ngoài.
 
-**`iterate.py` và `workers.py` cố ý trùng logic** (vòng gọi LLM + retry, ~40 dòng). Không rút gọn chung — `iterate.py` gắn chặt với SSE `yield`, sửa để dùng chung sẽ đụng vào loop legacy đang chạy production. Chấp nhận trùng lặp nhỏ, khoanh vùng 1 file mới, không sửa file cũ.
+**`get_stream_writer()` an toàn gọi vô điều kiện.** Đã verify thực nghiệm: khi node chạy qua `.ainvoke()` (không stream), writer là no-op thật (không exception, không side-effect); khi chạy qua `.astream(stream_mode="custom")`, mỗi lần gọi writer xuất hiện thành 1 chunk. Nhờ vậy `synthesize_node` chỉ cần **1 code path** cho cả `run_agent_multi` lẫn `run_agent_multi_stream`, không phải branch theo caller.
+
+**`run_worker_loop()` (graph/workers.py) không dùng chung code với bất kỳ vòng lặp nào khác** — nó tự implement LLM-call + retry (~50 dòng), không tái dùng qua kế thừa/composition với node khác. Lý do: mỗi worker cần `ctx` hoàn toàn riêng tư (không global state), và logic retry/fallback đặc thù cho việc "chỉ thu thập dữ liệu, không tự trả lời" (khác với 1 agent chat thông thường).
 
 **Model LLM đang active (`kira-3.5-flash`) không tuân `tool_choice="required"` một cách nhất quán.** Đôi khi chỉ emit dòng scratchpad nội bộ (`intent=REVIEW, slots={...}`) rồi dừng thay vì gọi tool. `graph/workers.py` có xử lý: parse `last_movie_name` từ dòng đó, tự dựng tool call fallback (`_build_search_fallback`) — xem comment trong file. Nếu đổi provider (Supabase `AI_MODELS.is_active`), cơ chế này vẫn chạy vô hại (chỉ kích hoạt khi thật sự cần).
 
-**`_MOVIE_CORE`** (`tooling/platform.py`) là danh sách tool dùng khi narrow theo "ý định review" — từng thiếu tool TikTok (chỉ có YouTube + RAG), khiến bất kỳ tool list nào chỉ toàn TikTok bị lọc còn gần như rỗng. Đã fix, nhưng nếu thêm domain mới (vd Instagram) thì nhớ update set này.
+**`domains.py`'s `DOMAINS`** là nguồn duy nhất cho tên nền tảng — `tooling/platform.py`, `graph/supervisor.py`, `graph/build.py`, `graph/nodes.py` đều suy từ đây (`DOMAIN_IDS`, `DOMAIN_BY_ID`, `capabilities`, `mention_re`). Thêm domain mới (vd Instagram): thêm 1 entry vào `DOMAINS` + tool definitions riêng (`app/tools/`) + key trong `TOOL_SETS` — không cần sửa logic routing ở nơi khác.
 
 ---
 
-## 6. Trạng thái multi-agent (2026-08)
+## 6. Trạng thái (2026-08)
 
-- **Đã xong (Phase 1):** supervisor routing xác định, fan-out song song thật qua `Send()`, 3 worker domain, merge `tool_call_log`, synthesis dùng chung code path với legacy. Chạy sau `/agent/run` + `AGENT_BACKEND=multi`.
-- **Chưa làm:**
-  - `/agent/run/stream` + `core/langgraph_stream.py` (Phase 3, SSE cho multi-agent) — route stream hiện 100% đi legacy.
-  - LLM classifier cho case supervisor không xác định được domain bằng heuristic (hiện tại: mặc định chọn cả 3 domain, an toàn nhưng tốn worker không cần thiết).
-  - Mặc định `AGENT_BACKEND` vẫn là legacy (`single`) — multi-agent chỉ bật khi set env, chưa cutover.
+- **LangGraph là đường duy nhất** cho cả `/agent/run` và `/agent/run/stream` — không còn loop cũ, không còn cờ backend nào để chọn.
+- **Chưa làm:** LLM classifier cho case supervisor không xác định được domain bằng heuristic (hiện tại: mặc định chọn cả 3 domain, an toàn nhưng tốn worker không cần thiết).
 - **Ngoài scope ai-layer:** `data-miner` occasionally trả `403 Forbidden` khi crawl YouTube — hạ tầng proxy/anti-bot riêng, không phải bug ở đây.
 
 ---
@@ -130,5 +130,4 @@ POST /agent/run
 
 - [FLOW.md](./FLOW.md) — luồng end-to-end chatbot → ai-layer → data-miner, tóm tắt hơn doc này nhưng có phần "chạy dev".
 - [RAG-GUIDE.md](./RAG-GUIDE.md) — chi tiết pipeline ingest + RAG L1/L2/L3, có checklist debug.
-- [LANGGRAPH-GUIDE.md](./LANGGRAPH-GUIDE.md) — khái niệm LangGraph (state/node/edge) + lịch sử quyết định đổi từ đơn-chain sang supervisor+worker.
 - [../../docs/MCP-PHASE2-GUIDE.md](../../docs/MCP-PHASE2-GUIDE.md) — backend `AGENT_CRAWL_BACKEND=mcp`, tool catalog động từ data-miner.
