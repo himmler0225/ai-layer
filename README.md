@@ -44,39 +44,45 @@ app/
 │   ├── agent.py           # POST /ai/agent/run[/stream]
 │   ├── youtube.py         # direct YouTube AI endpoints
 │   ├── history.py         # chat sessions + messages
-│   ├── utilities.py       # URL shortener, QR
+│   ├── auth.py            # signin/signup/OAuth/refresh (Supabase GoTrue), admin user/config routes
+│   ├── runtime.py         # runtime provider/model status
 │   └── admin.py           # health detail, ingest queue stats
+├── auth/                  # gotrue.py (GoTrue calls), profiles.py (profiles table), deps.py (guards)
+├── middleware/            # auth (X-API-Key), rate_limit, locale, ip_address
 ├── services/
 │   ├── agent/
-│   │   ├── core/          # context, engine, iterate, runner, stream, langgraph_runner/stream
+│   │   ├── core/          # context, engine — shared tool-loop mechanics
 │   │   ├── events/        # SSE event schema, tool_status
-│   │   ├── guards/        # budget, fallback
-│   │   ├── synthesis/     # finalize, generate
+│   │   ├── guards/        # budget (repeat/round limits), fallback
+│   │   ├── synthesis/     # finalize, generate — final-answer round
 │   │   ├── tooling/       # dispatch, platform filter, serialize
-│   │   └── graph/         # LangGraph nodes/state (see Roadmap below)
+│   │   └── graph/         # LangGraph supervisor + workers (the actual orchestration)
 │   ├── enricher.py        # orchestrate UI metadata
 │   ├── enricher_collect.py # parse tool_call_log → reviews/videos/sources
 │   ├── review_summarizer.py
 │   ├── prompts.py         # ASPECT_* for ingest LLM; agent prompts from Supabase
 │   └── health.py
 ├── tools/
-│   ├── definitions.py     # YouTube / TikTok tool schemas
+│   ├── definitions.py, movie_definitions.py, youtube_definitions.py, tiktok_definitions.py, web_definitions.py, util_definitions.py
 │   ├── rag_definitions.py # RAG tool schemas (when RAG_ENABLED)
+│   ├── handlers/          # tool implementations (crawl.py, rag.py)
 │   └── executor.py        # dispatch + jsonschema validation
-├── rag/                   # vector search, movie_id, movie_hint
+├── rag/                   # vector search, movie_id, movie_hint, knowledge freshness
 ├── ingest/                # background dispatch, handlers, RAG sync, summarize
-├── repositories/          # SQLAlchemy data access
-├── config/db/models/      # chat, video, movie RAG tables
-├── clients/data_miner.py
-├── utilities/             # QR code, URL shortener (active)
+├── repositories/          # SQLAlchemy data access (one module per entity)
 ├── config/
+│   ├── db/models/         # chat, video, movie RAG tables
 │   ├── settings.py        # env / infra
-│   ├── loader.py          # schema binders
-│   └── remote.py          # Supabase config load + validate
+│   ├── loader.py          # binds Supabase `config` values onto plain modules at startup
+│   └── remote.py          # Supabase config fetch + validate
+├── clients/data_miner/    # movies.py, youtube.py, tiktok.py, web.py — data-miner HTTP client
+├── mcp/                   # MCP client (consumes data-miner's MCP tool server)
+├── i18n/                  # message-key → localized string (locales/en.py, vi.py)
 ├── ai/
-│   ├── providers.py       # ConfiguredLLM (chat completions + stream adapter)
-│   ├── factory.py
-│   └── router.py
+│   ├── base.py            # BaseLLM interface
+│   ├── providers.py       # ConfiguredLLM — the OpenAI-compatible adapter
+│   ├── factory.py         # LLMFactory — one cached instance per provider
+│   └── router.py          # per-task provider/model resolution
 └── utils/
     ├── llm_responses.py   # LLM response helpers (stream, create_response)
     └── llm_errors.py      # user-facing LLM error messages
@@ -113,16 +119,16 @@ Body: `{ "task": "...", "tools": "youtube"|"tiktok"|"all", "max_iter?": 10, "sys
 | Area | Paths |
 |------|-------|
 | YouTube AI | `GET /ai/youtube/videos/{id}/summary`, `.../comments/analysis`, `.../trending/analysis` |
-| Utilities | `POST /ai/utilities/shorten`, `POST /ai/utilities/qr` |
+| Auth | `POST /ai/auth/signin`, `/signup`, `/refresh`, `/oauth/*`, `GET /ai/auth/me` |
 | History | `/ai/history/sessions`, `.../messages` |
 | Health | `GET /health` |
-| Admin | `GET /ai/admin/health/detail`, `GET /ai/admin/ingest/queues` |
+| Admin | `GET /ai/admin/health/detail`, `GET /ai/admin/ingest/queues`, `/ai/auth/admin/*` |
 
 ---
 
 ## Tools
 
-Schemas in `tools/definitions.py` + `tools/rag_definitions.py`, executed in `tools/executor.py` via `clients/data_miner.py` (social) or `rag/search.py` (RAG).
+Schemas in `tools/definitions.py` + `tools/rag_definitions.py`, executed in `tools/executor.py` via `clients/data_miner/` (social) or `rag/search.py` (RAG).
 
 | Set | Examples |
 |-----|----------|
@@ -135,14 +141,14 @@ Per request: `tools: "youtube" | "tiktok" | "all"`. `prepare_tools_for_task()` n
 
 ---
 
-## Agent loop (current)
+## Design patterns
 
-1. OpenAI Responses API call with selected tools (`tool_choice: auto`).
-2. On `function_call` → execute tools in parallel → trim results → append to conversation → repeat.
-3. Final answer: stream tokens directly, or in **dual-mode** run a separate synthesis stream on `OPENAI_MODEL`.
-4. Emit `done` with `sources`, `videos`, `tool_calls`.
-
-Prompts and limits come from **Supabase `config`**, not hardcoded in the repo.
+- **Supervisor–worker orchestration (LangGraph)** — a supervisor node reads the task and fans out to 1..N per-platform worker nodes (YouTube / TikTok / movie catalog) via `Send()`; workers run in parallel, each looping tool-calls independently, and their results merge into one shared synthesis step. Both `/agent/run` and `/agent/run/stream` go through this same graph (`services/agent/graph/`, `services/agent/core/engine.py`) — there is no alternate/legacy loop.
+- **Provider strategy + factory** — every LLM provider (OpenAI, DeepSeek, xAI, …) implements the same `BaseLLM` interface (`ai/base.py`); `ai/providers.py::ConfiguredLLM` is the concrete adapter, `ai/factory.py::LLMFactory` caches one instance per provider, and `ai/router.py` picks provider+model **per task** (`agent_tool`, `agent_synth`, `aspect_group`, `embedding`, …) so tool-calling and final-answer generation can use different models.
+- **Guards, not hard stops** — `services/agent/guards/budget.py` caps repeated/identical tool calls and forces synthesis after N rounds (or immediately once real evidence exists); `guards/fallback.py` covers the "model went silent" case. Both shape the loop's *decision*, they don't raise.
+- **Repository pattern** — `repositories/*.py` are the only modules doing SQLAlchemy queries; services never touch the ORM directly.
+- **Remote config over hardcoding** — prompts, model ids, and tuning knobs live in Supabase's `config` table, pulled once at startup (`config/remote.py`) and bound onto plain Python modules (`config/loader.py`) so the rest of the code just reads `settings.X` / `_prompts.X` like a normal constant.
+- **i18n by message key** — `AiLayerError` subclasses carry a `message_key` (e.g. `"auth.invalidCredentials"`) instead of a hardcoded string; `app/i18n/responses.py` resolves it against the request's locale before it reaches the client.
 
 ---
 
@@ -180,7 +186,7 @@ Loaded by `app/config/remote.py`. Missing keys → startup error.
 | `DATA_MINER_KEY` | Downstream scrape API |
 | `AGENT_SYSTEM`, `REVIEW_SUMMARY_SYSTEM`, `REVIEW_SUMMARY_PROMPT` | Prompts |
 | `AGENT_MAX_ITER`, `AGENT_MAX_RESULT_CHARS`, `AGENT_MAX_COMMENTS`, … | Agent tuning |
-| `AGENT_RATE_LIMIT`, `QR_RATE_LIMIT`, … | slowapi limits |
+| `AGENT_RATE_LIMIT`, … | slowapi limits |
 
 Manage via ai-chatbot admin `/admin/config` or Supabase SQL.
 
@@ -216,12 +222,6 @@ Docs UI: `http://localhost:8001/docs`
 ## Logging
 
 `logger.info("[module] message key=%s", value)` — namespaces like `[agent]`, `[openai]`, `[ingest]`, `[rag_sync]`. Rotating files under `logs/` (gitignored).
-
----
-
-## Multi-agent orchestration (LangGraph)
-
-The agent is a **supervisor + per-platform worker** graph on LangGraph — supervisor routes a question to 1..N workers (YouTube/TikTok/movie catalog), workers run in parallel via `Send()` fan-out, results merge and go through one shared synthesis step. Both `/agent/run` and `/agent/run/stream` run through the same graph — there is no alternate backend/flag.
 
 ---
 
