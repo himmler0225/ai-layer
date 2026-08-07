@@ -104,7 +104,7 @@ Body: `{ "task": "...", "tools": "youtube"|"tiktok"|"all", "max_iter?": 10, "sys
 | Event | Purpose |
 |-------|---------|
 | `text_delta` | Answer text chunk (streamed as generated) |
-| `tool_start` / `tool_done` | Tool execution progress (`detail_vi` / `detail_en` on start) |
+| `tool_start` / `tool_done` | Tool execution progress (`detail` localized via `X-Lang`) |
 | `status` | Phase hints (analyzing, writing answer, …) |
 | `data_preview` | Early video list from tool results |
 | `done` | `sources`, `videos`, `tool_calls` |

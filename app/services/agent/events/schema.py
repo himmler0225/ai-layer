@@ -12,60 +12,25 @@ class AgentEvent:
 
     @property
     def result(self) -> dict[str, Any] | None:
-        """Result.
-
-        Returns:
-            (dict[str, Any] | None) Kết quả trả về."""
         return self.data.get("_result")
 
     def to_sse(self) -> str:
-        """To sse.
-
-        Returns:
-            (str) Kết quả trả về."""
         payload = {"type": self.type, **{k: v for k, v in self.data.items() if not k.startswith("_")}}
         return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
 
 
-def status(detail_vi: str, detail_en: str) -> AgentEvent:
-    """Status.
-
-    Args:
-        detail_vi: (str) Tham số `detail_vi`.
-        detail_en: (str) Tham số `detail_en`.
-
-    Returns:
-        (AgentEvent) Kết quả trả về."""
-    return AgentEvent("status", {"detail_vi": detail_vi, "detail_en": detail_en})
+def status(detail: str) -> AgentEvent:
+    return AgentEvent("status", {"detail": detail})
 
 
-def tool_start(tool: str, detail_vi: str, detail_en: str, args, worker: str | None = None) -> AgentEvent:
-    """Tool start.
-
-    Args:
-        tool: (str) Tham số `tool`.
-        detail_vi: (str) Tham số `detail_vi`.
-        detail_en: (str) Tham số `detail_en`.
-        args: (Any) Tham số `args`.
-        worker: (str | None) Domain worker phát sinh event này (multi-agent).
-
-    Returns:
-        (AgentEvent) Kết quả trả về."""
-    data = {"tool": tool, "detail_vi": detail_vi, "detail_en": detail_en, "args": args}
+def tool_start(tool: str, detail: str, args, worker: str | None = None) -> AgentEvent:
+    data = {"tool": tool, "detail": detail, "args": args}
     if worker:
         data["worker"] = worker
     return AgentEvent("tool_start", data)
 
 
 def tool_done(tool: str, worker: str | None = None) -> AgentEvent:
-    """Tool done.
-
-    Args:
-        tool: (str) Tham số `tool`.
-        worker: (str | None) Domain worker phát sinh event này (multi-agent).
-
-    Returns:
-        (AgentEvent) Kết quả trả về."""
     data = {"tool": tool}
     if worker:
         data["worker"] = worker
@@ -73,25 +38,10 @@ def tool_done(tool: str, worker: str | None = None) -> AgentEvent:
 
 
 def text_delta(delta: str) -> AgentEvent:
-    """Text delta.
-
-    Args:
-        delta: (str) Tham số `delta`.
-
-    Returns:
-        (AgentEvent) Kết quả trả về."""
     return AgentEvent("text_delta", {"delta": delta})
 
 
 def data_preview(videos: list[dict], worker: str | None = None) -> AgentEvent:
-    """Data preview.
-
-    Args:
-        videos: (list[dict]) Tham số `videos`.
-        worker: (str | None) Domain worker phát sinh event này (multi-agent).
-
-    Returns:
-        (AgentEvent) Kết quả trả về."""
     data = {"videos": videos}
     if worker:
         data["worker"] = worker
@@ -99,13 +49,6 @@ def data_preview(videos: list[dict], worker: str | None = None) -> AgentEvent:
 
 
 def done(enriched: dict[str, Any]) -> AgentEvent:
-    """Done.
-
-    Args:
-        enriched: (dict[str, Any]) Tham số `enriched`.
-
-    Returns:
-        (AgentEvent) Kết quả trả về."""
     return AgentEvent(
         "done",
         {
@@ -116,42 +59,25 @@ def done(enriched: dict[str, Any]) -> AgentEvent:
     )
 
 
-def error(message_vi: str, message_en: str) -> AgentEvent:
-    """Error.
-
-    Args:
-        message_vi: (str) Tham số `message_vi`.
-        message_en: (str) Tham số `message_en`.
-
-    Returns:
-        (AgentEvent) Kết quả trả về."""
+def error(detail: str) -> AgentEvent:
     return AgentEvent(
         "error",
         {
-            "detail_vi": message_vi,
-            "detail_en": message_en,
-            "message": message_vi,
+            "detail": detail,
+            "message": detail,
         },
     )
 
 
 def error_key(key: str, **params) -> AgentEvent:
-    """Error key.
+    from app.i18n import msg
 
-    Args:
-        key: (str) Tham số `key`.
-        **params: (Any) Tham số `**params`.
-
-    Returns:
-        (AgentEvent) Kết quả trả về."""
-    from app.i18n import t
-
+    detail = msg(key, **params)
     return AgentEvent(
         "error",
         {
-            "detail_vi": t(key, "vi", **params),
-            "detail_en": t(key, "en", **params),
-            "message": t(key, "vi", **params),
+            "detail": detail,
+            "message": detail,
             "message_key": key,
             "message_params": params,
         },
