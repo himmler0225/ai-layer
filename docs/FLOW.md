@@ -146,4 +146,4 @@ Message kiểu *"An error occurred while processing your request... req_xxx"* l�
 - Mongo đã bỏ hẳn.
 - Supabase `config` ghi đè `AGENT_SYSTEM` — prod khác local là do đó.
 - Python 3.14+: dùng cú pháp hiện đại (`str | None`, `list[str]`, `dict[str, Any]`).
-- SSE: `text_delta`, `status`, `tool_start`/`tool_done` (có `detail_vi`), `data_preview`, `done` — không còn event `review_summary` riêng.
+- SSE: `text_delta`, `status`, `tool_start`/`tool_done` (có `detail` theo `X-Lang`), `data_preview`, `done` — không còn event `review_summary` riêng.

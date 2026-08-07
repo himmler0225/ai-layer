@@ -1,7 +1,7 @@
 import json
 import app.config.settings as settings
 from app.ai.router import TASK_ASPECT_GROUP, TASK_ASPECT_SUMMARY, max_tokens_for_task
-from app.config.logger import Logger
+from app.config.logger import Logger, log_event
 from app.ingest.processing.embeddings import embed_texts
 from app.repositories.aspect_chunks import delete_aspect_chunks_for_movie, upsert_aspect_chunks
 from app.repositories.aspect_summaries import upsert_aspect_summary
@@ -17,13 +17,14 @@ _MAX_CURATED_FOR_LLM = 200
 
 
 def _parse_json(raw: str) -> dict | list | None:
-    """(Nội bộ) Phân tích json.
+    """Parse an LLM response as JSON, stripping a leading/trailing markdown code fence.
 
     Args:
-        raw: (str) Tham số `raw`.
+        raw: Raw text returned by the LLM, possibly wrapped in a ```...``` fence.
 
     Returns:
-        (dict | list | None) Kết quả trả về."""
+        The parsed JSON value (dict or list), or None if it isn't valid JSON.
+    """
     text = (raw or "").strip()
     if text.startswith("```"):
         text = text.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
@@ -34,13 +35,16 @@ def _parse_json(raw: str) -> dict | list | None:
 
 
 def _fallback_group(curated: list[dict]) -> list[dict]:
-    """(Nội bộ) Fallback group.
+    """Build a single catch-all "other" aspect group when LLM grouping is unavailable.
 
     Args:
-        curated: (list[dict]) Tham số `curated`.
+        curated: Curated review rows; only the first 50 are used.
 
     Returns:
-        (list[dict]) Kết quả trả về."""
+        A single-item list containing one aspect group dict (aspect="other") whose
+        content is the concatenation of the review texts, with placeholder
+        positive/negative percentages.
+    """
     texts = [c["content"] for c in curated[:50]]
     return [
         {
@@ -54,14 +58,21 @@ def _fallback_group(curated: list[dict]) -> list[dict]:
 
 
 async def _llm_group_aspects(curated: list[dict], *, movie_name: str) -> list[dict]:
-    """(Nội bộ) Llm group aspects (async).
+    """Ask the LLM to group curated reviews into aspect buckets (battery, camera, etc.).
+
+    Formats up to `_MAX_CURATED_FOR_LLM` curated reviews into a prompt, asks the LLM
+    to cluster them by aspect, and validates/normalizes the returned groups (unknown
+    aspect labels fall back to "other"). Falls back to `_fallback_group` if the LLM
+    call fails or returns nothing usable.
 
     Args:
-        curated: (list[dict]) Tham số `curated`.
-        movie_name: (str) Tham số `movie_name`.
+        curated: Curated review rows to group.
+        movie_name: Movie/product name used to fill in the grouping prompt.
 
     Returns:
-        (list[dict]) Kết quả trả về."""
+        A list of aspect group dicts, each with "aspect", "review_ids", "content",
+        "positive_percent", and "negative_percent". Empty list if `curated` is empty.
+    """
     if not curated:
         return []
     lines = []
@@ -106,20 +117,23 @@ async def _llm_group_aspects(curated: list[dict], *, movie_name: str) -> list[di
             if valid:
                 return valid
     except Exception as exc:
-        logger.warning("[summarize] group_aspects LLM failed: %s", exc)
+        logger.warning(log_event("summarize", "group aspects llm failed", error=exc))
     return _fallback_group(curated)
 
 
 async def _llm_summarize_aspect(aspect: str, chunk_content: str, *, movie_name: str) -> dict:
-    """(Nội bộ) Llm summarize aspect (async).
+    """Ask the LLM to summarize one aspect's grouped review content.
 
     Args:
-        aspect: (str) Tham số `aspect`.
-        chunk_content: (str) Tham số `chunk_content`.
-        movie_name: (str) Tham số `movie_name`.
+        aspect: Aspect label (e.g. "battery", "camera") being summarized.
+        chunk_content: Concatenated review content for this aspect (truncated to 6000 chars).
+        movie_name: Movie/product name used to fill in the summarization prompt.
 
     Returns:
-        (dict) Kết quả trả về."""
+        A dict with "summary", "pros", "cons", and "positive_percent". If the LLM
+        call fails or returns no usable summary, falls back to a generic templated
+        summary with empty pros/cons and positive_percent=None.
+    """
     prompt = rag_prompts.ASPECT_SUMMARY_PROMPT.format(
         movie=movie_name, product=movie_name, aspect=aspect, content=chunk_content[:6000]
     )
@@ -139,7 +153,7 @@ async def _llm_summarize_aspect(aspect: str, chunk_content: str, *, movie_name: 
                 "positive_percent": parsed.get("positive_percent"),
             }
     except Exception as exc:
-        logger.warning("[summarize] summarize_aspect LLM failed aspect=%s: %s", aspect, exc)
+        logger.warning(log_event("summarize", "summarize aspect llm failed", aspect=aspect, error=exc))
     return {
         "summary": f"Tóm tắt {aspect} cho {movie_name}: {chunk_content[:300]}...",
         "pros": [],
@@ -149,7 +163,21 @@ async def _llm_summarize_aspect(aspect: str, chunk_content: str, *, movie_name: 
 
 
 async def handle_movie_summarize(envelope: dict) -> None:
-    """Xử lý movie summarize (async)."""
+    """Regenerate aspect summaries for a movie from its curated reviews.
+
+    Loads curated reviews for the movie, groups them into aspects via the LLM,
+    stores the resulting aspect chunks (with embeddings), summarizes each aspect
+    via the LLM, stores the resulting aspect summaries (with embeddings), and
+    updates the movie's metadata with the summarization bookkeeping (raw review
+    count and timestamp).
+
+    Args:
+        envelope: Ingest envelope dict whose payload (or "video_id" fallback)
+            contains "movie_id".
+
+    Returns:
+        None. Does nothing if there is no movie id or no curated reviews.
+    """
     payload = envelope.get("payload") or {}
     movie_id = payload.get("movie_id") or envelope.get("video_id")
     if not movie_id:
@@ -158,7 +186,7 @@ async def handle_movie_summarize(envelope: dict) -> None:
     movie_name = (movie_row or {}).get("name") or movie_id
     curated = await get_curated_reviews(movie_id, limit=getattr(settings, "AGENT_CURATED_TOP_N", 300))
     if not curated:
-        logger.warning("[summarize] no curated movie=%s", movie_id)
+        logger.warning(log_event("summarize", "no curated reviews", movie_id=movie_id))
         return
     groups = await _llm_group_aspects(curated, movie_name=movie_name)
     aspects = [g["aspect"] for g in groups]
@@ -201,4 +229,6 @@ async def handle_movie_summarize(envelope: dict) -> None:
     await upsert_movie(
         id=movie_id, name=movie_name, platform=(movie_row or {}).get("platform") or "mixed", metadata=meta
     )
-    logger.info("[summarize] done movie=%s chunks=%d aspects=%s", movie_id, len(chunk_rows), aspects)
+    logger.info(
+        log_event("summarize", "complete", movie_id=movie_id, chunks=len(chunk_rows), aspects=aspects)
+    )

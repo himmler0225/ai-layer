@@ -5,10 +5,13 @@ _redis: aioredis.Redis | None = None
 
 
 async def get_redis() -> aioredis.Redis | None:
-    """Lấy redis (async).
+    """Get or lazily create the cached Redis client, verifying connectivity.
+
+    Pings Redis on first call; if the connection or ping fails, the client is
+    discarded so callers can fall back to a no-cache path.
 
     Returns:
-        (aioredis.Redis | None) Kết quả trả về."""
+        The cached `aioredis.Redis` client, or `None` if Redis is unreachable."""
     global _redis
     if _redis is None:
         try:
@@ -21,10 +24,10 @@ async def get_redis() -> aioredis.Redis | None:
 
 
 async def close_redis() -> None:
-    """Đóng redis (async).
+    """Close the cached Redis client, if one is open, and clear the cache.
 
     Returns:
-        (None) Kết quả trả về."""
+        None."""
     global _redis
     if _redis:
         await _redis.aclose()

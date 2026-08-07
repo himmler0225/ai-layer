@@ -19,6 +19,7 @@ from app.clients.data_miner.tiktok import (
     tiktok_transcript,
     tiktok_video_info,
 )
+from app.clients.data_miner.web import search_web
 from app.clients.data_miner.youtube import (
     get_by_region,
     get_by_topic,
@@ -62,6 +63,7 @@ __all__ = [
     "movie_list_by_year",
     "movie_list_new",
     "movie_search",
+    "search_web",
     "search_youtube",
     "tiktok_comments",
     "tiktok_profile",

@@ -1,6 +1,6 @@
 import re
 from app.rag.config import RAG_ENABLED
-from app.config.logger import Logger
+from app.config.logger import Logger, log_event
 from app.ingest.mappers.social_review import slugify_movie_id
 from app.rag.knowledge import is_movie_fresh, movie_has_knowledge
 from app.rag.movie_hint import (
@@ -16,10 +16,10 @@ from app.rag.movie_hint import (
 from app.services.agent.domains import DOMAINS
 
 logger = Logger.get(__name__)
-# Domain có mention_re (nhận diện qua tên gọi trong câu hỏi) — hiện là
-# youtube/tiktok. "movies" không có mention_re nên không tham gia cơ chế
-# detect/block theo tên platform này (nó được chọn qua wants_catalog(), một
-# cơ chế khác, không phải "nhắc tên platform nào").
+# Domains with a mention_re (detected by name being mentioned in the question)
+# — currently youtube/tiktok. "movies" has no mention_re so it does not
+# participate in this detect/block-by-platform-name mechanism (it's selected
+# via wants_catalog() instead, a different mechanism, not "platform named").
 _MENTIONABLE_DOMAINS = [(d["id"], d["mention_re"]) for d in DOMAINS if d.get("mention_re")]
 _MOVIE_CORE = frozenset(
     {
@@ -31,9 +31,9 @@ _MOVIE_CORE = frozenset(
         "youtube_get_transcript_batch",
         "youtube_get_detail",
         "youtube_get_comments",
-        # TikTok — trước đây thiếu, khiến review-query narrowing xoá sạch tool
-        # tiktok_* của bất kỳ tool list nào chỉ có TikTok (vd multi-agent
-        # tiktok worker), chỉ còn lại extract_id_from_url.
+        # TikTok — previously missing here, which caused review-query narrowing
+        # to strip all tiktok_* tools from any tool list that was TikTok-only
+        # (e.g. the multi-agent tiktok worker), leaving only extract_id_from_url.
         "tiktok_search",
         "tiktok_comments",
         "tiktok_transcript",
@@ -58,26 +58,34 @@ _REVIEW_QUERY = re.compile(
     re.IGNORECASE,
 )
 
+_ECOSYSTEM_PREFIXES = ("youtube_", "tiktok_", "movie_")
+
+
+def _is_movie_ecosystem(tools: list[dict]) -> bool:
+    """(Internal) Check whether a tool list belongs to the youtube/tiktok/movies ecosystem."""
+    return any(t.get("name", "").startswith(_ECOSYSTEM_PREFIXES) for t in tools)
+
 
 def _is_catalog_tool(name: str) -> bool:
-    """(Nội bộ) Is catalog tool `_is_catalog_tool`.
+    """(Internal) Check whether a tool name belongs to the movie catalog toolset.
 
     Args:
-        name: (str) Tham số `name`.
+        name: (str) Tool name to check.
 
     Returns:
-        (bool) Kết quả trả về."""
+        (bool) True if `name` starts with "movie_" or is "extract_id_from_url"."""
     return name.startswith("movie_") or name == "extract_id_from_url"
 
 
 def detect_platform(task: str) -> str | None:
-    """Detect platform.
+    """Detect a single social platform (youtube/tiktok) explicitly named in the task.
 
     Args:
-        task: (str) Tham số `task`.
+        task: (str) The user task/question to scan.
 
     Returns:
-        (str | None) Kết quả trả về."""
+        (str | None) The domain id if exactly one mentionable platform is
+        named in the task; None if zero or more than one are mentioned."""
     question = context_for_filtering(task)
     mentioned = [domain_id for domain_id, pattern in _MENTIONABLE_DOMAINS if pattern.search(question)]
     if len(mentioned) == 1:
@@ -86,52 +94,70 @@ def detect_platform(task: str) -> str | None:
 
 
 def filter_tools_by_platform(tools: list[dict], task: str) -> list[dict]:
-    """Lọc tools by platform.
+    """Drop tools belonging to other mentionable platforms when exactly one platform is named in the task.
 
     Args:
-        tools: (list[dict]) Tham số `tools`.
-        task: (str) Tham số `task`.
+        tools: (list[dict]) Tool definitions to filter.
+        task: (str) The user task/question, used to detect the mentioned platform.
 
     Returns:
-        (list[dict]) Kết quả trả về."""
+        (list[dict]) `tools` unchanged if no single platform is detected;
+        otherwise `tools` with any tool whose name is prefixed by a
+        non-mentioned platform's domain id removed."""
     platform = detect_platform(task)
     if platform is None:
         return tools
     blocked = tuple(f"{domain_id}_" for domain_id, _ in _MENTIONABLE_DOMAINS if domain_id != platform)
     filtered = [t for t in tools if not t.get("name", "").startswith(blocked)]
     if len(filtered) != len(tools):
-        logger.info("[agent] platform=%s blocked=%s tools=%d/%d", platform, blocked, len(filtered), len(tools))
+        logger.info(
+            log_event(
+                "agent",
+                "platform filter applied",
+                platform=platform,
+                blocked=blocked,
+                kept=len(filtered),
+                total=len(tools),
+            )
+        )
     return filtered
 
 
 def _narrow_for_raw_comments(tools: list[dict], task: str) -> list[dict] | None:
-    """(Nội bộ) Narrow for raw comments `_narrow_for_raw_comments`.
+    """(Internal) Narrow tools to just comment-related ones when the task asks for raw comments.
 
     Args:
-        tools: (list[dict]) Tham số `tools`.
-        task: (str) Tham số `task`.
+        tools: (list[dict]) Tool definitions to narrow.
+        task: (str) The user task/question.
 
     Returns:
-        (list[dict] | None) Kết quả trả về."""
+        (list[dict] | None) The subset of `tools` found in _COMMENT_TOOLS if
+        the task wants raw comments and narrowing actually reduces the list;
+        None otherwise (caller should keep the original tools)."""
     ctx = context_for_filtering(task)
     if not wants_raw_comments(ctx) and not wants_raw_comments(current_question(task)):
         return None
     narrowed = [t for t in tools if t.get("name") in _COMMENT_TOOLS]
     if narrowed and len(narrowed) < len(tools):
-        logger.info("[agent] raw comments intent: tools %d → %d", len(tools), len(narrowed))
+        logger.info(
+            log_event("agent", "tool filter applied", intent="raw_comments", before=len(tools), after=len(narrowed))
+        )
         return narrowed
     return None
 
 
 def _narrow_for_catalog_query(tools: list[dict], task: str) -> list[dict] | None:
-    """(Nội bộ) Narrow for catalog query `_narrow_for_catalog_query`.
+    """(Internal) Narrow tools to just catalog tools for pure catalog queries (no review intent).
 
     Args:
-        tools: (list[dict]) Tham số `tools`.
-        task: (str) Tham số `task`.
+        tools: (list[dict]) Tool definitions to narrow.
+        task: (str) The user task/question.
 
     Returns:
-        (list[dict] | None) Kết quả trả về."""
+        (list[dict] | None) The subset of `tools` that are catalog tools, if
+        the task wants catalog info and has no review intent; None if the
+        task isn't a catalog query, mixes in review intent, or no catalog
+        tools were found."""
     ctx = context_for_filtering(task)
     question = current_question(task)
     if not wants_catalog(ctx) and not wants_catalog(question):
@@ -140,40 +166,48 @@ def _narrow_for_catalog_query(tools: list[dict], task: str) -> list[dict] | None
         return None
     narrowed = [t for t in tools if _is_catalog_tool(t.get("name", ""))]
     if narrowed and len(narrowed) < len(tools):
-        logger.info("[agent] catalog intent: tools %d → %d", len(tools), len(narrowed))
+        logger.info(
+            log_event("agent", "tool filter applied", intent="catalog", before=len(tools), after=len(narrowed))
+        )
         return narrowed
     return narrowed if narrowed else None
 
 
 def _narrow_for_movie_context(tools: list[dict], task: str) -> list[dict]:
-    """(Nội bộ) Narrow for movie context `_narrow_for_movie_context`.
+    """(Internal) Narrow tools to the core movie/review toolset when the task has movie context and no single platform is named.
 
     Args:
-        tools: (list[dict]) Tham số `tools`.
-        task: (str) Tham số `task`.
+        tools: (list[dict]) Tool definitions to narrow.
+        task: (str) The user task/question.
 
     Returns:
-        (list[dict]) Kết quả trả về."""
+        (list[dict]) `tools` unchanged if there's no movie context, a single
+        platform was explicitly detected, or narrowing would not reduce the
+        list; otherwise the subset of `tools` found in _MOVIE_CORE."""
     if not has_movie_context(task):
         return tools
     if detect_platform(task):
         return tools
     narrowed = [t for t in tools if t.get("name") in _MOVIE_CORE]
     if narrowed and len(narrowed) < len(tools):
-        logger.info("[agent] movie context: tools %d → %d", len(tools), len(narrowed))
+        logger.info(
+            log_event("agent", "tool filter applied", intent="movie_context", before=len(tools), after=len(narrowed))
+        )
         return narrowed
     return tools
 
 
 def _narrow_for_review_query(tools: list[dict], task: str) -> list[dict]:
-    """(Nội bộ) Narrow for review query `_narrow_for_review_query`.
+    """(Internal) Narrow tools to the core movie/review toolset when the task looks like a review query.
 
     Args:
-        tools: (list[dict]) Tham số `tools`.
-        task: (str) Tham số `task`.
+        tools: (list[dict]) Tool definitions to narrow.
+        task: (str) The user task/question.
 
     Returns:
-        (list[dict]) Kết quả trả về."""
+        (list[dict]) `tools` unchanged if there's already movie context, the
+        task doesn't express review intent, or narrowing would not reduce
+        the list; otherwise the subset of `tools` found in _MOVIE_CORE."""
     if has_movie_context(task):
         return tools
     ctx = context_for_filtering(task)
@@ -181,20 +215,25 @@ def _narrow_for_review_query(tools: list[dict], task: str) -> list[dict]:
         return tools
     narrowed = [t for t in tools if t.get("name") in _MOVIE_CORE]
     if narrowed and len(narrowed) < len(tools):
-        logger.info("[agent] review query: tools %d → %d", len(tools), len(narrowed))
+        logger.info(
+            log_event("agent", "tool filter applied", intent="review_query", before=len(tools), after=len(narrowed))
+        )
         return narrowed
     return tools
 
 
 async def _narrow_for_rag_cache(tools: list[dict], task: str) -> list[dict]:
-    """(Nội bộ) Narrow for rag cache (async) `_narrow_for_rag_cache`.
+    """(Internal) Narrow tools to RAG-backed lookups when a fresh knowledge cache exists for the mentioned movie (async).
 
     Args:
-        tools: (list[dict]) Tham số `tools`.
-        task: (str) Tham số `task`.
+        tools: (list[dict]) Tool definitions to narrow.
+        task: (str) The user task/question, used to extract a movie name.
 
     Returns:
-        (list[dict]) Kết quả trả về."""
+        (list[dict]) `tools` unchanged if RAG is disabled, no movie name is
+        found, the movie has no cached knowledge, the cache is stale, or
+        narrowing would not reduce the list; otherwise the subset of `tools`
+        found in _RAG_CACHE_TOOLS."""
     if not RAG_ENABLED:
         return tools
     movie_name = extract_movie_name(task)
@@ -207,21 +246,36 @@ async def _narrow_for_rag_cache(tools: list[dict], task: str) -> list[dict]:
         return tools
     rag_tools = [t for t in tools if t.get("name") in _RAG_CACHE_TOOLS]
     if rag_tools and len(rag_tools) < len(tools):
-        logger.info("[agent] RAG cache hit movie=%s tools=%d → %d", movie_id, len(tools), len(rag_tools))
+        logger.info(
+            log_event(
+                "agent",
+                "rag cache hit",
+                movie_id=movie_id,
+                before=len(tools),
+                after=len(rag_tools),
+            )
+        )
         return rag_tools
     return tools
 
 
 async def prepare_tools_for_task(tools: list[dict], task: str) -> list[dict]:
-    """Chuẩn bị tools for task (async).
+    """Run the full tool-narrowing pipeline for a task, including the async RAG cache check (async).
+
+    Applies platform filtering, then (for movie-ecosystem tool lists) narrows
+    by raw-comments intent, catalog intent, review intent, movie context, and
+    finally RAG cache freshness, in that order — the first narrowing that
+    applies for raw-comments/catalog short-circuits the rest.
 
     Args:
-        tools: (list[dict]) Tham số `tools`.
-        task: (str) Tham số `task`.
+        tools: (list[dict]) Tool definitions available for the task.
+        task: (str) The user task/question driving the narrowing decisions.
 
     Returns:
-        (list[dict]) Kết quả trả về."""
+        (list[dict]) The narrowed tool list to actually offer the LLM."""
     tools = filter_tools_by_platform(tools, task)
+    if not _is_movie_ecosystem(tools):
+        return tools
     comments = _narrow_for_raw_comments(tools, task)
     if comments is not None:
         return comments
@@ -235,15 +289,21 @@ async def prepare_tools_for_task(tools: list[dict], task: str) -> list[dict]:
 
 
 def prepare_tools(tools: list[dict], task: str) -> list[dict]:
-    """Chuẩn bị tools.
+    """Run the synchronous tool-narrowing pipeline for a task (no RAG cache check).
+
+    Same as `prepare_tools_for_task` but skips the async RAG-cache narrowing
+    step and does not apply review-query narrowing before the movie-context
+    narrowing.
 
     Args:
-        tools: (list[dict]) Tham số `tools`.
-        task: (str) Tham số `task`.
+        tools: (list[dict]) Tool definitions available for the task.
+        task: (str) The user task/question driving the narrowing decisions.
 
     Returns:
-        (list[dict]) Kết quả trả về."""
+        (list[dict]) The narrowed tool list to actually offer the LLM."""
     tools = filter_tools_by_platform(tools, task)
+    if not _is_movie_ecosystem(tools):
+        return tools
     comments = _narrow_for_raw_comments(tools, task)
     if comments is not None:
         return comments

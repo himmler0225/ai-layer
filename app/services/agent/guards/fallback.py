@@ -47,16 +47,20 @@ _COUNTRY_SLUGS: dict[str, str] = {
 
 
 def _task_text(task: str) -> str:
-    """(Nội bộ) Task text `_task_text`.
+    """(Internal) Get the text to scan for catalog intent/genre/country signals, falling back to conversation history.
 
     Args:
-        task: (str) Tham số `task`.
+        task: (str) Raw task string, possibly containing conversation history and the current question.
 
     Returns:
-        (str) Kết quả trả về."""
+        (str) The filtering context or current question extracted from `task`;
+        if that alone doesn't carry catalog intent, the conversation history is
+        merged in when doing so reveals catalog intent (short follow-ups like
+        "not enough, give me more" don't restate genre/country on their own)."""
     text = context_for_filtering(task) or current_question(task) or (task or "")
-    # Follow-up ngắn kiểu "ít vậy, cho thêm phim khác đi" không tự nêu lại thể loại/quốc
-    # gia — nếu câu hiện tại chưa đủ tín hiệu catalog, gộp thêm lịch sử để dò slug.
+    # Short follow-ups like "not enough, give me more movies" don't restate the
+    # genre/country — if the current sentence lacks catalog signal, merge in the
+    # history to look for a slug.
     if not wants_catalog(text):
         history = conversation_history(task)
         if history:
@@ -67,25 +71,25 @@ def _task_text(task: str) -> str:
 
 
 def _tool_names(tools: list[dict]) -> set[str]:
-    """(Nội bộ) Tool names `_tool_names`.
+    """(Internal) Collect the set of tool names available in a tool definitions list.
 
     Args:
-        tools: (list[dict]) Tham số `tools`.
+        tools: (list[dict]) Tool definitions, each expected to carry a "name" key.
 
     Returns:
-        (set[str]) Kết quả trả về."""
+        (set[str]) Non-empty tool names found in `tools`."""
     return {t.get("name", "") for t in tools if t.get("name")}
 
 
 def _match_slug(text: str, mapping: dict[str, str]) -> str | None:
-    """(Nội bộ) Match slug `_match_slug`.
+    """(Internal) Find the slug for the longest matching label found in text.
 
     Args:
-        text: (str) Tham số `text`.
-        mapping: (dict[str, str]) Tham số `mapping`.
+        text: (str) Text to search (matched case-insensitively).
+        mapping: (dict[str, str]) Label -> slug mapping (e.g. genre or country names to slugs).
 
     Returns:
-        (str | None) Kết quả trả về."""
+        (str | None) The slug for the longest label present in `text`, or None if no label matches."""
     lowered = text.lower()
     for label, slug in sorted(mapping.items(), key=lambda item: len(item[0]), reverse=True):
         if label in lowered:

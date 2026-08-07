@@ -21,7 +21,21 @@ def set_provider_remote(
     schema: dict | None = None,
     **fields: Any,
 ) -> str:
-    """Ghi settings._REMOTE cho một provider; trả về settings prefix."""
+    """Write a provider's config directly into settings._REMOTE for tests.
+
+    Merges the given field overrides on top of sensible test defaults
+    (api_key, base_url, model, max_tokens, tool_model, tool_max_tokens) and
+    stores them under the provider's settings key prefix.
+
+    Args:
+        settings: The settings module (or stand-in) whose _REMOTE dict is written to.
+        provider_id: id of the provider to configure.
+        schema: Config schema used to resolve the provider's settings prefix;
+            loaded via load_schema() if not given.
+        fields: Overrides for the default test values.
+
+    Returns:
+        The settings key prefix used for this provider."""
     schema = schema or load_schema()
     prefix = provider_settings_prefix(provider_id, schema)
     defaults = {

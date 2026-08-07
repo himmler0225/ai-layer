@@ -8,26 +8,35 @@ _MAX_UI_VIDEOS = 8
 
 
 def _youtube_search_url(query: str) -> str:
-    """(Nội bộ) Youtube search url.
+    """Build a YouTube search-results URL for the given query.
 
     Args:
-        query: (str) Tham số `query`.
+        query: Search keywords, URL-encoded before being inserted.
 
     Returns:
-        (str) Kết quả trả về."""
+        The full "youtube.com/results?search_query=..." URL.
+    """
     return f"https://www.youtube.com/results?search_query={quote(query)}"
 
 
 
 def _best_thumb(thumbnails, video_id: str = "") -> str | None:
-    """(Nội bộ) Best thumb.
+    """Pick the best-quality thumbnail URL available for a video.
+
+    Scans `thumbnails` from last to first (assumed to be lowest to highest
+    resolution) and returns the first valid URL found, normalizing
+    protocol-relative ("//...") URLs to https. Falls back to the standard
+    YouTube hqdefault thumbnail derived from `video_id` when no usable
+    thumbnail is present in the list.
 
     Args:
-        thumbnails: (Any) Tham số `thumbnails`.
-        video_id: (str, mặc định '') Tham số `video_id`.
+        thumbnails: List of thumbnail dicts (each expected to have a
+            "url" key), or any other value (treated as absent).
+        video_id: YouTube video id used to build the fallback thumbnail URL.
 
     Returns:
-        (Optional[str]) Kết quả trả về."""
+        The thumbnail URL, or None if none could be determined.
+    """
     if isinstance(thumbnails, list):
         for t in reversed(thumbnails):
             if isinstance(t, dict):
@@ -42,24 +51,33 @@ def _best_thumb(thumbnails, video_id: str = "") -> str | None:
 
 
 def _safe(item) -> dict | None:
-    """(Nội bộ) Safe `_safe`.
+    """Type-guard helper: return `item` only if it is a dict.
+
+    Used to defensively skip malformed entries when iterating over
+    tool-result lists that may contain unexpected types.
 
     Args:
-        item: (Any) Tham số `item`.
+        item: Value to check.
 
     Returns:
-        (Optional[Dict]) Kết quả trả về."""
+        `item` if it is a dict, otherwise None.
+    """
     return item if isinstance(item, dict) else None
 
 
 def _fmt_views(views) -> str | None:
-    """(Nội bộ) Fmt views.
+    """Format a raw view count into a compact human-readable string.
+
+    Examples: 2500000 -> "2.5M views", 15000 -> "15K views", 42 -> "42 views".
+    If `views` cannot be parsed as an int, it is returned as-is (stringified).
 
     Args:
-        views: (Any) Tham số `views`.
+        views: Raw view count, expected to be int-convertible.
 
     Returns:
-        (Optional[str]) Kết quả trả về."""
+        The formatted string, `str(views)` if formatting fails, or None if
+        `views` is falsy.
+    """
     try:
         n = int(views)
         if n >= 1000000:
@@ -72,13 +90,19 @@ def _fmt_views(views) -> str | None:
 
 
 def _unwrap(result) -> dict:
-    """(Nội bộ) Unwrap `_unwrap`.
+    """Unwrap a tool result that follows the `{"success", "data"}` envelope.
+
+    If `result` has both a "success" and a "data" key, the "data" value is
+    returned (lists are wrapped as `{"_list": [...]}` so callers always get
+    a dict). Otherwise `result` is returned unchanged if it's already a
+    dict, or `{}` otherwise.
 
     Args:
-        result: (Any) Tham số `result`.
+        result: Raw tool result, which may or may not be wrapped.
 
     Returns:
-        (dict) Kết quả trả về."""
+        The unwrapped dict payload.
+    """
     if isinstance(result, dict) and "success" in result and ("data" in result):
         inner = result.get("data")
         if isinstance(inner, (dict, list)):
@@ -87,46 +111,58 @@ def _unwrap(result) -> dict:
 
 
 def detect_source_label(tool_calls: list[dict]) -> str:
-    """Detect source label.
+    """Infer a human-readable label for which platforms were queried.
+
+    Inspects the tool names in `tool_calls` for youtube_*/tiktok_*/web_search
+    prefixes to decide which source(s) contributed to the result.
 
     Args:
-        tool_calls: (list[dict]) Tham số `tool_calls`.
+        tool_calls: Log of tool calls made during the agent run.
 
     Returns:
-        (str) Kết quả trả về."""
+        One of "YouTube & TikTok", "TikTok", "YouTube", "Web", or a
+        multi-source fallback label if none of those match.
+    """
     has_youtube = any(c.get("tool", "").startswith("youtube_") for c in tool_calls)
     has_tiktok = any(c.get("tool", "").startswith("tiktok_") for c in tool_calls)
+    has_web = any(c.get("tool") == "web_search" for c in tool_calls)
     if has_youtube and has_tiktok:
         return "YouTube & TikTok"
     if has_tiktok:
         return "TikTok"
     if has_youtube:
         return "YouTube"
+    if has_web:
+        return "Web"
     return "đa nguồn"
 
 
 def _review_entry(content: str, *, platform: str, source_url: str | None = None) -> dict:
-    """(Nội bộ) Review entry.
+    """Build a normalized review entry dict for the UI payload.
 
     Args:
-        content: (str) Tham số `content`.
-        platform: (str) Tham số `platform`.
-        source_url: (Optional[str], mặc định None) Tham số `source_url`.
+        content: The review/comment text.
+        platform: Source platform, e.g. "youtube" or "tiktok".
+        source_url: URL of the video/page the review came from, if known.
 
     Returns:
-        (Dict) Kết quả trả về."""
+        A dict with "content", "source_url", and "platform" keys.
+    """
     return {"content": content, "source_url": source_url, "platform": platform}
 
 
 def _youtube_video_entry(v: dict, vid: str) -> dict:
-    """(Nội bộ) Youtube video entry.
+    """Build a normalized YouTube video entry dict for the UI payload.
 
     Args:
-        v: (dict) Tham số `v`.
-        vid: (str) Tham số `vid`.
+        v: Raw video info, with optional "title", "channel"/"author",
+            "view_count"/"views", and "thumbnails" keys.
+        vid: The YouTube video id.
 
     Returns:
-        (Dict) Kết quả trả về."""
+        A dict with "video_id", "title", "channel", "views", "thumbnail",
+        "source_url", and "platform" keys.
+    """
     url = _youtube_url(vid)
     thumb = _best_thumb(v.get("thumbnails", []) or [], vid)
     return {
@@ -141,7 +177,22 @@ def _youtube_video_entry(v: dict, vid: str) -> dict:
 
 
 def collect_tool_results(tool_calls: list[dict]) -> tuple[list[dict], list[dict], list[dict]]:
-    """Parse tool_call_log → reviews, videos, sources cho UI."""
+    """Parse an agent's tool-call log into UI-ready reviews, videos, and sources.
+
+    Walks every tool call (YouTube/TikTok search, detail, comments,
+    transcripts, and web search), extracting review/comment text, building
+    deduplicated video summaries, and collecting a deduplicated list of
+    source links. Videos are ordered by the sequence they were "analyzed"
+    (comments/transcript fetched), then re-sorted by view count descending
+    and capped at `_MAX_UI_VIDEOS`.
+
+    Args:
+        tool_calls: Log of tool calls made during the agent run; each entry
+            has "tool", "inputs", and "result" keys.
+
+    Returns:
+        A 3-tuple of (all_reviews, all_videos, sources) lists.
+    """
     seen_urls: set = set()
     all_reviews: list[dict] = []
     sources: list[dict] = []
@@ -150,13 +201,15 @@ def collect_tool_results(tool_calls: list[dict]) -> tuple[list[dict], list[dict]
     video_by_key: dict[str, dict] = {}
 
     def _add_source(label: str, url: str, kind: str, **meta):
-        """(Nội bộ) Add source.
+        """Append a source entry to `sources` if its URL hasn't been seen yet.
 
         Args:
-            label: (str) Tham số `label`.
-            url: (str) Tham số `url`.
-            kind: (str) Tham số `kind`.
-            meta: (Any) Tham số `meta`."""
+            label: Display label for the source, truncated to 80 chars.
+            url: Source URL; used as the dedup key via `seen_urls`.
+            kind: Source type, e.g. "search", "video", "reviews", "web".
+            meta: Extra fields (e.g. thumbnail, channel, views, snippet,
+                platform) merged into the entry, dropping any None values.
+        """
         if url and url not in seen_urls:
             seen_urls.add(url)
             source = {"label": label[:80], "url": url, "type": kind}
@@ -164,14 +217,18 @@ def collect_tool_results(tool_calls: list[dict]) -> tuple[list[dict], list[dict]
             sources.append(source)
 
     def _mark_analyzed(entry: dict, key: str) -> None:
-        """(Nội bộ) Mark analyzed.
+        """Record or update a video as "analyzed" (comments/transcript fetched).
+
+        Tracks first-seen order in `analyzed_keys` while always storing the
+        latest `entry` for `key` in `video_by_key`, so repeated calls for
+        the same video (e.g. from a batch and a single-video call) refresh
+        its data without duplicating it in the output order.
 
         Args:
-            entry: (Dict) Tham số `entry`.
-            key: (str) Tham số `key`.
-
-        Returns:
-            (None) Kết quả trả về."""
+            entry: The video entry dict to store.
+            key: Unique key for the video, e.g. "yt:<video_id>" or
+                "tt:<aweme_id>".
+        """
         if key not in video_by_key:
             analyzed_keys.append(key)
         video_by_key[key] = entry
@@ -331,6 +388,21 @@ def collect_tool_results(tool_calls: list[dict]) -> tuple[list[dict], list[dict]
                     views=_fmt_views(plays),
                     platform="tiktok",
                 )
+        elif tool == "web_search":
+            for raw_r in result.get("results") or []:
+                r = _safe(raw_r)
+                if not r:
+                    continue
+                url = r.get("url", "")
+                if not url:
+                    continue
+                _add_source(
+                    r.get("title") or url,
+                    url,
+                    "web",
+                    snippet=(r.get("content") or "")[:200] or None,
+                    platform="web",
+                )
     all_videos = [video_by_key[k] for k in analyzed_keys if k in video_by_key]
     all_videos.sort(key=lambda v: int(v.get("views") or 0), reverse=True)
     all_videos = all_videos[:_MAX_UI_VIDEOS]
@@ -338,14 +410,22 @@ def collect_tool_results(tool_calls: list[dict]) -> tuple[list[dict], list[dict]
 
 
 def movie_name_from_task(task: str, videos: list[dict]) -> str:
-    """Movie name from task.
+    """Infer the movie/product name being discussed, for display purposes.
+
+    Tries, in order: an explicit movie-name block extracted from `task`
+    (via `extract_movie_name`), the current question (the part after the
+    last history marker) with common leading verbs like "review "/"đánh
+    giá " stripped, then the title of the first collected video, and
+    finally falls back to a generic placeholder.
 
     Args:
-        task: (str) Tham số `task`.
-        videos: (list[dict]) Tham số `videos`.
+        task: Full task/conversation text (may include prior turns
+            separated by the history marker).
+        videos: Collected video entries, used as a fallback name source.
 
     Returns:
-        (str) Kết quả trả về."""
+        A short name suitable for display, never longer than 80 chars.
+    """
     from_block = extract_movie_name(task)
     if from_block:
         return from_block

@@ -4,13 +4,14 @@ from app.utils.urls import tiktok_url as _tiktok_url, youtube_url as _youtube_ur
 
 
 def _as_int(value: Any) -> int:
-    """(Nội bộ) As int.
+    """Best-effort coerce a value to int, defaulting to 0 on failure.
 
     Args:
-        value: (Any) Tham số `value`.
+        value: Value to coerce (e.g. a count field that may be missing or malformed).
 
     Returns:
-        (int) Kết quả trả về."""
+        The coerced int, or 0 if `value` can't be converted.
+    """
     try:
         return int(value)
     except TypeError, ValueError:
@@ -18,13 +19,16 @@ def _as_int(value: Any) -> int:
 
 
 def map_youtube_video(raw: dict) -> dict | None:
-    """Map youtube video.
+    """Normalize a raw YouTube video payload into the internal video dict shape.
 
     Args:
-        raw: (dict) Tham số `raw`.
+        raw: Raw video data as returned by the YouTube tool APIs.
 
     Returns:
-        (Optional[dict]) Kết quả trả về."""
+        A dict with "id", "platform", "title", "author", "views", "likes",
+        "comments_count", "url", and "metadata", or None if the raw payload has
+        no usable video id.
+    """
     video_id = raw.get("video_id") or raw.get("id")
     if not video_id:
         return None
@@ -46,13 +50,16 @@ def map_youtube_video(raw: dict) -> dict | None:
 
 
 def map_tiktok_video(raw: dict) -> dict | None:
-    """Map tiktok video.
+    """Normalize a raw TikTok video payload into the internal video dict shape.
 
     Args:
-        raw: (dict) Tham số `raw`.
+        raw: Raw video data as returned by the TikTok tool APIs.
 
     Returns:
-        (Optional[dict]) Kết quả trả về."""
+        A dict with "id", "platform", "title", "author", "views", "likes",
+        "comments_count", "url", and "metadata", or None if the raw payload has
+        no usable video (aweme) id.
+    """
     aweme_id = raw.get("aweme_id") or raw.get("id")
     if not aweme_id:
         return None

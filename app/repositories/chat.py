@@ -6,13 +6,14 @@ from app.config.db.session import get_session_factory
 
 
 async def list_sessions(user_id: str) -> list[ChatSession]:
-    """List sessions (async).
+    """List a user's chat sessions, most recently updated first.
 
     Args:
-        user_id: (str) Tham số `user_id`.
+        user_id: The user's id.
 
     Returns:
-        (list[ChatSession]) Kết quả trả về."""
+        The user's `ChatSession` rows.
+    """
     factory = await get_session_factory()
     async with factory() as session:
         result = await session.execute(
@@ -22,13 +23,14 @@ async def list_sessions(user_id: str) -> list[ChatSession]:
 
 
 async def get_session_user_id(session_id: str) -> str | None:
-    """Lấy session user id (async).
+    """Look up the owning user id for a chat session.
 
     Args:
-        session_id: (str) Tham số `session_id`.
+        session_id: The session's id.
 
     Returns:
-        (str | None) Kết quả trả về."""
+        The owning user's id, or None if the session doesn't exist.
+    """
     factory = await get_session_factory()
     async with factory() as session:
         return await session.scalar(select(ChatSession.user_id).where(ChatSession.id == session_id))
@@ -37,17 +39,15 @@ async def get_session_user_id(session_id: str) -> str | None:
 async def upsert_session(
     *, session_id: str, user_id: str, title: str, created_at: datetime, updated_at: datetime
 ) -> None:
-    """Upsert session (async).
+    """Insert a chat session, or update its title/updated_at if it already exists.
 
     Args:
-        session_id: (str) Tham số `session_id`.
-        user_id: (str) Tham số `user_id`.
-        title: (str) Tham số `title`.
-        created_at: (datetime) Tham số `created_at`.
-        updated_at: (datetime) Tham số `updated_at`.
-
-    Returns:
-        (None) Kết quả trả về."""
+        session_id: The session's id.
+        user_id: Id of the user who owns the session.
+        title: Session title.
+        created_at: Creation timestamp (used only on insert).
+        updated_at: Timestamp to set on insert or conflict.
+    """
     factory = await get_session_factory()
     async with factory() as session:
         stmt = insert(ChatSession).values(
@@ -61,14 +61,12 @@ async def upsert_session(
 
 
 async def patch_session(session_id: str, *, title: str | None = None) -> None:
-    """Patch session (async).
+    """Partially update a chat session, always bumping updated_at.
 
     Args:
-        session_id: (str) Tham số `session_id`.
-        title: (Optional[str], mặc định None) Tham số `title`.
-
-    Returns:
-        (None) Kết quả trả về."""
+        session_id: The session's id.
+        title: New title to set; left unchanged if None.
+    """
     values: dict = {"updated_at": datetime.now(UTC)}
     if title is not None:
         values["title"] = title
@@ -79,13 +77,11 @@ async def patch_session(session_id: str, *, title: str | None = None) -> None:
 
 
 async def delete_session(session_id: str) -> None:
-    """Delete session (async).
+    """Delete a chat session by id.
 
     Args:
-        session_id: (str) Tham số `session_id`.
-
-    Returns:
-        (None) Kết quả trả về."""
+        session_id: The session's id.
+    """
     factory = await get_session_factory()
     async with factory() as session:
         await session.execute(delete(ChatSession).where(ChatSession.id == session_id))
@@ -93,13 +89,14 @@ async def delete_session(session_id: str) -> None:
 
 
 async def list_messages(session_id: str) -> list[ChatMessage]:
-    """List messages (async).
+    """List a chat session's messages in chronological order.
 
     Args:
-        session_id: (str) Tham số `session_id`.
+        session_id: The session's id.
 
     Returns:
-        (list[ChatMessage]) Kết quả trả về."""
+        The session's `ChatMessage` rows, oldest first.
+    """
     factory = await get_session_factory()
     async with factory() as session:
         result = await session.execute(
@@ -109,14 +106,16 @@ async def list_messages(session_id: str) -> list[ChatMessage]:
 
 
 async def save_messages(session_id: str, messages: list[dict]) -> None:
-    """Save messages (async).
+    """Append new messages to a session and bump the session's updated_at.
+
+    Existing message ids are ignored (no-op on conflict), so this is safe
+    to call with messages that may have already been saved.
 
     Args:
-        session_id: (str) Tham số `session_id`.
-        messages: (list[dict]) Tham số `messages`.
-
-    Returns:
-        (None) Kết quả trả về."""
+        session_id: The session to append messages to.
+        messages: Message dicts with "id", "role", "content", optional
+            "metadata", and "created_at".
+    """
     if not messages:
         return
     factory = await get_session_factory()
@@ -141,13 +140,17 @@ async def save_messages(session_id: str, messages: list[dict]) -> None:
 
 
 async def session_stats(days: int = 7) -> dict:
-    """Session stats (async).
+    """Compute chat session counts for a dashboard: today's total, all-time total, and a daily breakdown.
 
     Args:
-        days: (int, mặc định 7) Tham số `days`.
+        days: Number of trailing days (including today) to include in the
+            daily breakdown; clamped to the range [1, 30].
 
     Returns:
-        (dict) Kết quả trả về."""
+        A dict with "sessionsToday" (int), "totalSessions" (int), and
+        "daily" (list of {"date", "label", "count"} dicts, one per day in
+        the requested range, oldest first).
+    """
     days = max(1, min(int(days), 30))
     now = datetime.now(UTC)
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)

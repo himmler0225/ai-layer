@@ -1,5 +1,5 @@
 import app.config.settings as settings
-from app.config.logger import Logger
+from app.config.logger import Logger, log_event
 from app.ingest.mappers.social_review import map_social_raw_review, slugify_movie_id
 from app.ingest.processing.curate import merge_curated
 from app.ingest.producer.publisher import publish
@@ -15,14 +15,19 @@ _RE_SUMMARIZE_DELTA = 50
 
 
 async def _should_queue_summarize(movie_id: str, total_raw: int) -> bool:
-    """(Nội bộ) Should queue summarize (async).
+    """Decide whether enough new raw reviews have accumulated to (re)trigger summarization.
+
+    Requires at least `_MIN_RAW_FOR_SUMMARIZE` raw reviews. If the movie has no
+    aspect summaries yet, summarization is always due; otherwise it's due once the
+    raw review count has grown by at least `_RE_SUMMARIZE_DELTA` since the last run.
 
     Args:
-        movie_id: (str) Tham số `movie_id`.
-        total_raw: (int) Tham số `total_raw`.
+        movie_id: Id of the movie to check.
+        total_raw: Current total raw review count for the movie.
 
     Returns:
-        (bool) Kết quả trả về."""
+        True if a summarize job should be queued, False otherwise.
+    """
     if total_raw < _MIN_RAW_FOR_SUMMARIZE:
         return False
     summaries = await get_aspect_summaries(movie_id)
@@ -37,7 +42,22 @@ async def _should_queue_summarize(movie_id: str, total_raw: int) -> bool:
 async def sync_comments_to_movie_rag(
     *, movie_hint: str, platform: str, video_id: str, raw_comments: list[dict]
 ) -> str | None:
-    """Đồng bộ comments vào movie RAG (async)."""
+    """Sync a batch of raw comments into the movie RAG pipeline and maybe queue a summarize job.
+
+    Slugifies the movie hint into a movie id, upserts the movie row, maps and
+    stores the raw comments as raw reviews, re-curates the top reviews for the
+    movie, and publishes a summarize job if enough new raw reviews have
+    accumulated since the last summarization.
+
+    Args:
+        movie_hint: Free-text movie/product hint; if blank, syncing is skipped.
+        platform: Either "youtube" or "tiktok".
+        video_id: Id of the video the comments were posted on.
+        raw_comments: Raw comment payloads from the source API.
+
+    Returns:
+        The resolved movie id, or None if `movie_hint` is blank.
+    """
     hint = (movie_hint or "").strip()
     if not hint:
         return None
@@ -61,5 +81,5 @@ async def sync_comments_to_movie_rag(
         await publish(
             ROUTING_SUMMARIZE, platform=platform, video_id=movie_id, movie_hint=hint, payload={"movie_id": movie_id}
         )
-        logger.info("[rag_sync] queued summarize movie=%s raw=%d", movie_id, total)
+        logger.info(log_event("rag_sync", "summarize queued", movie_id=movie_id, raw_reviews=total))
     return movie_id

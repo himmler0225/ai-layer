@@ -13,13 +13,16 @@ DEFAULT_SYSTEM_PROMPT = "You are a helpful assistant that can answer questions a
 
 
 def _parse_system_prompt(prompts_raw: str) -> str:
-    """(Nội bộ) Phân tích system prompt `_parse_system_prompt`.
+    """Extract the agent's system prompt from the remote PROMPTS config value.
+
+    Falls back to DEFAULT_SYSTEM_PROMPT if the raw value is empty, isn't
+    valid JSON, or has no non-empty "agent.system" field.
 
     Args:
-        prompts_raw: (str) Tham số `prompts_raw`.
+        prompts_raw: Raw PROMPTS config value (a JSON string).
 
     Returns:
-        (str) Kết quả trả về."""
+        The resolved system prompt string."""
     if not prompts_raw.strip():
         return DEFAULT_SYSTEM_PROMPT
     try:

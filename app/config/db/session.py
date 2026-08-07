@@ -3,7 +3,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 from app.exceptions import AiLayerConfigError
 import app.config.settings as settings
-from app.config.logger import Logger
+from app.config.logger import Logger, log_event
 from app.config.db.models import Base
 from app.config.db.url import database_url_label, resolve_database_url
 
@@ -13,10 +13,14 @@ _session_factory: async_sessionmaker[AsyncSession] | None = None
 
 
 def _database_url() -> str:
-    """(Nội bộ) Database url `_database_url`.
+    """Resolve and validate the configured database URL for async SQLAlchemy.
 
     Returns:
-        (str) Kết quả trả về."""
+        str: The async-compatible database connection URL.
+
+    Raises:
+        AiLayerConfigError: If `DATABASE_URL` is not configured.
+    """
     url = settings.DATABASE_URL
     if not url:
         raise AiLayerConfigError(
@@ -27,10 +31,11 @@ def _database_url() -> str:
 
 
 def _connect_args() -> dict:
-    """(Nội bộ) Kết nối args `_connect_args`.
+    """Build the asyncpg connect_args (SSL/pgbouncer settings) for the configured database URL.
 
     Returns:
-        (dict) Kết quả trả về."""
+        dict: Connect args to pass to `create_async_engine`, or empty if no URL is configured.
+    """
     if not settings.DATABASE_URL:
         return {}
     _, connect_args = resolve_database_url(settings.DATABASE_URL)
@@ -38,10 +43,11 @@ def _connect_args() -> dict:
 
 
 async def get_session_factory() -> async_sessionmaker[AsyncSession]:
-    """Lấy session factory (async).
+    """Get the process-wide async session factory, creating the engine on first call.
 
     Returns:
-        (async_sessionmaker[AsyncSession]) Kết quả trả về."""
+        async_sessionmaker[AsyncSession]: The shared session factory.
+    """
     global _engine, _session_factory
     if _session_factory is None:
         _engine = create_async_engine(
@@ -57,27 +63,30 @@ async def get_session_factory() -> async_sessionmaker[AsyncSession]:
 
 
 async def _verify_connection() -> None:
-    """(Nội bộ) Xác minh connection (async) `_verify_connection`.
+    """Ping the database to confirm connectivity and log the server version.
 
-    Returns:
-        (None) Kết quả trả về."""
+    Raises:
+        Exception: Re-raises any error encountered while connecting, after logging it.
+    """
     assert _engine is not None
     label = database_url_label(settings.DATABASE_URL)
     try:
         async with _engine.connect() as conn:
             version = (await conn.execute(text("SELECT version()"))).scalar_one()
             version_short = str(version).split(",")[0].strip()
-        logger.info("[db] connected %s (%s)", label, version_short)
+        logger.info(log_event("db", "connected", label=label, version=version_short))
     except Exception as exc:
-        logger.error("[db] connection failed %s: %s", label, exc)
+        logger.error(log_event("db", "connection failed", label=label, error=exc))
         raise
 
 
 async def init_db() -> None:
-    """Khởi tạo db (async).
+    """Initialize the database: create the session factory, verify connectivity,
+    and create any missing tables.
 
-    Returns:
-        (None) Kết quả trả về."""
+    Enables the pgvector extension when available; if it isn't, the
+    `video_chunks` table (which depends on pgvector) is skipped.
+    """
     await get_session_factory()
     assert _engine is not None
     await _verify_connection()
@@ -88,21 +97,23 @@ async def init_db() -> None:
             has_vector = True
         except Exception as exc:
             logger.warning(
-                "[db] pgvector unavailable (%s) - video_chunks table skipped; enable extension on Supabase (config/supabase-setup.sql)",
-                exc,
+                log_event(
+                    "db",
+                    "pgvector unavailable",
+                    error=exc,
+                    action="video_chunks_table_skipped",
+                    hint="enable extension via config/supabase-setup.sql",
+                )
             )
         tables = list(Base.metadata.sorted_tables)
         if not has_vector:
             tables = [t for t in tables if t.name != "video_chunks"]
         await conn.run_sync(lambda sync_conn: Base.metadata.create_all(sync_conn, tables=tables))
-    logger.info("[db] tables initialized vector=%s", has_vector)
+    logger.info(log_event("db", "tables initialized", vector=has_vector))
 
 
 async def close_engine() -> None:
-    """Đóng engine (async).
-
-    Returns:
-        (None) Kết quả trả về."""
+    """Dispose of the shared async engine and reset the session factory."""
     global _engine, _session_factory
     if _engine is not None:
         await _engine.dispose()

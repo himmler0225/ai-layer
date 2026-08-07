@@ -58,13 +58,15 @@ _TOPIC_HINTS = ("phim", "video", "youtube", "tiktok", "review", "bình luận", 
 
 
 def _movie_block(task: str) -> str:
-    """(Nội bộ) Movie block `_movie_block`.
+    """Extract the "[Phim đang xem]" (or legacy "[Sản phẩm đang xem]") block from a task.
 
     Args:
-        task: (str) Tham số `task`.
+        task: Raw task/prompt text that may contain a movie-context block.
 
     Returns:
-        (str) Kết quả trả về."""
+        The text following the marker up to the next history marker, or
+        an empty string if no such block is present.
+    """
     text = task or ""
     for marker in (MOVIE_BLOCK_MARKER, _LEGACY_PRODUCT_BLOCK):
         if marker in text:
@@ -76,13 +78,14 @@ def _movie_block(task: str) -> str:
 
 
 def conversation_history(task: str) -> str:
-    """Conversation history.
+    """Extract the "[Lịch sử hội thoại]" block from a task, up to the history marker.
 
     Args:
-        task: (str) Tham số `task`.
+        task: Raw task/prompt text that may contain a chat-history block.
 
     Returns:
-        (str) Kết quả trả về."""
+        The stripped conversation history text, or an empty string if none is present.
+    """
     text = task or ""
     if CHAT_HISTORY_BLOCK not in text:
         return ""
@@ -93,26 +96,33 @@ def conversation_history(task: str) -> str:
 
 
 def current_question(task: str) -> str:
-    """Current question.
+    """Extract the current user question, i.e. the text after the last history marker.
 
     Args:
-        task: (str) Tham số `task`.
+        task: Raw task/prompt text, possibly containing history markers.
 
     Returns:
-        (str) Kết quả trả về."""
+        The stripped text following the last `HISTORY_MARKER`, or the
+        whole (stripped) task if no marker is present.
+    """
     if HISTORY_MARKER in task:
         return task.split(HISTORY_MARKER)[-1].strip()
     return (task or "").strip()
 
 
 def is_short_followup(question: str) -> bool:
-    """Is short followup.
+    """Heuristically detect whether a question is a short, context-dependent follow-up.
+
+    Matches known short follow-up phrases (e.g. "lấy đi", "continue", "ok")
+    or, failing that, treats any question of 4 words or fewer that contains
+    none of the topic keywords as a likely follow-up.
 
     Args:
-        question: (str) Tham số `question`.
+        question: The current user question to test.
 
     Returns:
-        (bool) Kết quả trả về."""
+        True if the question looks like a short follow-up needing prior context.
+    """
     q = (question or "").strip()
     if not q or len(q) > 35:
         return False
@@ -125,7 +135,7 @@ def is_short_followup(question: str) -> bool:
 
 
 def context_for_filtering(task: str) -> str:
-    """Văn bản dùng lọc tool — gộp lịch sử khi câu hiện tại là follow-up ngắn."""
+    """Build the text used for tool filtering, merging history when the current question is a short follow-up."""
     question = current_question(task)
     history = conversation_history(task)
     if history and is_short_followup(question):
@@ -136,35 +146,38 @@ def context_for_filtering(task: str) -> str:
 
 
 def wants_raw_comments(text: str) -> bool:
-    """Wants raw comments.
+    """Detect whether the text expresses intent to get raw/unsummarized comments.
 
     Args:
-        text: (str) Tham số `text`.
+        text: User text to check.
 
     Returns:
-        (bool) Kết quả trả về."""
+        True if the text matches the raw-comments intent pattern.
+    """
     return bool(_RAW_COMMENTS_INTENT.search(text or ""))
 
 
 def wants_review(text: str) -> bool:
-    """Wants review.
+    """Detect whether the text expresses intent to get a review/opinion summary.
 
     Args:
-        text: (str) Tham số `text`.
+        text: User text to check.
 
     Returns:
-        (bool) Kết quả trả về."""
+        True if the text matches the review intent pattern.
+    """
     return bool(_REVIEW_INTENT.search(text or ""))
 
 
 def wants_catalog(text: str) -> bool:
-    """Wants catalog.
+    """Detect whether the text is asking for a movie catalog/recommendation list.
 
     Args:
-        text: (str) Tham số `text`.
+        text: User text to check.
 
     Returns:
-        (bool) Kết quả trả về."""
+        True if the text matches the catalog intent or country/genre movie patterns.
+    """
     t = text or ""
     if _CATALOG_INTENT.search(t) or _COUNTRY_PHIM.search(t):
         return True
@@ -174,13 +187,14 @@ def wants_catalog(text: str) -> bool:
 
 
 def extract_youtube_video_id(text: str) -> str:
-    """Trích xuất youtube video id.
+    """Extract a YouTube video ID from a URL or an explicit "video_id: ..." mention in text.
 
     Args:
-        text: (str) Tham số `text`.
+        text: Text that may contain a YouTube URL or a video_id reference.
 
     Returns:
-        (str) Kết quả trả về."""
+        The extracted video ID, or an empty string if none is found.
+    """
     from app.services.url_extractor import extract_id_from_url
 
     for url in _YOUTUBE_URL.findall(text or ""):
@@ -195,13 +209,15 @@ def extract_youtube_video_id(text: str) -> str:
 
 
 def detect_intent(text: str) -> str | None:
-    """Detect intent.
+    """Classify text into one of the known intents by checking each detector in priority order.
 
     Args:
-        text: (str) Tham số `text`.
+        text: User text to classify.
 
     Returns:
-        (str | None) Kết quả trả về."""
+        "raw_comments", "review", or "catalog" if a matching intent is
+        detected, otherwise None.
+    """
     if wants_raw_comments(text):
         return "raw_comments"
     if wants_review(text):
@@ -212,13 +228,19 @@ def detect_intent(text: str) -> str | None:
 
 
 def extract_movie_name(task: str) -> str:
-    """Trích xuất movie name.
+    """Extract the movie name being discussed from a task's movie block, current text, or history.
+
+    Tries, in order: the "Tên:" line of the movie-context block, the
+    "[Đang xem phim ...]" prefix, a quoted "Review ... phim/movie 'X'"
+    mention, and finally the same patterns searched over conversation
+    history.
 
     Args:
-        task: (str) Tham số `task`.
+        task: Raw task/prompt text.
 
     Returns:
-        (str) Kết quả trả về."""
+        The extracted movie name, or an empty string if none is found.
+    """
     block = _movie_block(task)
     if block:
         match = _NAME_LINE.search(block)
@@ -241,13 +263,18 @@ def extract_movie_name(task: str) -> str:
 
 
 def has_movie_context(task: str) -> bool:
-    """Has movie context.
+    """Determine whether a task has an associated movie in context (current or from history).
+
+    Checks the current task for a movie block, "Đang xem phim" prefix, or
+    an extractable movie name; if the current question is a short
+    follow-up, also checks conversation history for the same signals.
 
     Args:
-        task: (str) Tham số `task`.
+        task: Raw task/prompt text.
 
     Returns:
-        (bool) Kết quả trả về."""
+        True if a movie is in context for this task.
+    """
     text = task or ""
     if MOVIE_BLOCK_MARKER in text or _LEGACY_PRODUCT_BLOCK in text:
         return True
@@ -266,7 +293,21 @@ def has_movie_context(task: str) -> bool:
 
 
 def enrich_short_followup_task(task: str) -> str:
-    """Thêm hint có cấu trúc khi user follow-up ngắn (Lấy đi, tiếp đi…)."""
+    """Prepend a structured context hint block to short follow-up tasks (e.g. "Lấy đi", "tiếp đi...").
+
+    Uses the extracted movie name, YouTube video ID, and detected intent
+    from history/question to build hint lines, so downstream tool
+    filtering has enough context even though the user's message alone is
+    too short.
+
+    Args:
+        task: Raw task/prompt text.
+
+    Returns:
+        The task with a "[Ngữ cảnh từ lịch sử]" hint block prepended, or
+        the original task unchanged if it isn't a short follow-up, has no
+        history, has no hints to add, or already has a hint block.
+    """
     question = current_question(task)
     if not is_short_followup(question):
         return task

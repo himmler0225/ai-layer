@@ -22,44 +22,53 @@ _TYPE_DEFAULTS: dict[str, Any] = {
 
 
 def load_schema() -> dict[str, Any]:
-    """Tải schema.
+    """Load the remote-config JSON schema from disk.
 
     Returns:
-        (dict[str, Any]) Kết quả trả về."""
+        dict[str, Any]: The parsed contents of `config/remote-schema.json`.
+    """
     with _SCHEMA_PATH.open(encoding="utf-8") as fh:
         return json.load(fh)
 
 
 def _screaming(value: str) -> str:
-    """(Nội bộ) Screaming `_screaming`.
+    """Convert a field name to SCREAMING_CASE for use as a settings attribute suffix.
 
     Args:
-        value: (str) Tham số `value`.
+        value: Lowercase (or mixed-case) field name.
 
     Returns:
-        (str) Kết quả trả về."""
+        str: The uppercased value.
+    """
     return value.upper()
 
 
 def _default_for(type_name: str) -> Any:
-    """(Nội bộ) Default for.
+    """Look up the zero-value default for a schema field type.
 
     Args:
-        type_name: (str) Tham số `type_name`.
+        type_name: One of "str", "int", "float", "bool" (or unknown).
 
     Returns:
-        (Any) Kết quả trả về."""
+        Any: The default value for that type, or "" if the type is unrecognized.
+    """
     return _TYPE_DEFAULTS.get(type_name, "")
 
 
 def build_settings_defaults(schema: dict[str, Any]) -> dict[str, Any]:
-    """Xây dựng settings defaults.
+    """Compute the initial `settings` module defaults implied by the remote-config schema.
+
+    Walks each schema key's `bind` block (flat_prefix, provider, service, or
+    rate_limit_apis) and any `mirror` rules, producing zero-valued defaults for
+    every settings attribute the schema can populate, before any remote or env
+    override is applied.
 
     Args:
-        schema: (dict[str, Any]) Tham số `schema`.
+        schema: The parsed remote-config schema (see `load_schema`).
 
     Returns:
-        (dict[str, Any]) Kết quả trả về."""
+        dict[str, Any]: Mapping of settings attribute name to its default value.
+    """
     defaults: dict[str, Any] = {}
 
     for key_schema in schema.get("keys", {}).values():
@@ -106,13 +115,14 @@ def build_settings_defaults(schema: dict[str, Any]) -> dict[str, Any]:
 
 
 def build_prompt_defaults(schema: dict[str, Any]) -> dict[str, str]:
-    """Xây dựng prompt defaults.
+    """Compute empty-string defaults for every prompt field declared under the PROMPTS key.
 
     Args:
-        schema: (dict[str, Any]) Tham số `schema`.
+        schema: The parsed remote-config schema (see `load_schema`).
 
     Returns:
-        (dict[str, str]) Kết quả trả về."""
+        dict[str, str]: Mapping of `{GROUP}_{FIELD}` prompt keys to `""`.
+    """
     defaults: dict[str, str] = {}
     prompts = schema.get("keys", {}).get("PROMPTS") or {}
     for group, fields in (prompts.get("groups") or {}).items():
@@ -123,14 +133,17 @@ def build_prompt_defaults(schema: dict[str, Any]) -> dict[str, str]:
 
 
 def env_override(name: str, type_name: str = "str") -> Any | None:
-    """Env override.
+    """Read and type-cast an environment variable override, if present.
 
     Args:
-        name: (str) Tham số `name`.
-        type_name: (str, mặc định 'str') Tham số `type_name`.
+        name: Environment variable name to look up.
+        type_name: Expected type ("str", "bool", "int", or "float") used to
+            cast the raw string value.
 
     Returns:
-        (Optional[Any]) Kết quả trả về."""
+        Any | None: The cast value, or None if the variable is unset or the
+        cast fails.
+    """
     raw = os.getenv(name)
     if raw is None:
         return None
@@ -153,14 +166,16 @@ def apply_env_fallbacks(
     remote: dict[str, Any],
     schema: dict[str, Any],
 ) -> dict[str, Any]:
-    """Áp dụng env fallbacks.
+    """Fill in service settings (and the data-miner service token) from environment
+    variables wherever the remote config left them empty.
 
     Args:
-        remote: (dict[str, Any]) Tham số `remote`.
-        schema: (dict[str, Any]) Tham số `schema`.
+        remote: The in-progress remote settings dict to patch in place.
+        schema: The parsed remote-config schema, used to enumerate service fields.
 
     Returns:
-        (dict[str, Any]) Kết quả trả về."""
+        dict[str, Any]: The same `remote` dict, mutated with env fallback values.
+    """
     services = (schema.get("keys", {}).get("SERVICES") or {}).get("bind", {}).get("services") or {}
     for service, fields in services.items():
         prefix = _screaming(service)

@@ -10,7 +10,11 @@ Platform = Literal["youtube", "tiktok"]
 
 
 class IngestEnvelope(BaseModel):
-    """Lớp `IngestEnvelope` (kế thừa BaseModel)."""
+    """Message envelope passed through the in-process ingest pipeline.
+
+    Carries a routing key selecting the handler, the source platform/video/movie
+    context, and the handler-specific payload.
+    """
 
     job_id: str
     routing_key: str
@@ -22,7 +26,7 @@ class IngestEnvelope(BaseModel):
 
 
 class ChunkItem(BaseModel):
-    """Lớp `ChunkItem` (kế thừa BaseModel)."""
+    """A single embeddable text chunk (transcript or comment) awaiting embedding."""
 
     id: str
     content: str

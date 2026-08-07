@@ -5,24 +5,24 @@ from app.clients.data_miner._http import get as _get
 
 
 def _movie_provider(provider: str | None = None) -> str:
-    """(Nội bộ) Movie provider `_movie_provider`.
+    """Normalize a movie provider name, defaulting to the configured provider.
 
     Args:
-        provider: (str | None, mặc định None) Tham số `provider`.
+        provider: Explicit provider name, or `None` to use the default.
 
     Returns:
-        (str) Kết quả trả về."""
+        The lowercased, trimmed provider name."""
     return (provider or dm_config.movie_default_provider()).strip().lower()
 
 
 def _movie_filters(**kwargs: Any) -> dict[str, Any]:
-    """(Nội bộ) Movie filters `_movie_filters`.
+    """Drop `None`/empty-string values from a set of optional filter kwargs.
 
     Args:
-        **kwargs: (Any) Tham số `**kwargs`.
+        **kwargs: Candidate filter values (e.g. category, country, year).
 
     Returns:
-        (dict[str, Any]) Kết quả trả về."""
+        A dict containing only the kwargs with a non-`None`, non-empty value."""
     return {key: value for key, value in kwargs.items() if value is not None and value != ""}
 
 
@@ -38,21 +38,22 @@ def _list_params(
     sort_field: str | None = None,
     sort_type: str | None = None,
 ) -> dict[str, Any]:
-    """(Nội bộ) Liệt kê params `_list_params`.
+    """Build the common query params for the movie list-by-* endpoints.
 
     Args:
-        provider: (str | None) Tham số `provider`.
-        page: (int) Tham số `page`.
-        limit: (int) Tham số `limit`.
-        category: (str | None, mặc định None) Tham số `category`.
-        country: (str | None, mặc định None) Tham số `country`.
-        year: (int | None, mặc định None) Tham số `year`.
-        sort_lang: (str | None, mặc định None) Tham số `sort_lang`.
-        sort_field: (str | None, mặc định None) Tham số `sort_field`.
-        sort_type: (str | None, mặc định None) Tham số `sort_type`.
+        provider: Movie provider name, or `None` for the default.
+        page: Page number to fetch.
+        limit: Number of results per page.
+        category: Optional category filter.
+        country: Optional country filter.
+        year: Optional release-year filter.
+        sort_lang: Optional sort language.
+        sort_field: Optional field to sort by.
+        sort_type: Optional sort direction/type.
 
     Returns:
-        (dict[str, Any]) Kết quả trả về."""
+        A params dict with `provider`, `page`, `limit`, plus any non-empty
+        optional filters."""
     return {
         "provider": _movie_provider(provider),
         "page": page,
@@ -74,16 +75,16 @@ async def movie_search(
     page: int = 1,
     limit: int = 10,
 ) -> dict:
-    """Movie search (async).
+    """Search movies by keyword via the data-miner service.
 
     Args:
-        keyword: (str) Tham số `keyword`.
-        provider: (str | None, mặc định None) Tham số `provider`.
-        page: (int, mặc định 1) Tham số `page`.
-        limit: (int, mặc định 10) Tham số `limit`.
+        keyword: Search text.
+        provider: Movie provider name, or `None` for the default.
+        page: Page number to fetch.
+        limit: Number of results per page.
 
     Returns:
-        (dict) Kết quả trả về."""
+        The data-miner search response (dict)."""
     return await _get(
         "/api/movies/search",
         {
@@ -96,26 +97,26 @@ async def movie_search(
 
 
 async def movie_get_detail(slug: str, provider: str | None = None) -> dict:
-    """Movie get detail (async).
+    """Fetch full details for a single movie by its slug.
 
     Args:
-        slug: (str) Tham số `slug`.
-        provider: (str | None, mặc định None) Tham số `provider`.
+        slug: The movie's unique slug identifier.
+        provider: Movie provider name, or `None` for the default.
 
     Returns:
-        (dict) Kết quả trả về."""
+        The data-miner movie detail response (dict)."""
     return await _get(f"/api/movies/{slug}", {"provider": _movie_provider(provider)})
 
 
 async def movie_list_new(provider: str | None = None, page: int = 1) -> dict:
-    """Movie list new (async).
+    """List newly added movies.
 
     Args:
-        provider: (str | None, mặc định None) Tham số `provider`.
-        page: (int, mặc định 1) Tham số `page`.
+        provider: Movie provider name, or `None` for the default.
+        page: Page number to fetch.
 
     Returns:
-        (dict) Kết quả trả về."""
+        The data-miner "new movies" list response (dict)."""
     return await _get("/api/movies/new", {"provider": _movie_provider(provider), "page": page})
 
 
@@ -131,22 +132,22 @@ async def movie_list_by_type(
     sort_field: str | None = None,
     sort_type: str | None = None,
 ) -> dict:
-    """Movie list by type (async).
+    """List movies by type (e.g. series, single, cartoon), with optional filters.
 
     Args:
-        movie_type: (str) Tham số `movie_type`.
-        provider: (str | None, mặc định None) Tham số `provider`.
-        page: (int, mặc định 1) Tham số `page`.
-        limit: (int, mặc định 10) Tham số `limit`.
-        category: (str | None, mặc định None) Tham số `category`.
-        country: (str | None, mặc định None) Tham số `country`.
-        year: (int | None, mặc định None) Tham số `year`.
-        sort_lang: (str | None, mặc định None) Tham số `sort_lang`.
-        sort_field: (str | None, mặc định None) Tham số `sort_field`.
-        sort_type: (str | None, mặc định None) Tham số `sort_type`.
+        movie_type: The movie type/category slug to filter by.
+        provider: Movie provider name, or `None` for the default.
+        page: Page number to fetch.
+        limit: Number of results per page.
+        category: Optional category filter.
+        country: Optional country filter.
+        year: Optional release-year filter.
+        sort_lang: Optional sort language.
+        sort_field: Optional field to sort by.
+        sort_type: Optional sort direction/type.
 
     Returns:
-        (dict) Kết quả trả về."""
+        The data-miner movie list response (dict)."""
     return await _get(
         f"/api/movies/types/{movie_type}",
         _list_params(
@@ -175,22 +176,22 @@ async def movie_list_by_genre(
     sort_field: str | None = None,
     sort_type: str | None = None,
 ) -> dict:
-    """Movie list by genre (async).
+    """List movies belonging to a given genre, with optional filters.
 
     Args:
-        slug: (str) Tham số `slug`.
-        provider: (str | None, mặc định None) Tham số `provider`.
-        page: (int, mặc định 1) Tham số `page`.
-        limit: (int, mặc định 10) Tham số `limit`.
-        category: (str | None, mặc định None) Tham số `category`.
-        country: (str | None, mặc định None) Tham số `country`.
-        year: (int | None, mặc định None) Tham số `year`.
-        sort_lang: (str | None, mặc định None) Tham số `sort_lang`.
-        sort_field: (str | None, mặc định None) Tham số `sort_field`.
-        sort_type: (str | None, mặc định None) Tham số `sort_type`.
+        slug: The genre's unique slug identifier.
+        provider: Movie provider name, or `None` for the default.
+        page: Page number to fetch.
+        limit: Number of results per page.
+        category: Optional category filter.
+        country: Optional country filter.
+        year: Optional release-year filter.
+        sort_lang: Optional sort language.
+        sort_field: Optional field to sort by.
+        sort_type: Optional sort direction/type.
 
     Returns:
-        (dict) Kết quả trả về."""
+        The data-miner movie list response (dict)."""
     return await _get(
         f"/api/movies/genres/{slug}",
         _list_params(
@@ -219,22 +220,22 @@ async def movie_list_by_country(
     sort_field: str | None = None,
     sort_type: str | None = None,
 ) -> dict:
-    """Movie list by country (async).
+    """List movies from a given country, with optional filters.
 
     Args:
-        slug: (str) Tham số `slug`.
-        provider: (str | None, mặc định None) Tham số `provider`.
-        page: (int, mặc định 1) Tham số `page`.
-        limit: (int, mặc định 10) Tham số `limit`.
-        category: (str | None, mặc định None) Tham số `category`.
-        country: (str | None, mặc định None) Tham số `country`.
-        year: (int | None, mặc định None) Tham số `year`.
-        sort_lang: (str | None, mặc định None) Tham số `sort_lang`.
-        sort_field: (str | None, mặc định None) Tham số `sort_field`.
-        sort_type: (str | None, mặc định None) Tham số `sort_type`.
+        slug: The country's unique slug identifier.
+        provider: Movie provider name, or `None` for the default.
+        page: Page number to fetch.
+        limit: Number of results per page.
+        category: Optional category filter.
+        country: Optional country filter.
+        year: Optional release-year filter.
+        sort_lang: Optional sort language.
+        sort_field: Optional field to sort by.
+        sort_type: Optional sort direction/type.
 
     Returns:
-        (dict) Kết quả trả về."""
+        The data-miner movie list response (dict)."""
     return await _get(
         f"/api/movies/countries/{slug}",
         _list_params(
@@ -262,21 +263,21 @@ async def movie_list_by_year(
     sort_field: str | None = None,
     sort_type: str | None = None,
 ) -> dict:
-    """Movie list by year (async).
+    """List movies released in a given year, with optional filters.
 
     Args:
-        year: (int) Tham số `year`.
-        provider: (str | None, mặc định None) Tham số `provider`.
-        page: (int, mặc định 1) Tham số `page`.
-        limit: (int, mặc định 10) Tham số `limit`.
-        category: (str | None, mặc định None) Tham số `category`.
-        country: (str | None, mặc định None) Tham số `country`.
-        sort_lang: (str | None, mặc định None) Tham số `sort_lang`.
-        sort_field: (str | None, mặc định None) Tham số `sort_field`.
-        sort_type: (str | None, mặc định None) Tham số `sort_type`.
+        year: The release year to filter by.
+        provider: Movie provider name, or `None` for the default.
+        page: Page number to fetch.
+        limit: Number of results per page.
+        category: Optional category filter.
+        country: Optional country filter.
+        sort_lang: Optional sort language.
+        sort_field: Optional field to sort by.
+        sort_type: Optional sort direction/type.
 
     Returns:
-        (dict) Kết quả trả về."""
+        The data-miner movie list response (dict)."""
     return await _get(
         f"/api/movies/years/{year}",
         _list_params(
@@ -293,22 +294,22 @@ async def movie_list_by_year(
 
 
 async def movie_get_genres(provider: str | None = None) -> dict:
-    """Movie get genres (async).
+    """List the available movie genres for a provider.
 
     Args:
-        provider: (str | None, mặc định None) Tham số `provider`.
+        provider: Movie provider name, or `None` for the default.
 
     Returns:
-        (dict) Kết quả trả về."""
+        The data-miner genres metadata response (dict)."""
     return await _get("/api/movies/meta/genres", {"provider": _movie_provider(provider)})
 
 
 async def movie_get_countries(provider: str | None = None) -> dict:
-    """Movie get countries (async).
+    """List the available movie countries for a provider.
 
     Args:
-        provider: (str | None, mặc định None) Tham số `provider`.
+        provider: Movie provider name, or `None` for the default.
 
     Returns:
-        (dict) Kết quả trả về."""
+        The data-miner countries metadata response (dict)."""
     return await _get("/api/movies/meta/countries", {"provider": _movie_provider(provider)})

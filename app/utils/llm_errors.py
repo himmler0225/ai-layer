@@ -3,17 +3,22 @@ import logging
 
 from openai import APIError, APIStatusError, APITimeoutError, RateLimitError
 
-from app.i18n import t
+from app.config.logger import log_event
+from app.i18n import get_locale, t
 
 
 def request_id(exc: Exception) -> str | None:
-    """Request id.
+    """Extract the upstream request ID from an OpenAI SDK exception, if present.
+
+    Checks the exception's `request_id` attribute first, then falls back
+    to the `error.request_id` field of its response body.
 
     Args:
-        exc: (Exception) Tham số `exc`.
+        exc: The exception raised by the OpenAI client.
 
     Returns:
-        (str | None) Kết quả trả về."""
+        The request ID as a string, or None if not found.
+    """
     rid = getattr(exc, "request_id", None)
     if rid:
         return str(rid)
@@ -25,66 +30,51 @@ def request_id(exc: Exception) -> str | None:
     return None
 
 
-def user_message(exc: Exception) -> tuple[str, str]:
-    """User message.
+def _error_tag(rid: str | None, locale: str) -> str:
+    if not rid:
+        return ""
+    if locale == "vi":
+        return f" Mã lỗi: {rid}."
+    return f" Error code: {rid}."
 
-    Args:
-        exc: (Exception) Tham số `exc`.
 
-    Returns:
-        (tuple[str, str]) Kết quả trả về."""
+def user_message(exc: Exception, locale: str | None = None) -> str:
+    """Localized user-facing message for an LLM/upstream exception."""
+    loc = locale or get_locale()
     rid = request_id(exc)
-    tag_vi = f" Mã lỗi: {rid}." if rid else ""
-    tag_en = f" Error code: {rid}." if rid else ""
-    tag = {"tag": tag_vi}
-    tag_en_kw = {"tag": tag_en}
+    tag = {"tag": _error_tag(rid, loc)}
 
     if isinstance(exc, RateLimitError):
-        return t("llm.rate_limit", "vi", **tag), t("llm.rate_limit", "en", **tag_en_kw)
+        return t("llm.rate_limit", loc, **tag)
     if isinstance(exc, APITimeoutError):
-        return t("llm.timeout", "vi", **tag), t("llm.timeout", "en", **tag_en_kw)
+        return t("llm.timeout", loc, **tag)
     if isinstance(exc, APIStatusError):
         code = getattr(exc, "status_code", 0)
         raw = str(exc)
         if code == 401:
-            return t("llm.invalid_key", "vi"), t("llm.invalid_key", "en")
+            return t("llm.invalid_key", loc)
         if code == 402 or "quota" in raw.lower() or "billing" in raw.lower():
-            return t("llm.quota", "vi", **tag), t("llm.quota", "en", **tag_en_kw)
+            return t("llm.quota", loc, **tag)
         if code in (502, 503, 504):
-            kw = {"code": code, "tag": tag_vi}
-            kw_en = {"code": code, "tag": tag_en}
-            return t("llm.gateway", "vi", **kw), t("llm.gateway", "en", **kw_en)
+            return t("llm.gateway", loc, code=code, **tag)
         if code >= 500:
-            kw = {"code": code, "tag": tag_vi}
-            kw_en = {"code": code, "tag": tag_en}
-            return t("llm.server", "vi", **kw), t("llm.server", "en", **kw_en)
+            return t("llm.server", loc, code=code, **tag)
         if code == 400:
             if "upstream" in raw.lower() or "từ chối" in raw.lower():
-                return (
-                    t("llm.bad_request_upstream", "vi", **tag),
-                    t("llm.bad_request_upstream", "en", **tag_en_kw),
-                )
-            return t("llm.bad_request", "vi", **tag), t("llm.bad_request", "en", **tag_en_kw)
+                return t("llm.bad_request_upstream", loc, **tag)
+            return t("llm.bad_request", loc, **tag)
     if isinstance(exc, APIError):
         raw = str(exc)
         if "quota" in raw.lower() or "billing" in raw.lower():
-            return t("llm.quota", "vi", **tag), t("llm.quota", "en", **tag_en_kw)
+            return t("llm.quota", loc, **tag)
         if "error occurred while processing" in raw.lower():
-            return t("llm.crash", "vi", **tag), t("llm.crash", "en", **tag_en_kw)
-        detail = raw[:200]
-        return (
-            t("llm.raw", "vi", detail=detail, tag=tag_vi),
-            t("llm.raw", "en", detail=detail, tag=tag_en),
-        )
-    detail = str(exc)
-    return (
-        t("llm.unknown", "vi", detail=detail, tag=tag_vi),
-        t("llm.unknown", "en", detail=detail, tag=tag_en),
-    )
+            return t("llm.crash", loc, **tag)
+        return t("llm.raw", loc, detail=raw[:200], **tag)
+    return t("llm.unknown", loc, detail=str(exc), **tag)
 
 
 def _is_connection_drop(exc: Exception) -> bool:
-    """SSE/body rỗng, TCP reset, gateway đóng giữa chừng."""
+    """Detect a mid-request connection drop: empty SSE/body, TCP reset, or gateway closing early."""
     if isinstance(exc, (ConnectionError, TimeoutError, json.JSONDecodeError)):
         return True
     if isinstance(exc, OSError) and getattr(exc, "errno", None) in (54, 104, 110, 111):
@@ -105,13 +95,15 @@ def _is_connection_drop(exc: Exception) -> bool:
 
 
 def should_retry(exc: Exception) -> bool:
-    """Should retry.
+    """Decide whether an LLM/upstream call should be retried after this exception.
 
     Args:
-        exc: (Exception) Tham số `exc`.
+        exc: The exception raised by the LLM call.
 
     Returns:
-        (bool) Kết quả trả về."""
+        True for rate limits, timeouts, 5xx status errors, or detected
+        connection drops; False otherwise.
+    """
     if isinstance(exc, (RateLimitError, APITimeoutError)):
         return True
     if isinstance(exc, APIStatusError) and getattr(exc, "status_code", 0) in (
@@ -127,13 +119,14 @@ def should_retry(exc: Exception) -> bool:
 
 
 def is_upstream_gateway_error(exc: Exception) -> bool:
-    """Is upstream gateway error.
+    """Check whether an exception represents a 502/503/504 gateway error from the upstream API.
 
     Args:
-        exc: (Exception) Tham số `exc`.
+        exc: The exception raised by the LLM call.
 
     Returns:
-        (bool) Kết quả trả về."""
+        True if `exc` is an `APIStatusError` with status code 502, 503, or 504.
+    """
     return isinstance(exc, APIStatusError) and getattr(exc, "status_code", 0) in (
         502,
         503,
@@ -142,18 +135,13 @@ def is_upstream_gateway_error(exc: Exception) -> bool:
 
 
 def log_error(logger: logging.Logger, exc: Exception, *, where: str = "") -> None:
-    """Log error.
-
-    Args:
-        logger: (logging.Logger) Tham số `logger`.
-        exc: (Exception) Tham số `exc`.
-        where: (str, mặc định '') Tham số `where`.
-
-    Returns:
-        (None) Kết quả trả về."""
+    """Log an LLM/upstream exception with a consistent format."""
     logger.error(
-        "[llm] %s err=%s request_id=%s",
-        where or "call",
-        exc,
-        request_id(exc),
+        log_event(
+            "llm",
+            "call failed",
+            where=where or "call",
+            error=exc,
+            request_id=request_id(exc),
+        )
     )

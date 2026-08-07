@@ -3,16 +3,18 @@ from app.tools.movie_definitions import MOVIE_TOOLS
 from app.tools.rag_definitions import RAG_TOOLS
 from app.tools.tiktok_definitions import TIKTOK_TOOLS
 from app.tools.util_definitions import UTIL_TOOLS
+from app.tools.web_definitions import WEB_TOOLS
 from app.tools.youtube_definitions import YOUTUBE_TOOLS
 
 _RAG = RAG_TOOLS if RAG_ENABLED else []
 
 # Legacy static sets (AGENT_CRAWL_BACKEND=http)
-ALL_TOOLS = _RAG + YOUTUBE_TOOLS + TIKTOK_TOOLS + MOVIE_TOOLS + UTIL_TOOLS
+ALL_TOOLS = _RAG + YOUTUBE_TOOLS + TIKTOK_TOOLS + MOVIE_TOOLS + WEB_TOOLS + UTIL_TOOLS
 TOOL_SETS = {
     "youtube": _RAG + YOUTUBE_TOOLS + UTIL_TOOLS,
     "tiktok": _RAG + TIKTOK_TOOLS + UTIL_TOOLS,
     "movies": MOVIE_TOOLS + UTIL_TOOLS,
+    "web": WEB_TOOLS + UTIL_TOOLS,
     "all": ALL_TOOLS,
 }
 
@@ -28,7 +30,10 @@ async def resolve_tool_set(name: str) -> list[dict]:
     from app.mcp.config import AGENT_CRAWL_BACKEND
 
     key = name if name in TOOL_SETS else "all"
-    if AGENT_CRAWL_BACKEND != "mcp":
+    # "web" does not go through the data-miner MCP crawl catalog (that catalog
+    # covers youtube/tiktok/movies) — web_search is always a static tool that
+    # calls the REST endpoint directly.
+    if key == "web" or AGENT_CRAWL_BACKEND != "mcp":
         return TOOL_SETS[key]
 
     from app.mcp.catalog import crawl_catalog

@@ -10,13 +10,18 @@ logger = Logger.get(__name__)
 
 
 def extract_response_text(response: Any) -> str:
-    """Trích xuất response text.
+    """Extract the concatenated output text from an LLM response object.
+
+    Prefers the response's `output_text` shortcut when available;
+    otherwise concatenates the text of all "output_text" content blocks
+    across "message" items in `response.output`.
 
     Args:
-        response: (Any) Tham số `response`.
+        response: An `LLMResponse` (or duck-typed equivalent) returned by the router.
 
     Returns:
-        (str) Kết quả trả về."""
+        The concatenated output text, or an empty string if none is found.
+    """
     if isinstance(response, LLMResponse):
         if response.output_text:
             return response.output_text
@@ -40,14 +45,16 @@ def extract_response_text(response: Any) -> str:
 
 
 def is_incomplete_for(reason: str, response: Any) -> bool:
-    """Is incomplete for.
+    """Check whether a response was marked incomplete for a specific reason.
 
     Args:
-        reason: (str) Tham số `reason`.
-        response: (Any) Tham số `response`.
+        reason: The incomplete-details reason to match (e.g. "max_output_tokens").
+        response: The LLM response object to inspect.
 
     Returns:
-        (bool) Kết quả trả về."""
+        True if `response.status == "incomplete"` and its
+        `incomplete_details.reason` equals `reason`.
+    """
     return (
         getattr(response, "status", None) == "incomplete"
         and getattr(response, "incomplete_details", None) is not None
@@ -56,13 +63,15 @@ def is_incomplete_for(reason: str, response: Any) -> bool:
 
 
 def status_error(response: Any) -> str | None:
-    """Status error.
+    """Build an error message if a response's status indicates failure or cancellation.
 
     Args:
-        response: (Any) Tham số `response`.
+        response: The LLM response object to inspect.
 
     Returns:
-        (str | None) Kết quả trả về."""
+        A message like "LLM response failed: ..." if status is "failed" or
+        "cancelled", otherwise None.
+    """
     status = getattr(response, "status", None)
     if status in ("failed", "cancelled"):
         return f"LLM response {status}: {getattr(response, 'error', None)}"
@@ -70,13 +79,19 @@ def status_error(response: Any) -> str | None:
 
 
 def output_item_to_input(item: Any) -> dict:
-    """Output item to input.
+    """Convert a single response output item into the input-item shape for the next turn.
+
+    Used to feed a prior turn's output (function calls, messages, or other
+    item types) back into the LLM as conversation input.
 
     Args:
-        item: (Any) Tham số `item`.
+        item: An output item from an LLM response (e.g. function_call or message).
 
     Returns:
-        (dict) Kết quả trả về."""
+        A plain dict shaped for "function_call" or "message" items; for
+        any other item type, the model-dumped dict with "id", "status",
+        and "parsed_arguments" keys stripped.
+    """
     item_type = getattr(item, "type", None)
     if item_type == "function_call":
         return {
@@ -102,13 +117,14 @@ def output_item_to_input(item: Any) -> dict:
 
 
 def output_items_to_input(output: list[Any]) -> list[dict]:
-    """Output items to input.
+    """Convert a list of response output items into input-item shape via `output_item_to_input`.
 
     Args:
-        output: (list[Any]) Tham số `output`.
+        output: List of output items from an LLM response.
 
     Returns:
-        (list[dict]) Kết quả trả về."""
+        The converted list of input-item dicts.
+    """
     return [output_item_to_input(item) for item in output]
 
 
@@ -122,19 +138,20 @@ async def create_response(
     tools: list[dict] | None = None,
     tool_choice: str | dict[str, Any] | None = None,
 ) -> Any:
-    """Tạo response (async).
+    """Create an LLM response via the task-routed model, passing through only the given kwargs.
 
     Args:
-        task: (str, mặc định TASK_DEFAULT) Tham số `task`.
-        model: (str | None, mặc định None) Tham số `model`.
-        instructions: (str | None, mặc định None) Tham số `instructions`.
-        input: (Any, mặc định None) Tham số `input`.
-        max_output_tokens: (int | None, mặc định None) Tham số `max_output_tokens`.
-        tools: (list[dict] | None, mặc định None) Tham số `tools`.
-        tool_choice: (str | dict[str, Any] | None, mặc định None) Tham số `tool_choice`.
+        task: Task key used to select the model/config from the router.
+        model: Optional model override.
+        instructions: Optional system/developer instructions.
+        input: Conversation input (string or list of input items).
+        max_output_tokens: Optional cap on output tokens.
+        tools: Optional list of tool schemas to make available to the model.
+        tool_choice: Optional tool-choice directive ("auto", "none", or a specific tool).
 
     Returns:
-        (Any) Kết quả trả về."""
+        The raw response object from the underlying router/client.
+    """
     kwargs: dict[str, Any] = {}
     if model is not None:
         kwargs["model"] = model
@@ -153,14 +170,15 @@ async def create_response(
 
 @asynccontextmanager
 async def response_stream(*, task: str = TASK_DEFAULT, **kwargs: Any) -> AsyncIterator[Any]:
-    """Response stream (async).
+    """Open a streaming LLM response as an async context manager, delegating to the router.
 
     Args:
-        task: (str, mặc định TASK_DEFAULT) Tham số `task`.
-        **kwargs: (Any) Tham số `**kwargs`.
+        task: Task key used to select the model/config from the router.
+        **kwargs: Additional arguments forwarded to the router's `response_stream`.
 
-    Returns:
-        (AsyncIterator[Any]) Kết quả trả về."""
+    Yields:
+        The streaming response object from the underlying router/client.
+    """
     async with get_router().response_stream(task, **kwargs) as stream:
         yield stream
 
@@ -173,17 +191,18 @@ async def complete(
     *,
     task: str = TASK_DEFAULT,
 ) -> str:
-    """Hoàn tất (async).
+    """Run a simple prompt-completion call through the task-routed model.
 
     Args:
-        user_prompt: (str) Tham số `user_prompt`.
-        system_prompt: (str) Tham số `system_prompt`.
-        max_tokens: (int | None, mặc định None) Tham số `max_tokens`.
-        model: (str | None, mặc định None) Tham số `model`.
-        task: (str, mặc định TASK_DEFAULT) Tham số `task`.
+        user_prompt: The user-facing prompt text.
+        system_prompt: The system/instruction prompt text.
+        max_tokens: Optional cap on output tokens.
+        model: Optional model override.
+        task: Task key used to select the model/config from the router.
 
     Returns:
-        (str) Kết quả trả về."""
+        The completion text returned by the router.
+    """
     return await get_router().complete(
         task,
         user_prompt=user_prompt,
@@ -201,17 +220,18 @@ async def complete_json(
     *,
     task: str = TASK_DEFAULT,
 ) -> str:
-    """Hoàn tất json (async).
+    """Run a prompt-completion call through the task-routed model, requesting a JSON-formatted reply.
 
     Args:
-        user_prompt: (str) Tham số `user_prompt`.
-        system_prompt: (str) Tham số `system_prompt`.
-        max_tokens: (int | None, mặc định None) Tham số `max_tokens`.
-        model: (str | None, mặc định None) Tham số `model`.
-        task: (str, mặc định TASK_DEFAULT) Tham số `task`.
+        user_prompt: The user-facing prompt text.
+        system_prompt: The system/instruction prompt text.
+        max_tokens: Optional cap on output tokens.
+        model: Optional model override.
+        task: Task key used to select the model/config from the router.
 
     Returns:
-        (str) Kết quả trả về."""
+        The raw JSON text returned by the router (not yet parsed).
+    """
     return await get_router().complete_json(
         task,
         user_prompt=user_prompt,

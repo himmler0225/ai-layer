@@ -16,13 +16,18 @@ _HANDLERS = {
 
 
 async def dispatch(envelope: dict) -> None:
-    """Dispatch `dispatch` (async).
+    """Look up and invoke the ingest handler matching an envelope's routing key.
 
     Args:
-        envelope: (dict) Tham số `envelope`.
+        envelope: Ingest envelope dict; must contain a "routing_key" matching one
+            of the registered ROUTING_* constants.
 
     Returns:
-        (None) Kết quả trả về."""
+        None.
+
+    Raises:
+        AiLayerValidationError: If the routing key has no registered handler.
+    """
     routing_key = envelope.get("routing_key", "")
     handler = _HANDLERS.get(routing_key)
     if not handler:

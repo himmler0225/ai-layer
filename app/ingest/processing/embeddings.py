@@ -4,13 +4,15 @@ _BATCH_SIZE = 64
 
 
 async def embed_texts(texts: list[str]) -> list[list[float]]:
-    """Embed texts (async).
+    """Compute embedding vectors for a list of texts, batching requests to the router.
 
     Args:
-        texts: (list[str]) Tham số `texts`.
+        texts: Texts to embed.
 
     Returns:
-        (list[list[float]]) Kết quả trả về."""
+        A list of embedding vectors, one per input text, in the same order; []
+        if `texts` is empty.
+    """
     if not texts:
         return []
     router = get_router()

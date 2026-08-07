@@ -2,14 +2,17 @@ from app.config.service_auth import AI_LAYER_SERVICE_NAME
 
 
 def get_data_miner_headers(api_key: str, service_token: str = "") -> dict[str, str]:
-    """Lấy data miner headers.
+    """Build the HTTP headers used to authenticate requests to the data-miner service.
 
     Args:
-        api_key: (str) Tham số `api_key`.
-        service_token: (str, mặc định '') Tham số `service_token`.
+        api_key: API key identifying this caller to the data-miner service.
+        service_token: Optional inter-service token; when provided, sent as
+            `X-Service-Token`.
 
     Returns:
-        (Dict[str, str]) Kết quả trả về."""
+        dict[str, str]: Headers including `X-API-Key`, `X-Service-Name`, and
+        optionally `X-Service-Token`.
+    """
     headers = {
         "X-API-Key": api_key,
         "X-Service-Name": AI_LAYER_SERVICE_NAME,
@@ -20,13 +23,14 @@ def get_data_miner_headers(api_key: str, service_token: str = "") -> dict[str, s
 
 
 def get_supabase_rest_headers(service_key: str) -> dict[str, str]:
-    """Lấy supabase rest headers.
+    """Build the HTTP headers for authenticating against the Supabase REST API.
 
     Args:
-        service_key: (str) Tham số `service_key`.
+        service_key: Supabase service-role key.
 
     Returns:
-        (Dict[str, str]) Kết quả trả về."""
+        dict[str, str]: `apikey` and `Authorization: Bearer` headers.
+    """
     return {
         "apikey": service_key,
         "Authorization": f"Bearer {service_key}",
@@ -34,14 +38,15 @@ def get_supabase_rest_headers(service_key: str) -> dict[str, str]:
 
 
 def get_supabase_auth_headers(token: str, anon_key: str) -> dict[str, str]:
-    """Lấy supabase auth headers.
+    """Build the HTTP headers for a user-authenticated Supabase Auth request.
 
     Args:
-        token: (str) Tham số `token`.
-        anon_key: (str) Tham số `anon_key`.
+        token: User's Supabase access (JWT) token.
+        anon_key: Supabase anon/public API key.
 
     Returns:
-        (Dict[str, str]) Kết quả trả về."""
+        dict[str, str]: `Authorization: Bearer` and `apikey` headers.
+    """
     return {
         "Authorization": f"Bearer {token}",
         "apikey": anon_key,

@@ -4,7 +4,7 @@ from typing import Any
 
 @dataclass
 class OutputTextContent:
-    """Lớp `OutputTextContent` (kế thừa object)."""
+    """A single text content block within a Responses-API message output item."""
 
     type: str = "output_text"
     text: str = ""
@@ -12,7 +12,8 @@ class OutputTextContent:
 
 @dataclass
 class MessageOutputItem:
-    """Lớp `MessageOutputItem` (kế thừa object)."""
+    """A Responses-API output item representing an assistant/user message,
+    holding one or more text content blocks."""
 
     type: str = "message"
     role: str = "assistant"
@@ -21,7 +22,9 @@ class MessageOutputItem:
 
 @dataclass
 class FunctionCallItem:
-    """Lớp `FunctionCallItem` (kế thừa object)."""
+    """A Responses-API output item representing a single tool/function call
+    requested by the model, with its call id, function name, and JSON
+    arguments string."""
 
     type: str = "function_call"
     call_id: str = ""
@@ -31,14 +34,15 @@ class FunctionCallItem:
 
 @dataclass
 class IncompleteDetails:
-    """Lớp `IncompleteDetails` (kế thừa object)."""
+    """Explains why an `LLMResponse` is incomplete (e.g. truncated output)."""
 
     reason: str = ""
 
 
 @dataclass
 class LLMResponse:
-    """Lớp `LLMResponse` (kế thừa object)."""
+    """Normalized result of an LLM call, mirroring the shape of the OpenAI
+    Responses API regardless of which underlying provider/API produced it."""
 
     status: str = "completed"
     output: list[Any] = field(default_factory=list)
@@ -47,16 +51,17 @@ class LLMResponse:
     error: Any = None
 
     def model_dump(self) -> dict:
-        """Model dump.
+        """Serialize the response to a plain dict for JSON responses.
 
         Returns:
-            (dict) Kết quả trả về."""
+            A dict with `status`, `output`, and `output_text` keys (omits
+            `incomplete_details` and `error`)."""
         return {"status": self.status, "output": self.output, "output_text": self.output_text}
 
 
 @dataclass
 class StreamTextDelta:
-    """Lớp `StreamTextDelta` (kế thừa object)."""
+    """A single incremental text chunk emitted while streaming an LLM response."""
 
     type: str = "response.output_text.delta"
     delta: str = ""

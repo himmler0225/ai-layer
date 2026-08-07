@@ -4,16 +4,17 @@ import app.config.settings as settings
 from app.config.constants import REMOTE_CONFIG_TIMEOUT
 from app.config.headers import get_supabase_rest_headers
 from app.config.loader import apply_schema, load_schema, parse_remote, validate_required
-from app.config.logger import Logger
+from app.config.logger import Logger, log_event
 
 logger = Logger.get(__name__)
 
 
 async def load_and_apply() -> None:
-    """Tải and apply (async).
+    """Fetch remote config from Supabase and apply it to settings/prompts/runtime.
 
-    Returns:
-        (None) Kết quả trả về."""
+    Falls back to validating only local/env-based required config when Supabase
+    credentials are missing, the request fails, or the response isn't successful.
+    """
     schema = load_schema()
 
     if not settings.SUPABASE_URL or not settings.SUPABASE_SERVICE_KEY:
@@ -36,5 +37,5 @@ async def load_and_apply() -> None:
         return
 
     apply_schema(parse_remote(remote), schema)
-    logger.info("[remote_config] applied keys=%d", len(remote))
+    logger.info(log_event("remote_config", "applied", keys=len(remote)))
     validate_required(schema)

@@ -7,29 +7,35 @@ _OVERLAP_WORDS = 50
 
 
 def make_chunk_id(video_id: str, chunk_type: str, content: str) -> str:
-    """Make chunk id.
+    """Derive a stable, content-addressed id for a chunk.
 
     Args:
-        video_id: (str) Tham số `video_id`.
-        chunk_type: (str) Tham số `chunk_type`.
-        content: (str) Tham số `content`.
+        video_id: Id of the video the chunk was derived from.
+        chunk_type: Kind of chunk, e.g. "transcript" or "comment".
+        content: Chunk text content, hashed to make the id deterministic.
 
     Returns:
-        (str) Kết quả trả về."""
+        A "{video_id}:{hash}" id string.
+    """
     digest = hashlib.sha256(f"{video_id}:{chunk_type}:{content}".encode()).hexdigest()[:20]
     return f"{video_id}:{digest}"
 
 
 def chunk_transcript(video_id: str, text: str, *, language: str = "") -> list[ChunkItem]:
-    """Chunk transcript.
+    """Split a transcript into overlapping word-based chunks for embedding.
+
+    Slides a window of `_WORDS_PER_CHUNK` words over the transcript, stepping by
+    `_WORDS_PER_CHUNK - _OVERLAP_WORDS` words each iteration, and skips any chunk
+    shorter than 20 characters.
 
     Args:
-        video_id: (str) Tham số `video_id`.
-        text: (str) Tham số `text`.
-        language: (str, mặc định '') Tham số `language`.
+        video_id: Id of the video the transcript belongs to.
+        text: Full transcript text.
+        language: Optional transcript language code, stored in each chunk's metadata.
 
     Returns:
-        (list[ChunkItem]) Kết quả trả về."""
+        A list of ChunkItem with chunk_type="transcript"; [] if `text` is empty.
+    """
     words = (text or "").split()
     if not words:
         return []
@@ -53,14 +59,20 @@ def chunk_transcript(video_id: str, text: str, *, language: str = "") -> list[Ch
 
 
 def comment_chunks(video_id: str, comments: list[dict]) -> list[ChunkItem]:
-    """Comment chunks.
+    """Build one embeddable chunk per indexable comment.
+
+    Filters out comments that fail `is_indexable_comment` (too short, spammy, or
+    with too few alphanumeric characters), then wraps each remaining comment's
+    content as a ChunkItem.
 
     Args:
-        video_id: (str) Tham số `video_id`.
-        comments: (list[dict]) Tham số `comments`.
+        video_id: Id of the video the comments belong to.
+        comments: Normalized comment dicts (as produced by `map_comment`).
 
     Returns:
-        (list[ChunkItem]) Kết quả trả về."""
+        A list of ChunkItem with chunk_type="comment", carrying comment_id, author,
+        and likes in metadata.
+    """
     items: list[ChunkItem] = []
     for comment in comments:
         content = (comment.get("content") or "").strip()

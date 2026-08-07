@@ -11,13 +11,14 @@ def _unique_statement_name() -> str:
 
 
 def normalize_async_database_url(url: str) -> str:
-    """Chuẩn hóa async database url.
+    """Rewrite a plain postgres/postgresql URL to use the asyncpg driver.
 
     Args:
-        url: (str) Tham số `url`.
+        url: Database URL, potentially using the `postgres://` or `postgresql://` scheme.
 
     Returns:
-        (str) Kết quả trả về."""
+        str: The URL with scheme `postgresql+asyncpg://` if it matched, otherwise unchanged.
+    """
     if url.startswith("postgresql://"):
         return url.replace("postgresql://", "postgresql+asyncpg://", 1)
     if url.startswith("postgres://"):
@@ -36,13 +37,15 @@ def strip_unsupported_query_params(url: str) -> str:
 
 
 def database_connect_args(url: str) -> dict:
-    """Database connect args.
+    """Derive asyncpg connect_args (SSL context, pgbouncer workarounds) from a database URL.
 
     Args:
-        url: (str) Tham số `url`.
+        url: Database URL to inspect (scheme, host, port, and query string).
 
     Returns:
-        (dict) Kết quả trả về."""
+        dict: Extra keyword arguments for `create_async_engine`/asyncpg, covering
+        SSL context setup and pgbouncer-safe prepared statement handling.
+    """
     parsed = urlparse(url)
     query = parse_qs(parsed.query)
     sslmode = (query.get("sslmode") or [None])[0]

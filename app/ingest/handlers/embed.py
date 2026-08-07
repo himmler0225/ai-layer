@@ -3,13 +3,20 @@ from app.repositories.chunks import upsert_chunks
 
 
 async def handle_chunks_embed(envelope: dict) -> None:
-    """Xử lý chunks embed (async).
+    """Embed the chunks in an envelope's payload and upsert them into chunk storage.
+
+    Filters out chunks with empty content, computes embedding vectors for the rest,
+    attaches chunk type and (if present) movie hint to each chunk's metadata, then
+    persists the resulting rows.
 
     Args:
-        envelope: (dict) Tham số `envelope`.
+        envelope: Ingest envelope dict with "video_id"/"platform"/"movie_hint" and a
+            "payload" containing "chunks" (list of chunk dicts with id/content/
+            chunk_type/metadata).
 
     Returns:
-        (None) Kết quả trả về."""
+        None. Does nothing if there is no video id or no non-empty chunks.
+    """
     payload = envelope.get("payload") or {}
     video_id = envelope.get("video_id") or payload.get("video_id")
     platform = envelope.get("platform") or payload.get("platform") or "youtube"

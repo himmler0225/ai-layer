@@ -12,17 +12,14 @@ class AiLayerError(Exception):
         message_params: dict | None = None,
         cause: Exception | None = None,
     ) -> None:
-        """(Nội bộ) Khởi tạo `__init__`.
+        """Initialize the error with a fallback message plus optional localization/context.
 
         Args:
-            message: (str) Tham số `message`.
-            message_key: (str | None, mặc định None) Tham số `message_key`.
-            message_en: (str | None, mặc định None) Tham số `message_en`.
-            message_params: (dict | None, mặc định None) Tham số `message_params`.
-            cause: (Exception | None, mặc định None) Tham số `cause`.
-
-        Returns:
-            (None) Kết quả trả về."""
+            message: Fallback message, used if no localized message can be resolved.
+            message_key: i18n key used to look up a localized client-facing message.
+            message_en: Explicit English override for the client-facing message.
+            message_params: Parameters interpolated into the localized message.
+            cause: Original exception that triggered this error, if any."""
         super().__init__(message)
         self.message = message
         self.message_key = message_key

@@ -16,9 +16,8 @@ from app.api.agent import router as agent_router
 from app.api.auth import router as auth_router
 from app.api.history import router as history_router
 from app.api.runtime import router as runtime_router
-from app.api.utilities import router as utilities_router
 from app.api.youtube import router as youtube_router
-from app.config.logger import Logger
+from app.config.logger import Logger, log_event
 from app.exceptions import AiLayerError
 from app.i18n.responses import client_message, localize_detail
 from app.lifecycle import shutdown, startup
@@ -34,12 +33,13 @@ logger = Logger.get(__name__)
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    """Lifespan (async).
+    """FastAPI lifespan: load remote config and run startup tasks before serving,
+    then run shutdown tasks when the app stops.
 
     Args:
-        _app: (FastAPI) Tham số `_app`."""
+        _app: The FastAPI application instance (unused)."""
     Logger.sync_uvicorn(settings.LOG_LEVEL)
-    logger.info("[startup] loading remote config")
+    logger.info(log_event("startup", "loading remote config"))
     from app.config.remote import load_and_apply
 
     await load_and_apply()
@@ -70,14 +70,14 @@ app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
 
 @app.exception_handler(AiLayerError)
 async def ai_layer_error_handler(request: Request, exc: AiLayerError) -> JSONResponse:
-    """Ai layer error handler (async).
+    """Convert an AiLayerError into a localized JSON error response.
 
     Args:
-        request: (Request) Tham số `request`.
-        exc: (AiLayerError) Tham số `exc`.
+        request: Incoming request, used to resolve the client's locale.
+        exc: The raised application error.
 
     Returns:
-        (JSONResponse) Kết quả trả về."""
+        JSONResponse with the error's HTTP status and a localized message."""
     from app.i18n.locale import resolve_locale
 
     locale = resolve_locale(request)
@@ -89,14 +89,15 @@ async def ai_layer_error_handler(request: Request, exc: AiLayerError) -> JSONRes
 
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
-    """Http exception handler (async).
+    """Convert a FastAPI HTTPException into a localized JSON error response.
 
     Args:
-        request: (Request) Tham số `request`.
-        exc: (HTTPException) Tham số `exc`.
+        request: Incoming request, used to resolve the client's locale.
+        exc: The raised HTTP exception.
 
     Returns:
-        (JSONResponse) Kết quả trả về."""
+        JSONResponse with the exception's status code and localized detail
+        wrapped in the standard ApiResponse envelope."""
     from app.i18n.locale import resolve_locale
 
     locale = resolve_locale(request)
@@ -108,11 +109,14 @@ async def http_exception_handler(request: Request, exc: HTTPException) -> JSONRe
 
 @app.middleware("http")
 async def add_process_time(request: Request, call_next):
-    """Add process time (async).
+    """Middleware that times each request and reports the duration to the client.
 
     Args:
-        request: (Request) Tham số `request`.
-        call_next: (Any) Tham số `call_next`."""
+        request: The incoming request.
+        call_next: The next handler in the middleware chain.
+
+    Returns:
+        The response, with an added X-Process-Time-Ms header."""
     start = time.perf_counter()
     response = await call_next(request)
     response.headers["X-Process-Time-Ms"] = str(round((time.perf_counter() - start) * 1000, 2))
@@ -121,7 +125,6 @@ async def add_process_time(request: Request, call_next):
 
 app.include_router(youtube_router, prefix="/ai", tags=["YouTube AI"])
 app.include_router(agent_router, prefix="/ai", tags=["Agent"])
-app.include_router(utilities_router, prefix="/ai", tags=["Utilities"])
 app.include_router(history_router, prefix="/ai", tags=["History"])
 app.include_router(admin_router, prefix="/ai", tags=["Admin"])
 app.include_router(auth_router, prefix="/ai", tags=["Auth"])
@@ -130,6 +133,6 @@ app.include_router(runtime_router, prefix="/ai", tags=["Runtime"])
 
 @app.get("/health", tags=["Health"])
 async def health():
-    """Health (async)."""
+    """Health check endpoint reporting overall status and per-dependency checks."""
     checks = await collect_checks()
     return ApiResponse.ok({"service": "ai-layer", "healthy": is_healthy(checks), "checks": checks})

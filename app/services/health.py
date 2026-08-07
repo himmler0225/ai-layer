@@ -7,10 +7,12 @@ from app.config.loader import provider_settings_prefix, runtime
 
 
 async def check_postgres() -> str:
-    """Check postgres (async).
+    """Check Postgres connectivity by running a trivial `SELECT 1`.
 
     Returns:
-        (str) Kết quả trả về."""
+        "missing DATABASE_URL" if unconfigured, "ok" on success, or
+        "error: <exception>" if the query fails.
+    """
     if not settings.DATABASE_URL:
         return "missing DATABASE_URL"
     try:
@@ -27,10 +29,12 @@ async def check_postgres() -> str:
 
 
 async def check_redis() -> str:
-    """Check redis (async).
+    """Check Redis connectivity via a `PING`.
 
     Returns:
-        (str) Kết quả trả về."""
+        "unreachable" if no client could be obtained, "ok" on a successful
+        ping, or "error: <exception>" if the ping fails.
+    """
     try:
         from app.cache.client import get_redis
 
@@ -44,10 +48,13 @@ async def check_redis() -> str:
 
 
 async def check_data_miner() -> str:
-    """Check data miner (async).
+    """Check reachability of the external data-miner service via its `/health` endpoint.
 
     Returns:
-        (str) Kết quả trả về."""
+        "missing DATA_MINER_URL" or "missing DATA_MINER_KEY" if unconfigured,
+        "ok" on a successful response, "status <code>" for a non-success
+        HTTP status, or "unreachable: <message>" on a request error.
+    """
     if not settings.DATA_MINER_URL:
         return "missing DATA_MINER_URL"
     if not settings.DATA_MINER_KEY:
@@ -64,7 +71,13 @@ async def check_data_miner() -> str:
 
 
 def check_llm_key() -> str:
-    """API key của provider đang active trong AI_MODELS."""
+    """Check whether the API key for the currently active AI_MODELS provider is set.
+
+    Returns:
+        "missing AI_MODELS.is_active" if no provider is active, "set" if
+        the corresponding `<PREFIX>_API_KEY` setting has a value, or
+        "missing" otherwise.
+    """
     active = (runtime.active_provider or "").strip()
     if not active:
         return "missing AI_MODELS.is_active"
@@ -74,10 +87,12 @@ def check_llm_key() -> str:
 
 
 async def collect_checks() -> dict[str, str]:
-    """Thu thập checks (async).
+    """Run all health checks and gather their results into a single dict.
 
     Returns:
-        (dict[str, str]) Kết quả trả về."""
+        A dict with "postgres", "redis", "data_miner", and "llm_key" keys,
+        each holding the corresponding check's status string.
+    """
     return {
         "postgres": await check_postgres(),
         "redis": await check_redis(),
@@ -87,13 +102,16 @@ async def collect_checks() -> dict[str, str]:
 
 
 def is_healthy(checks: dict[str, str]) -> bool:
-    """Is healthy.
+    """Decide overall system health from individual check results.
 
     Args:
-        checks: (dict[str, str]) Tham số `checks`.
+        checks: Result dict from `collect_checks`, with "postgres", "redis",
+            "data_miner", and "llm_key" status strings.
 
     Returns:
-        (bool) Kết quả trả về."""
+        True only if postgres, redis, and data_miner are all "ok" and
+        llm_key is "set"; False otherwise.
+    """
     if checks.get("postgres") != "ok":
         return False
     if checks.get("redis") != "ok":

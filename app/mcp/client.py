@@ -17,7 +17,8 @@ from app.mcp.config import (
 
 @asynccontextmanager
 async def mcp_session():
-    """Mcp session (async)."""
+    """Open and initialize an MCP client session, over SSE or stdio depending
+    on `MCP_TRANSPORT`, closing it automatically on exit."""
     if MCP_TRANSPORT == MCPTransport.SSE:
         headers = {"Authorization": f"Bearer {MCP_SERVICE_TOKEN}"} if MCP_SERVICE_TOKEN else {}
         async with sse_client(url=mcp_sse_url(), headers=headers) as (read, write):
@@ -33,24 +34,28 @@ async def mcp_session():
 
 
 async def list_tools() -> list[dict]:
-    """Liệt kê tools (async).
+    """List the tools exposed by the MCP server.
 
     Returns:
-        (list[dict]) Kết quả trả về."""
+        A list of tool definitions as plain dicts (via `model_dump()`)."""
     async with mcp_session() as session:
         result = await session.list_tools()
         return [t.model_dump() for t in result.tools]
 
 
 async def call_tool(name: str, arguments: dict) -> dict:
-    """Call tool (async).
+    """Invoke a named MCP tool and parse its JSON text response.
 
     Args:
-        name: (str) Tham số `name`.
-        arguments: (dict) Tham số `arguments`.
+        name: The MCP tool name to call.
+        arguments: JSON-serializable arguments to pass to the tool.
 
     Returns:
-        (dict) Kết quả trả về."""
+        The tool's parsed JSON response. If the response is empty, returns
+        `{"success": False, "error": "empty MCP response", "tool": name}`; if
+        the response text isn't valid JSON, returns
+        `{"success": False, "error": "invalid JSON from MCP", "tool": name,
+        "raw": raw}`."""
     async with mcp_session() as session:
         result = await session.call_tool(name, arguments=arguments)
         if not result.content:

@@ -2,7 +2,7 @@ import asyncio
 import uuid
 from datetime import UTC, datetime
 
-from app.config.logger import Logger
+from app.config.logger import Logger, log_event
 from app.ingest.config import INGEST_ENABLED
 from app.ingest.schemas import IngestEnvelope
 
@@ -17,18 +17,34 @@ async def _run_dispatch(envelope: IngestEnvelope) -> None:
         await dispatch(envelope.model_dump())
     except Exception:
         logger.exception(
-            "[ingest] handler failed key=%s video=%s", envelope.routing_key, envelope.video_id or "-"
+            log_event(
+                "ingest",
+                "handler failed",
+                routing_key=envelope.routing_key,
+                video_id=envelope.video_id or "-",
+            )
         )
 
 
 async def publish(
     routing_key: str, *, platform: str, video_id: str = "", movie_hint: str = "", payload: dict | None = None
 ) -> None:
-    """Xếp lịch xử lý ingest trong-process (fire-and-forget), không qua broker.
+    """Schedule in-process ingest handling as a fire-and-forget background task (no broker).
 
-    Chạy dispatch như một background task thay vì await trực tiếp, để không
-    chặn phản hồi của agent cho user — giữ đúng ngữ nghĩa "publish vào queue"
-    của thiết kế RabbitMQ trước đây.
+    Builds an IngestEnvelope and runs its dispatch as a background asyncio task
+    instead of awaiting it directly, so the agent's response to the user isn't
+    blocked — preserving the "publish to a queue" semantics of the previous
+    RabbitMQ-based design without an actual broker.
+
+    Args:
+        routing_key: One of the ROUTING_* constants selecting the ingest handler.
+        platform: Either "youtube" or "tiktok".
+        video_id: Optional id of the video the payload relates to.
+        movie_hint: Optional free-text movie/product hint.
+        payload: Handler-specific payload data.
+
+    Returns:
+        None. Does nothing if ingest is disabled via INGEST_ENABLED.
     """
     if not INGEST_ENABLED:
         return

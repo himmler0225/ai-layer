@@ -5,7 +5,7 @@ from app.exceptions import AiLayerAuthError, AiLayerError, AiLayerNotFoundError
 from pydantic import BaseModel
 from app.auth.supabase import get_user_id
 from app.cache.client import get_redis
-from app.config.logger import Logger
+from app.config.logger import Logger, log_event
 from app.config.settings import HISTORY_MESSAGES_TTL, HISTORY_SESSIONS_TTL
 from app.middleware.auth import verify_api_key
 from app.repositories import chat as chat_repo
@@ -16,7 +16,7 @@ router = APIRouter(dependencies=[Depends(verify_api_key)])
 
 
 class SessionUpsert(BaseModel):
-    """Lớp `SessionUpsert` (kế thừa BaseModel)."""
+    """Request body for creating or updating a chat session record."""
 
     id: str
     title: str
@@ -25,13 +25,13 @@ class SessionUpsert(BaseModel):
 
 
 class SessionPatch(BaseModel):
-    """Lớp `SessionPatch` (kế thừa BaseModel)."""
+    """Request body for partially updating a chat session (currently just the title)."""
 
     title: str | None = None
 
 
 class MessageSave(BaseModel):
-    """Lớp `MessageSave` (kế thừa BaseModel)."""
+    """A single chat message to persist, as sent by the client when saving history."""
 
     id: str
     role: str
@@ -41,57 +41,56 @@ class MessageSave(BaseModel):
 
 
 async def _bust_sessions(redis, user_id: str) -> None:
-    """(Nội bộ) Bust sessions (async).
+    """Invalidate the cached session list for a user after it changes.
 
     Args:
-        redis: (Any) Tham số `redis`.
-        user_id: (str) Tham số `user_id`.
-
-    Returns:
-        (None) Kết quả trả về."""
+        redis: Redis client, or None if caching is disabled.
+        user_id: id whose cached session list should be dropped."""
     if redis:
         await redis.delete(f"history:sessions:{user_id}")
 
 
 async def _bust_messages(redis, session_id: str) -> None:
-    """(Nội bộ) Bust messages (async).
+    """Invalidate the cached message list for a session after it changes.
 
     Args:
-        redis: (Any) Tham số `redis`.
-        session_id: (str) Tham số `session_id`.
-
-    Returns:
-        (None) Kết quả trả về."""
+        redis: Redis client, or None if caching is disabled.
+        session_id: id whose cached messages should be dropped."""
     if redis:
         await redis.delete(f"history:messages:{session_id}")
 
 
 def _parse_token(authorization: str) -> str:
-    """(Nội bộ) Phân tích token.
+    """Strip the "Bearer " prefix from an Authorization header value.
 
     Args:
-        authorization: (str) Tham số `authorization`.
+        authorization: Raw Authorization header value.
 
     Returns:
-        (str) Kết quả trả về."""
+        The bare token string."""
     return authorization.removeprefix("Bearer ").strip()
 
 
 def _parse_dt(s: str) -> datetime:
-    """(Nội bộ) Phân tích dt.
+    """Parse an ISO-8601 timestamp (with trailing "Z" or offset) into a datetime.
 
     Args:
-        s: (str) Tham số `s`.
+        s: ISO-8601 timestamp string, e.g. a client-supplied created_at/updated_at.
 
     Returns:
-        (datetime) Kết quả trả về."""
+        The parsed datetime."""
     return datetime.fromisoformat(s.replace("Z", "+00:00"))
 
 
 async def _resolve_user_id(authorization: str | None, x_user_id: str | None) -> str:
-    """Resolve user id từ header `X-User-Id` (trusted service-to-service caller,
-    đã được xác thực bởi bên gọi — router này đã được `verify_api_key` bảo vệ)
-    hoặc từ Supabase bearer token (client gọi trực tiếp, hành vi cũ)."""
+    """Resolve the caller's user id, preferring the trusted `X-User-Id` header
+    from a service-to-service caller (already authenticated by that caller,
+    since this router is protected by `verify_api_key`), falling back to a
+    Supabase bearer token for direct client calls (legacy behavior).
+
+    Raises:
+        AiLayerAuthError: if neither an X-User-Id header nor an Authorization
+            header is provided."""
     if x_user_id:
         return x_user_id
     if not authorization:
@@ -101,14 +100,14 @@ async def _resolve_user_id(authorization: str | None, x_user_id: str | None) -> 
 
 @router.get("/history/admin/stats")
 async def admin_session_stats(days: int = 7):
-    """Admin session stats (async).
+    """Return chat session/message counts for the admin dashboard.
 
     Args:
-        days: (int, mặc định 7) Tham số `days`."""
+        days: number of trailing days to aggregate over (default 7)."""
     try:
         data = await chat_repo.session_stats(days=days)
     except Exception as e:
-        logger.error("[history] admin_session_stats failed: %s", e, exc_info=True)
+        logger.error(log_event("history", "admin session stats failed", error=e), exc_info=True)
         raise AiLayerError(str(e), cause=e) from e
     return ApiResponse.ok(data)
 
@@ -118,17 +117,17 @@ async def list_sessions(
     authorization: str | None = Header(None),
     x_user_id: str | None = Header(None, alias="X-User-Id"),
 ):
-    """List sessions (async).
+    """List the authenticated user's chat sessions, serving from cache when available.
 
     Args:
-        authorization: (str | None) Tham số `authorization`.
-        x_user_id: (str | None) Trusted user id từ service caller."""
+        authorization: Bearer token header, for direct client calls.
+        x_user_id: Trusted user id header, for service-to-service callers."""
     try:
         user_id = await _resolve_user_id(authorization, x_user_id)
     except AiLayerAuthError:
         raise
     except Exception as e:
-        logger.error("[history] list_sessions auth failed: %s", e, exc_info=True)
+        logger.error(log_event("history", "list sessions auth failed", error=e), exc_info=True)
         raise AiLayerError(str(e), cause=e) from e
     redis = await get_redis()
     key = f"history:sessions:{user_id}"
@@ -139,7 +138,7 @@ async def list_sessions(
     try:
         rows = await chat_repo.list_sessions(user_id)
     except Exception as e:
-        logger.error("[history] list_sessions db failed: %s", e, exc_info=True)
+        logger.error(log_event("history", "list sessions db failed", error=e), exc_info=True)
         raise AiLayerError(str(e), cause=e) from e
     data = [
         {"id": r.id, "title": r.title, "created_at": r.created_at.isoformat(), "updated_at": r.updated_at.isoformat()}
@@ -156,12 +155,12 @@ async def upsert_session(
     authorization: str | None = Header(None),
     x_user_id: str | None = Header(None, alias="X-User-Id"),
 ):
-    """Upsert session (async).
+    """Create or update a chat session record and invalidate its cached session list.
 
     Args:
-        body: (SessionUpsert) Tham số `body`.
-        authorization: (str | None) Tham số `authorization`.
-        x_user_id: (str | None) Trusted user id từ service caller."""
+        body: Session id, title, and created/updated timestamps.
+        authorization: Bearer token header, for direct client calls.
+        x_user_id: Trusted user id header, for service-to-service callers."""
     user_id = await _resolve_user_id(authorization, x_user_id)
     await chat_repo.upsert_session(
         session_id=body.id,
@@ -181,13 +180,16 @@ async def patch_session(
     authorization: str | None = Header(None),
     x_user_id: str | None = Header(None, alias="X-User-Id"),
 ):
-    """Patch session (async).
+    """Rename an existing chat session after verifying the caller owns it.
 
     Args:
-        session_id: (str) Tham số `session_id`.
-        body: (SessionPatch) Tham số `body`.
-        authorization: (str | None) Tham số `authorization`.
-        x_user_id: (str | None) Trusted user id từ service caller."""
+        session_id: id of the session to update.
+        body: New title for the session.
+        authorization: Bearer token header, for direct client calls.
+        x_user_id: Trusted user id header, for service-to-service callers.
+
+    Raises:
+        AiLayerNotFoundError: if the session doesn't belong to the caller."""
     user_id = await _resolve_user_id(authorization, x_user_id)
     owner_id = await chat_repo.get_session_user_id(session_id)
     if owner_id != user_id:
@@ -203,12 +205,17 @@ async def delete_session(
     authorization: str | None = Header(None),
     x_user_id: str | None = Header(None, alias="X-User-Id"),
 ):
-    """Delete session (async).
+    """Delete a chat session and its cached session/message lists.
+
+    Verifies the caller owns the session before deleting.
 
     Args:
-        session_id: (str) Tham số `session_id`.
-        authorization: (str | None) Tham số `authorization`.
-        x_user_id: (str | None) Trusted user id từ service caller."""
+        session_id: id of the session to delete.
+        authorization: Bearer token header, for direct client calls.
+        x_user_id: Trusted user id header, for service-to-service callers.
+
+    Raises:
+        AiLayerNotFoundError: if the session doesn't belong to the caller."""
     user_id = await _resolve_user_id(authorization, x_user_id)
     owner_id = await chat_repo.get_session_user_id(session_id)
     if owner_id != user_id:
@@ -226,12 +233,17 @@ async def get_messages(
     authorization: str | None = Header(None),
     x_user_id: str | None = Header(None, alias="X-User-Id"),
 ):
-    """Lấy messages (async).
+    """Return a chat session's messages, serving from cache when available.
+
+    Verifies the caller owns the session before returning its messages.
 
     Args:
-        session_id: (str) Tham số `session_id`.
-        authorization: (str | None) Tham số `authorization`.
-        x_user_id: (str | None) Trusted user id từ service caller."""
+        session_id: id of the session to fetch messages for.
+        authorization: Bearer token header, for direct client calls.
+        x_user_id: Trusted user id header, for service-to-service callers.
+
+    Raises:
+        AiLayerNotFoundError: if the session doesn't belong to the caller."""
     user_id = await _resolve_user_id(authorization, x_user_id)
     redis = await get_redis()
     key = f"history:messages:{session_id}"
@@ -265,13 +277,21 @@ async def save_messages(
     authorization: str | None = Header(None),
     x_user_id: str | None = Header(None, alias="X-User-Id"),
 ):
-    """Save messages (async).
+    """Persist a batch of messages for a chat session and invalidate its caches.
+
+    Verifies the caller owns the session before saving.
 
     Args:
-        session_id: (str) Tham số `session_id`.
-        body: (list[MessageSave]) Tham số `body`.
-        authorization: (str | None) Tham số `authorization`.
-        x_user_id: (str | None) Trusted user id từ service caller."""
+        session_id: id of the session to save messages under.
+        body: Messages to persist.
+        authorization: Bearer token header, for direct client calls.
+        x_user_id: Trusted user id header, for service-to-service callers.
+
+    Raises:
+        AiLayerNotFoundError: if the session doesn't belong to the caller.
+
+    Returns:
+        ApiResponse with the number of messages saved."""
     user_id = await _resolve_user_id(authorization, x_user_id)
     owner_id = await chat_repo.get_session_user_id(session_id)
     if owner_id != user_id:

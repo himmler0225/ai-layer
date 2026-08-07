@@ -1,6 +1,6 @@
 import json
 from app.clients import data_miner
-from app.config.logger import Logger
+from app.config.logger import Logger, log_event
 from app.exceptions import AiLayerUpstreamError
 from app.utils.llm_responses import complete_json
 
@@ -9,29 +9,38 @@ _SYSTEM = "You are an AI assistant analyzing YouTube content.\nBe concise. Alway
 
 
 def _parse_json(raw: str, context: str) -> dict:
-    """(Nội bộ) Phân tích json.
+    """Parse an LLM's raw text response as JSON, raising a domain error on failure.
 
     Args:
-        raw: (str) Tham số `raw`.
-        context: (str) Tham số `context`.
+        raw: Raw text returned by the LLM, expected to be a JSON object.
+        context: Short label identifying the calling operation, used in
+            logging and the raised error message.
 
     Returns:
-        (Dict) Kết quả trả về."""
+        The parsed JSON object.
+
+    Raises:
+        AiLayerUpstreamError: If `raw` is not valid JSON.
+    """
     try:
         return json.loads(raw)
     except (json.JSONDecodeError, TypeError) as e:
-        logger.error("[youtube] json parse failed context=%s error=%s raw=%s", context, e, raw[:200])
+        logger.error(
+            log_event("youtube", "json parse failed", context=context, error=e, raw=raw[:200])
+        )
         raise AiLayerUpstreamError(f"ChatGPT returned invalid JSON in {context}: {e}", cause=e) from e
 
 
 async def summarize_video(video_id: str) -> dict:
-    """Tóm tắt video (async).
+    """Fetch a video's details and ask the LLM to summarize it.
 
     Args:
-        video_id: (str) Tham số `video_id`.
+        video_id: YouTube video ID to summarize.
 
     Returns:
-        (Dict) Kết quả trả về."""
+        A dict with "summary", "key_points", "tags", "sentiment" (from the
+        LLM), plus "video_id" and "title".
+    """
     detail = (await data_miner.get_video_detail(video_id)).get("detail", {})
     prompt = f"""Summarize this YouTube video:\nTitle: {detail.get("title")}\nChannel: {detail.get("author")}\nDescription: {(detail.get("description") or "")[:1000]}\nDuration: {detail.get("length_seconds")}s\nViews: {detail.get("views")}\n\nReturn JSON: {{"summary": "...", "key_points": ["..."], "tags": ["..."], "sentiment": "positive|neutral|negative"}}"""
     raw = await complete_json(prompt, _SYSTEM)
@@ -42,13 +51,17 @@ async def summarize_video(video_id: str) -> dict:
 
 
 async def analyze_comments(video_id: str) -> dict:
-    """Analyze comments (async).
+    """Fetch up to 100 comments for a video and ask the LLM to analyze audience sentiment.
 
     Args:
-        video_id: (str) Tham số `video_id`.
+        video_id: YouTube video ID whose comments should be analyzed.
 
     Returns:
-        (Dict) Kết quả trả về."""
+        If there are no comments, {"video_id", "total": 0, "insights": None}.
+        Otherwise a dict with "overall_sentiment", "top_topics",
+        "common_questions", "audience_insight" (from the LLM), plus
+        "video_id" and "total_analyzed".
+    """
     data = await data_miner.get_video_comments(video_id, max_comments=100)
     comments = data.get("comments", [])
     if not comments:
@@ -63,13 +76,15 @@ async def analyze_comments(video_id: str) -> dict:
 
 
 async def analyze_trends(limit: int = 20) -> dict:
-    """Analyze trends (async).
+    """Fetch trending YouTube videos and ask the LLM to identify patterns across them.
 
     Args:
-        limit: (int, mặc định 20) Tham số `limit`.
+        limit: Maximum number of trending videos to fetch and analyze.
 
     Returns:
-        (Dict) Kết quả trả về."""
+        A dict with "dominant_themes", "trending_formats", "top_channels",
+        "insights" (from the LLM), plus "analyzed_count".
+    """
     data = await data_miner.get_trending(max_results=limit)
     videos: list[dict] = data.get("results", []) if isinstance(data, dict) else data
     titles = "\n".join(

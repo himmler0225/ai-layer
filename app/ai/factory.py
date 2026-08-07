@@ -5,17 +5,17 @@ _instances: dict[str, BaseLLM] = {}
 
 
 class LLMFactory:
-    """Factory tạo và cache client LLM theo tên provider."""
+    """Factory that creates and caches one LLM client instance per provider name."""
 
     @staticmethod
     def get(provider: str) -> BaseLLM:
-        """Lấy hoặc tạo client LLM cho provider.
+        """Get the cached LLM client for a provider, creating it on first use.
 
         Args:
-            provider: Tên provider (openai, deepseek, xah, ...).
+            provider: Provider name (openai, deepseek, xai, ...).
 
         Returns:
-            Instance LLM đã cache hoặc mới khởi tạo."""
+            The cached or newly created `BaseLLM` instance for this provider."""
         key = normalize_provider(provider)
         if key in _instances:
             return _instances[key]
@@ -25,6 +25,6 @@ class LLMFactory:
 
     @staticmethod
     def reset() -> None:
-        """Xóa cache instance LLM và reset HTTP client nội bộ."""
+        """Clear all cached LLM instances and reset the underlying HTTP clients."""
         _instances.clear()
         reset_clients()

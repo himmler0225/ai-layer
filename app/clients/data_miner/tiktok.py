@@ -8,17 +8,17 @@ async def tiktok_search(
     date_posted: str | None = None,
     region: str | None = None,
 ) -> dict:
-    """Tiktok search (async).
+    """Search TikTok videos by keyword.
 
     Args:
-        keyword: (str) Tham số `keyword`.
-        cursor: (int, mặc định 0) Tham số `cursor`.
-        sort_by: (str | None, mặc định None) Tham số `sort_by`.
-        date_posted: (str | None, mặc định None) Tham số `date_posted`.
-        region: (str | None, mặc định None) Tham số `region`.
+        keyword: Search text.
+        cursor: Pagination cursor; `0` for the first page.
+        sort_by: Optional sort order (e.g. relevance, date).
+        date_posted: Optional recency filter for when videos were posted.
+        region: Optional region/country code filter.
 
     Returns:
-        (dict) Kết quả trả về."""
+        The data-miner TikTok search response (dict)."""
     params: dict = {"q": keyword, "cursor": cursor}
     if sort_by:
         params["sort_by"] = sort_by
@@ -30,46 +30,46 @@ async def tiktok_search(
 
 
 async def tiktok_video_info(url: str) -> dict:
-    """Tiktok video info (async).
+    """Fetch metadata for a single TikTok video by its URL.
 
     Args:
-        url: (str) Tham số `url`.
+        url: The TikTok video URL.
 
     Returns:
-        (dict) Kết quả trả về."""
+        The data-miner video info response (dict)."""
     return await _get("/api/tiktok/video-info", {"url": url})
 
 
 async def tiktok_comments(aweme_id: str, cursor: int = 0, count: int = 20) -> dict:
-    """Tiktok comments (async).
+    """Fetch comments for a TikTok video.
 
     Args:
-        aweme_id: (str) Tham số `aweme_id`.
-        cursor: (int, mặc định 0) Tham số `cursor`.
-        count: (int, mặc định 20) Tham số `count`.
+        aweme_id: The TikTok video's aweme id.
+        cursor: Pagination cursor; `0` for the first page.
+        count: Maximum number of comments to fetch.
 
     Returns:
-        (dict) Kết quả trả về."""
+        The data-miner comments response (dict)."""
     return await _get("/api/tiktok/comments", {"aweme_id": aweme_id, "cursor": cursor, "count": count})
 
 
 async def tiktok_profile(handle: str) -> dict:
-    """Tiktok profile (async).
+    """Fetch a TikTok user profile by handle.
 
     Args:
-        handle: (str) Tham số `handle`.
+        handle: The TikTok username/handle.
 
     Returns:
-        (dict) Kết quả trả về."""
+        The data-miner profile response (dict)."""
     return await _get(f"/api/tiktok/profiles/{handle}")
 
 
 async def tiktok_transcript(aweme_id: str) -> dict:
-    """Tiktok transcript (async).
+    """Fetch the spoken-audio transcript for a TikTok video.
 
     Args:
-        aweme_id: (str) Tham số `aweme_id`.
+        aweme_id: The TikTok video's aweme id.
 
     Returns:
-        (dict) Kết quả trả về."""
+        The data-miner transcript response (dict)."""
     return await _get("/api/tiktok/transcript", {"aweme_id": aweme_id})

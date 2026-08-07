@@ -19,14 +19,15 @@ SEARCH_TOOLS = frozenset(
 
 
 def _map_video(raw: dict, platform: str) -> dict | None:
-    """(Nội bộ) Map video.
+    """Map a raw video payload to the normalized video dict for the given platform.
 
     Args:
-        raw: (dict) Tham số `raw`.
-        platform: (str) Tham số `platform`.
+        raw: Raw video data as returned by the source API.
+        platform: Either "youtube" or "tiktok"; selects which mapper to use.
 
     Returns:
-        (dict | None) Kết quả trả về."""
+        The normalized video dict, or None if the raw payload has no usable id.
+    """
     if platform == "youtube":
         return map_youtube_video(raw)
     return map_tiktok_video(raw)
@@ -35,16 +36,18 @@ def _map_video(raw: dict, platform: str) -> dict | None:
 async def publish_videos(
     videos: list[dict], *, platform: str, movie_hint: str, search_cache: dict | None = None
 ) -> None:
-    """Xuất bản videos (async).
+    """Map and publish a batch of raw videos onto the video ingest routing key.
 
     Args:
-        videos: (list[dict]) Tham số `videos`.
-        platform: (str) Tham số `platform`.
-        movie_hint: (str) Tham số `movie_hint`.
-        search_cache: (dict | None, mặc định None) Tham số `search_cache`.
+        videos: Raw video payloads from the source API.
+        platform: Either "youtube" or "tiktok"; selects which mapper to use.
+        movie_hint: Free-text movie/product hint to attach to each published envelope.
+        search_cache: Optional search-cache payload (query, platform, video ids)
+            attached only to the first successfully mapped video.
 
     Returns:
-        (None) Kết quả trả về."""
+        None. Videos that fail to map are silently skipped.
+    """
     for index, raw in enumerate(videos):
         mapped = _map_video(raw, platform)
         if not mapped:
@@ -58,16 +61,17 @@ async def publish_videos(
 
 
 async def publish_search(inputs: dict, data: dict, platform: str, movie_hint: str) -> None:
-    """Xuất bản search (async).
+    """Extract videos from a search-tool result and publish them, caching the query.
 
     Args:
-        inputs: (dict) Tham số `inputs`.
-        data: (dict) Tham số `data`.
-        platform: (str) Tham số `platform`.
-        movie_hint: (str) Tham số `movie_hint`.
+        inputs: Original tool call arguments, used to recover the search keyword/query.
+        data: Unwrapped tool result data expected to contain a list of videos.
+        platform: Either "youtube" or "tiktok".
+        movie_hint: Free-text movie/product hint to attach to published envelopes.
 
     Returns:
-        (None) Kết quả trả về."""
+        None. Does nothing if no videos are found in `data`.
+    """
     videos = video_list(data)
     if not videos:
         return
@@ -85,17 +89,18 @@ async def publish_search(inputs: dict, data: dict, platform: str, movie_hint: st
 
 
 async def publish_comments(video_id: str, platform: str, comments: list[dict], movie_hint: str, url: str = "") -> None:
-    """Xuất bản comments (async).
+    """Map raw comments for a video and publish them onto the comments routing key.
 
     Args:
-        video_id: (str) Tham số `video_id`.
-        platform: (str) Tham số `platform`.
-        comments: (list[dict]) Tham số `comments`.
-        movie_hint: (str) Tham số `movie_hint`.
-        url: (str, mặc định '') Tham số `url`.
+        video_id: Id of the video the comments belong to.
+        platform: Either "youtube" or "tiktok".
+        comments: Raw comment payloads from the source API.
+        movie_hint: Free-text movie/product hint to attach to the published envelope.
+        url: Optional source URL for the video, forwarded in the payload.
 
     Returns:
-        (None) Kết quả trả về."""
+        None. Does nothing if no comment maps to a valid entry.
+    """
     mapped = [map_comment(video_id, raw) for raw in comments if isinstance(raw, dict)]
     mapped = [item for item in mapped if item]
     if not mapped:
@@ -110,17 +115,18 @@ async def publish_comments(video_id: str, platform: str, comments: list[dict], m
 
 
 async def publish_transcript(video_id: str, platform: str, text: str, movie_hint: str, language: str = "") -> None:
-    """Xuất bản transcript (async).
+    """Publish a video transcript onto the transcript routing key.
 
     Args:
-        video_id: (str) Tham số `video_id`.
-        platform: (str) Tham số `platform`.
-        text: (str) Tham số `text`.
-        movie_hint: (str) Tham số `movie_hint`.
-        language: (str, mặc định '') Tham số `language`.
+        video_id: Id of the video the transcript belongs to.
+        platform: Either "youtube" or "tiktok".
+        text: Full transcript text.
+        movie_hint: Free-text movie/product hint to attach to the published envelope.
+        language: Optional transcript language code, forwarded in the payload.
 
     Returns:
-        (None) Kết quả trả về."""
+        None. Does nothing if `video_id` or `text` is empty.
+    """
     if not video_id or not text:
         return
     await publish(

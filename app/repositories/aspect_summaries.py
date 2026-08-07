@@ -18,21 +18,24 @@ async def upsert_aspect_summary(
     source_chunk_ids: list | None = None,
     embedding: list[float] | None = None,
 ) -> None:
-    """Upsert aspect summary (async).
+    """Insert or update the aspect summary for a movie+aspect pair.
+
+    On conflict (same movie_id, aspect), refreshes summary, pros, cons,
+    positive_percent, source_chunk_ids, embedding, and updated_at.
 
     Args:
-        id: (str) Tham số `id`.
-        movie_id: (str) Tham số `movie_id`.
-        aspect: (str) Tham số `aspect`.
-        summary: (str) Tham số `summary`.
-        pros: (list | None, mặc định None) Tham số `pros`.
-        cons: (list | None, mặc định None) Tham số `cons`.
-        positive_percent: (float | None, mặc định None) Tham số `positive_percent`.
-        source_chunk_ids: (list | None, mặc định None) Tham số `source_chunk_ids`.
-        embedding: (list[float] | None, mặc định None) Tham số `embedding`.
-
-    Returns:
-        (None) Kết quả trả về."""
+        id: Primary key for the summary row.
+        movie_id: Movie the summary belongs to.
+        aspect: Aspect name (e.g. "acting", "plot").
+        summary: Generated summary text.
+        pros: Positive points extracted for this aspect.
+        cons: Negative points extracted for this aspect.
+        positive_percent: Share of reviews that were positive on this
+            aspect, if computed.
+        source_chunk_ids: Ids of the aspect chunks this summary was built
+            from.
+        embedding: Vector embedding of the summary, for similarity search.
+    """
     factory = await get_session_factory()
     async with factory() as session:
         stmt = insert(AspectSummary).values(
@@ -64,14 +67,15 @@ async def upsert_aspect_summary(
 
 
 async def get_aspect_summaries(movie_id: str, *, aspect: str | None = None) -> list[dict]:
-    """Lấy aspect summaries (async).
+    """Fetch a movie's aspect summaries, ordered by aspect name.
 
     Args:
-        movie_id: (str) Tham số `movie_id`.
-        aspect: (str | None, mặc định None) Tham số `aspect`.
+        movie_id: Movie id to filter by.
+        aspect: If given, restrict results to this aspect only.
 
     Returns:
-        (list[dict]) Kết quả trả về."""
+        Aspect summary rows as dicts.
+    """
     factory = await get_session_factory()
     async with factory() as session:
         q = select(AspectSummary).where(AspectSummary.movie_id == movie_id)
@@ -83,14 +87,15 @@ async def get_aspect_summaries(movie_id: str, *, aspect: str | None = None) -> l
 
 
 async def get_aspect_summary(movie_id: str, aspect: str) -> dict | None:
-    """Lấy aspect summary (async).
+    """Fetch a single aspect summary for a movie+aspect pair.
 
     Args:
-        movie_id: (str) Tham số `movie_id`.
-        aspect: (str) Tham số `aspect`.
+        movie_id: Movie id to look up.
+        aspect: Aspect name to look up.
 
     Returns:
-        (Optional[dict]) Kết quả trả về."""
+        The summary as a dict, or None if not found.
+    """
     factory = await get_session_factory()
     async with factory() as session:
         row = await session.scalar(
@@ -102,16 +107,21 @@ async def get_aspect_summary(movie_id: str, aspect: str) -> dict | None:
 async def search_similar_summaries(
     movie_id: str, query_vector: list[float], *, aspect: str | None = None, limit: int = 8
 ) -> list[dict]:
-    """Tìm kiếm similar summaries (async).
+    """Find aspect summaries for a movie whose embedding is closest to a query vector.
+
+    Uses pgvector cosine distance (`<=>`) ordering, optionally restricted
+    to a single aspect.
 
     Args:
-        movie_id: (str) Tham số `movie_id`.
-        query_vector: (list[float]) Tham số `query_vector`.
-        aspect: (str | None, mặc định None) Tham số `aspect`.
-        limit: (int, mặc định 8) Tham số `limit`.
+        movie_id: Movie id to search within.
+        query_vector: Query embedding to compare against.
+        aspect: If given, restrict the search to this aspect only.
+        limit: Maximum number of results to return.
 
     Returns:
-        (list[dict]) Kết quả trả về."""
+        Rows with "aspect", "summary", "pros", "cons", "positive_percent",
+        and a similarity "score" (1 - cosine distance), most similar first.
+    """
     vec = vector_literal(query_vector)
     sql = text(
         "\n        SELECT aspect, summary, pros, cons, positive_percent,\n               1 - (embedding <=> CAST(:vec AS vector)) AS score\n        FROM aspect_summaries\n        WHERE movie_id = :pid\n          AND embedding IS NOT NULL\n          AND (CAST(:aspect AS text) IS NULL OR aspect = :aspect)\n        ORDER BY embedding <=> CAST(:vec AS vector)\n        LIMIT :k\n    "

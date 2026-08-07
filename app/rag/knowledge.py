@@ -6,13 +6,17 @@ from app.repositories.movies import exists_movie
 
 
 async def movie_has_knowledge(movie_id: str) -> bool:
-    """Movie has knowledge (async).
+    """Check whether a movie has enough ingested data to answer from RAG.
+
+    True if the movie exists and either has aspect summaries or at least
+    20 curated reviews.
 
     Args:
-        movie_id: (str) Tham số `movie_id`.
+        movie_id: Movie slug to check.
 
     Returns:
-        (bool) Kết quả trả về."""
+        Whether the movie has sufficient knowledge for RAG search.
+    """
     if not movie_id or not await exists_movie(movie_id):
         return False
     summaries = await get_aspect_summaries(movie_id)
@@ -22,14 +26,18 @@ async def movie_has_knowledge(movie_id: str) -> bool:
 
 
 async def is_movie_fresh(movie_id: str, days: int | None = None) -> bool:
-    """Is movie fresh (async).
+    """Check whether a movie's ingested aspect summaries are still within TTL.
+
+    A movie is considered fresh if it has no `updated_at` timestamp (treated
+    as always fresh) or if any summary was updated within the last `days`.
 
     Args:
-        movie_id: (str) Tham số `movie_id`.
-        days: (int | None, mặc định None) Tham số `days`.
+        movie_id: Movie slug to check.
+        days: TTL window in days; defaults to `settings.CACHE_TTL_DAYS` when omitted.
 
     Returns:
-        (bool) Kết quả trả về."""
+        Whether the movie's cached knowledge is still fresh.
+    """
     ttl_days = days if days is not None else settings.CACHE_TTL_DAYS
     summaries = await get_aspect_summaries(movie_id)
     if not summaries:

@@ -3,7 +3,7 @@
 import asyncio
 
 import app.config.settings as settings
-from app.config.logger import Logger
+from app.config.logger import Logger, log_event
 from app.exceptions import AiLayerConfigError
 
 logger = Logger.get(__name__)
@@ -12,26 +12,26 @@ _config_refresh_task: asyncio.Task | None = None
 
 
 async def _remote_config_refresher() -> None:
-    """(Nội bộ) Remote config refresher (async) `_remote_config_refresher`.
+    """Background loop that reloads and applies remote config on a fixed interval.
 
-    Returns:
-        (None) Kết quả trả về."""
+    Sleeps for REMOTE_CONFIG_TTL minutes (at least 1) between refreshes; logs
+    and continues on failure instead of crashing the app."""
     from app.config.remote import load_and_apply
 
     while True:
         await asyncio.sleep(max(settings.REMOTE_CONFIG_TTL, 1) * 60)
         try:
             await load_and_apply()
-            logger.info("[remote_config] refreshed")
+            logger.info(log_event("remote_config", "refresh complete"))
         except Exception as exc:
-            logger.warning("[remote_config] refresh failed: %s", exc)
+            logger.warning(log_event("remote_config", "refresh failed", error=exc))
 
 
 async def _start_config_refresher() -> None:
-    """(Nội bộ) Bắt đầu config refresher (async) `_start_config_refresher`.
+    """Start the background remote-config refresh task.
 
-    Returns:
-        (None) Kết quả trả về."""
+    No-op if Supabase credentials aren't configured, since remote config
+    can't be loaded without them."""
     global _config_refresh_task
     if not settings.SUPABASE_URL or not settings.SUPABASE_SERVICE_KEY:
         return
@@ -39,10 +39,7 @@ async def _start_config_refresher() -> None:
 
 
 async def _stop_config_refresher() -> None:
-    """(Nội bộ) Dừng config refresher (async) `_stop_config_refresher`.
-
-    Returns:
-        (None) Kết quả trả về."""
+    """Cancel and await the background remote-config refresh task, if one is running."""
     global _config_refresh_task
     if _config_refresh_task is None:
         return
@@ -55,10 +52,12 @@ async def _stop_config_refresher() -> None:
 
 
 def validate_startup_config() -> None:
-    """Xác thực startup config.
+    """Validate that required settings are present before the app starts serving.
 
-    Returns:
-        (None) Kết quả trả về."""
+    Raises:
+        AiLayerConfigError: if API_KEYS, DATA_MINER_URL/DATA_MINER_KEY are
+            missing, or (outside development) DATA_MINER_SERVICE_TOKEN
+            is missing."""
     if not settings.API_KEYS:
         raise AiLayerConfigError("API_KEYS must be set before starting ai-layer")
     if not settings.DATA_MINER_URL or not settings.DATA_MINER_KEY:
@@ -68,10 +67,13 @@ def validate_startup_config() -> None:
 
 
 async def startup() -> None:
-    """Startup (async).
+    """Run application startup: validate config, init the database and Redis,
+    start the remote-config refresher, and preload the MCP tool catalog if
+    the MCP crawl backend is enabled.
 
-    Returns:
-        (None) Kết quả trả về."""
+    Raises:
+        AiLayerConfigError: if required settings are missing or database
+            initialization fails."""
     validate_startup_config()
     from app.cache.client import get_redis
     from app.config.db.session import init_db
@@ -79,7 +81,7 @@ async def startup() -> None:
     try:
         await init_db()
     except Exception as exc:
-        logger.error("[db] init failed: %s", exc)
+        logger.error(log_event("db", "init failed", error=exc))
         raise AiLayerConfigError(f"Database initialization failed: {exc}", cause=exc) from exc
     await get_redis()
     await _start_config_refresher()
@@ -90,16 +92,14 @@ async def startup() -> None:
 
         try:
             loaded = await crawl_catalog.refresh()
-            logger.info("[startup] MCP catalog ready tools=%d", len(loaded))
+            logger.info(log_event("startup", "mcp catalog ready", tools=len(loaded)))
         except Exception as exc:
-            logger.warning("[startup] MCP catalog preload failed (will retry on request): %s", exc)
+            logger.warning(log_event("startup", "mcp catalog preload failed", error=exc, retry="on_request"))
 
 
 async def shutdown() -> None:
-    """Shutdown (async).
-
-    Returns:
-        (None) Kết quả trả về."""
+    """Run application shutdown: stop the config refresher and close the
+    data-miner client, database engine, and Redis connections."""
     await _stop_config_refresher()
     from app.cache.client import close_redis
     from app.clients.data_miner import close_client as close_dm

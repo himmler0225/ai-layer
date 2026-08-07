@@ -12,18 +12,19 @@ from app.exceptions import AiLayerError, AiLayerValidationError
 
 
 def _admin_schema() -> dict[str, Any]:
-    """(Nội bộ) Admin schema `_admin_schema`.
+    """Return the `admin` section of the config schema.
 
     Returns:
-        (dict[str, Any]) Kết quả trả về."""
+        The admin schema dict, or `{}` if not defined."""
     return load_schema().get("admin") or {}
 
 
 def whitelist_keys() -> set[str]:
-    """Whitelist keys.
+    """List config keys admins are allowed to read/write.
 
     Returns:
-        (set[str]) Kết quả trả về."""
+        The union of all keys across the admin schema's groups plus any
+        `standalone_keys`."""
     admin = _admin_schema()
     groups = admin.get("groups") or {}
     keys = {key for group in groups.values() for key in group}
@@ -32,27 +33,33 @@ def whitelist_keys() -> set[str]:
 
 
 def json_keys() -> set[str]:
-    """Json keys.
+    """List config keys whose values must be valid JSON strings.
 
     Returns:
-        (set[str]) Kết quả trả về."""
+        The `json_keys` set from the admin schema, or `{}` if not defined."""
     return set(_admin_schema().get("json_keys") or [])
 
 
 async def load_config() -> dict[str, str]:
-    """Tải config (async).
+    """Load the current whitelisted config as a flat key/value mapping.
 
     Returns:
-        (dict[str, str]) Kết quả trả về."""
+        The `config` dict from `load_config_bundle()`."""
     bundle = await load_config_bundle()
     return bundle["config"]
 
 
 async def load_config_bundle() -> dict[str, Any]:
-    """Tải config bundle (async).
+    """Fetch whitelisted config rows from Supabase, including metadata.
 
     Returns:
-        (dict[str, Any]) Kết quả trả về."""
+        A dict with `config` (key -> value), `updated_at` (key -> ISO
+        timestamp string), and `items` (key -> `{"label", "fields"}` for keys
+        that define a label or fields). Returns empty collections if Supabase
+        is not configured.
+
+    Raises:
+        AiLayerError: If the Supabase request fails."""
     allowed = whitelist_keys()
     if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
         return {"config": {}, "updated_at": {}, "items": {}}
@@ -85,13 +92,19 @@ async def load_config_bundle() -> dict[str, Any]:
 
 
 async def patch_config(updates: dict[str, str]) -> list[str]:
-    """Patch config (async).
+    """Validate and upsert one or more config key/value pairs to Supabase.
 
     Args:
-        updates: (dict[str, str]) Tham số `updates`.
+        updates: Mapping of config key to new string value. Keys must be in
+            the admin whitelist; values for JSON-only keys must parse as JSON.
 
     Returns:
-        (list[str]) Kết quả trả về."""
+        The list of keys successfully saved (same order as `updates`).
+
+    Raises:
+        AiLayerValidationError: If a key isn't whitelisted or a JSON-only
+            key's value fails to parse.
+        AiLayerError: If Supabase isn't configured or a save request fails."""
     allowed = whitelist_keys()
     json_only = json_keys()
     saved: list[str] = []
