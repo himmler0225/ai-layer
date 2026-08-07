@@ -225,8 +225,6 @@ Docs UI: `http://localhost:8001/docs`
 
 The agent is a **supervisor + per-platform worker** graph on LangGraph — supervisor routes a question to 1..N workers (YouTube/TikTok/movie catalog), workers run in parallel via `Send()` fan-out, results merge and go through one shared synthesis step. Both `/agent/run` and `/agent/run/stream` run through the same graph — there is no alternate backend/flag.
 
-**Chi tiết kiến trúc + thứ tự đọc file:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
-
 ---
 
 ## License / stack context
