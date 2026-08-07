@@ -16,8 +16,6 @@ Built on **OpenAI-compatible chat completions** (Responses-shaped adapter). The 
         └─ Supabase REST        Auth, profiles, runtime config table
 ```
 
-Further reading: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (bắt đầu từ đây) · [docs/FLOW.md](docs/FLOW.md) · [docs/RAG-GUIDE.md](docs/RAG-GUIDE.md) · [docs/REFACTOR-AUDIT.md](docs/REFACTOR-AUDIT.md) · [../docs/MCP-PHASE2-GUIDE.md](../docs/MCP-PHASE2-GUIDE.md)
-
 ---
 
 ## Highlights
@@ -224,8 +222,6 @@ Docs UI: `http://localhost:8001/docs`
 ## Multi-agent orchestration (LangGraph)
 
 The agent is a **supervisor + per-platform worker** graph on LangGraph — supervisor routes a question to 1..N workers (YouTube/TikTok/movie catalog), workers run in parallel via `Send()` fan-out, results merge and go through one shared synthesis step. Both `/agent/run` and `/agent/run/stream` run through the same graph — there is no alternate backend/flag.
-
-**Chi tiết kiến trúc + thứ tự đọc file:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ---
 
