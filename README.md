@@ -16,8 +16,6 @@ Built on **OpenAI-compatible chat completions** (Responses-shaped adapter). The 
         └─ Supabase REST        Auth, profiles, runtime config table
 ```
 
-Further reading: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (bắt đầu từ đây) · [docs/FLOW.md](docs/FLOW.md) · [docs/RAG-GUIDE.md](docs/RAG-GUIDE.md) · [docs/REFACTOR-AUDIT.md](docs/REFACTOR-AUDIT.md) · [../docs/MCP-PHASE2-GUIDE.md](../docs/MCP-PHASE2-GUIDE.md)
-
 ---
 
 ## Highlights
