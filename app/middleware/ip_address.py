@@ -6,7 +6,7 @@ from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 from app.config.constants import GEOIP_LOOKUP_TIMEOUT
-from app.config.logger import Logger
+from app.config.logger import Logger, log_event
 from app.config.settings import GEOIP_CACHE_MAX, GEOIP_CACHE_TTL, GEOIP_DB_PATH
 
 logger = Logger.get(__name__)
@@ -15,13 +15,14 @@ _IPV6 = re.compile("^[0-9a-fA-F:]+$")
 
 
 def _is_valid_ip(ip: str) -> bool:
-    """(Nội bộ) Is valid ip.
+    """Check whether a string looks like a valid IPv4 or IPv6 address.
 
     Args:
-        ip: (str) Tham số `ip`.
+        ip: Candidate address string.
 
     Returns:
-        (bool) Kết quả trả về."""
+        `True` if it matches IPv4 dotted-quad format with each octet in
+        0-255, or a plausible IPv6 pattern (hex groups/colons, 2-7 colons)."""
     if _IPV4.match(ip):
         return all(0 <= int(p) <= 255 for p in ip.split("."))
     return bool(_IPV6.match(ip) and 2 <= ip.count(":") <= 7)
@@ -32,20 +33,21 @@ if GEOIP_DB_PATH:
     try:
         geoip2_db = importlib.import_module("geoip2.database")
         _reader = geoip2_db.Reader(GEOIP_DB_PATH)
-        logger.info("[geoip] database loaded path=%s", GEOIP_DB_PATH)
+        logger.info(log_event("geoip", "database loaded", path=GEOIP_DB_PATH))
     except Exception as e:
-        logger.warning("[geoip] database load failed: %s", e)
+        logger.warning(log_event("geoip", "database load failed", error=e))
 _cache: dict[str, dict] = {}
 
 
 def _from_cache(ip: str) -> dict | None:
-    """(Nội bộ) From cache.
+    """Look up a cached geo-info result for an IP if it hasn't expired.
 
     Args:
-        ip: (str) Tham số `ip`.
+        ip: The IP address to look up.
 
     Returns:
-        (Optional[Dict]) Kết quả trả về."""
+        The cached geo-info dict, or `None` if missing or older than
+        `GEOIP_CACHE_TTL` seconds."""
     entry = _cache.get(ip)
     if entry and time.time() - entry["ts"] < GEOIP_CACHE_TTL:
         return entry["data"]
@@ -53,14 +55,14 @@ def _from_cache(ip: str) -> dict | None:
 
 
 def _to_cache(ip: str, data: dict) -> None:
-    """(Nội bộ) To cache.
+    """Store a geo-info result in the in-memory cache, evicting old entries if full.
 
     Args:
-        ip: (str) Tham số `ip`.
-        data: (Dict) Tham số `data`.
+        ip: The IP address the result is for.
+        data: The geo-info dict to cache.
 
     Returns:
-        (None) Kết quả trả về."""
+        None."""
     _cache[ip] = {"data": data, "ts": time.time()}
     if len(_cache) > GEOIP_CACHE_MAX:
         oldest = sorted(_cache, key=lambda k: _cache[k]["ts"])[:100]
@@ -72,10 +74,10 @@ _http: httpx.AsyncClient | None = None
 
 
 def _get_http() -> httpx.AsyncClient:
-    """(Nội bộ) Lấy http.
+    """Get or lazily (re)create the shared HTTP client used for IP-API lookups.
 
     Returns:
-        (httpx.AsyncClient) Kết quả trả về."""
+        The shared `httpx.AsyncClient` instance."""
     global _http
     if _http is None or _http.is_closed:
         _http = httpx.AsyncClient(timeout=GEOIP_LOOKUP_TIMEOUT)
@@ -83,13 +85,17 @@ def _get_http() -> httpx.AsyncClient:
 
 
 def get_client_ip(request: Request) -> str:
-    """Lấy client ip.
+    """Determine the originating client IP for a request.
+
+    Checks `X-Forwarded-For` then `X-Real-IP` headers for a valid IP address
+    (taking the first entry of a comma-separated list), falling back to the
+    direct connection's peer address.
 
     Args:
-        request: (Request) Tham số `request`.
+        request: The incoming FastAPI/Starlette request.
 
     Returns:
-        (str) Kết quả trả về."""
+        The resolved client IP, or `"unknown"` if none could be determined."""
     for header in ("X-Forwarded-For", "X-Real-IP"):
         raw = request.headers.get(header)
         if not raw:
@@ -97,18 +103,20 @@ def get_client_ip(request: Request) -> str:
         candidate = raw.split(",")[0].strip()
         if _is_valid_ip(candidate):
             return candidate
-        logger.debug("Ignored invalid IP in %s: %r", header, candidate)
+        logger.debug(log_event("geoip", "invalid ip ignored", header=header, value=candidate))
     return request.client.host if request.client else "unknown"
 
 
 def _local_lookup(ip: str) -> dict | None:
-    """(Nội bộ) Local lookup.
+    """Look up geo-info for an IP using the local GeoIP2 database, if loaded.
 
     Args:
-        ip: (str) Tham số `ip`.
+        ip: The IP address to look up.
 
     Returns:
-        (Optional[Dict]) Kết quả trả về."""
+        A dict with country/region/city/coordinates/timezone and
+        `source: "local"`, or `None` if no local reader is available or the
+        lookup fails (e.g. IP not found in the database)."""
     if not _reader:
         return None
     try:
@@ -129,13 +137,15 @@ def _local_lookup(ip: str) -> dict | None:
 
 
 async def _api_lookup(ip: str) -> dict:
-    """(Nội bộ) Api lookup (async).
+    """Look up geo-info for an IP via the ip-api.com HTTP API.
 
     Args:
-        ip: (str) Tham số `ip`.
+        ip: The IP address to look up.
 
     Returns:
-        (Dict) Kết quả trả về."""
+        A dict with country/region/city/coordinates/timezone/isp/org and
+        `source: "api"` on success; `{"ip": ip, "source": "unknown"}` if the
+        API call fails or reports a non-success status."""
     try:
         r = await _get_http().get(
             f"http://ip-api.com/json/{ip}",
@@ -157,18 +167,20 @@ async def _api_lookup(ip: str) -> dict:
                 "source": "api",
             }
     except Exception as e:
-        logger.warning("[geoip] api lookup failed ip=%s error=%s", ip, e)
+        logger.warning(log_event("geoip", "api lookup failed", ip=ip, error=e))
     return {"ip": ip, "source": "unknown"}
 
 
 async def get_geo_info(ip: str) -> dict:
-    """Lấy geo info (async).
+    """Resolve geo-location info for an IP, using cache, then local DB, then API.
 
     Args:
-        ip: (str) Tham số `ip`.
+        ip: The IP address to resolve. Loopback addresses short-circuit to a
+            `"Localhost"` result.
 
     Returns:
-        (Dict) Kết quả trả về."""
+        A geo-info dict (see `_local_lookup`/`_api_lookup`), served from cache
+        when available and freshly cached otherwise."""
     if ip in ("127.0.0.1", "::1", "unknown"):
         return {"ip": ip, "country": "Localhost", "source": "local"}
     cached = _from_cache(ip)
@@ -180,17 +192,18 @@ async def get_geo_info(ip: str) -> dict:
 
 
 class GeoIPMiddleware(BaseHTTPMiddleware):
-    """Lớp `GeoIPMiddleware` (kế thừa BaseHTTPMiddleware)."""
+    """Middleware that resolves the client IP and geo-location for each
+    request and attaches them to `request.state` as `client_ip`/`geo_info`."""
 
     async def dispatch(self, request: Request, call_next) -> Response:
-        """Dispatch `dispatch` (async).
+        """Resolve and attach client IP/geo info, then continue the request.
 
         Args:
-            request: (Request) Tham số `request`.
-            call_next: (Any) Tham số `call_next`.
+            request: The incoming request.
+            call_next: The next handler in the middleware chain.
 
         Returns:
-            (Response) Kết quả trả về."""
+            The downstream response."""
         ip = get_client_ip(request)
         request.state.client_ip = ip
         request.state.geo_info = await get_geo_info(ip)

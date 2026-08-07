@@ -6,14 +6,13 @@ from app.config.db.utils import model_to_dict
 
 
 async def insert_comments(video_id: str, comments: list[dict]) -> None:
-    """Insert comments (async).
+    """Bulk insert comments for a video, skipping ids that already exist.
 
     Args:
-        video_id: (str) Tham số `video_id`.
-        comments: (list[dict]) Tham số `comments`.
-
-    Returns:
-        (None) Kết quả trả về."""
+        video_id: Video the comments belong to.
+        comments: Comment dicts with "id" and optional "author", "content",
+            "likes", "published_at", "metadata".
+    """
     if not comments:
         return
     factory = await get_session_factory()
@@ -38,14 +37,15 @@ async def insert_comments(video_id: str, comments: list[dict]) -> None:
 
 
 async def get_comments(video_id: str, limit: int = 100) -> list[dict]:
-    """Lấy comments (async).
+    """Fetch a video's comments, most-liked first.
 
     Args:
-        video_id: (str) Tham số `video_id`.
-        limit: (int, mặc định 100) Tham số `limit`.
+        video_id: Video to fetch comments for.
+        limit: Maximum number of comments to return.
 
     Returns:
-        (list[dict]) Kết quả trả về."""
+        Comment rows as dicts.
+    """
     factory = await get_session_factory()
     async with factory() as session:
         result = await session.execute(
@@ -55,13 +55,14 @@ async def get_comments(video_id: str, limit: int = 100) -> list[dict]:
 
 
 async def count_comments(video_id: str) -> int:
-    """Count comments (async).
+    """Count how many comments a video has.
 
     Args:
-        video_id: (str) Tham số `video_id`.
+        video_id: Video to count comments for.
 
     Returns:
-        (int) Kết quả trả về."""
+        The number of comments stored for the video.
+    """
     factory = await get_session_factory()
     async with factory() as session:
         return int(
@@ -70,13 +71,11 @@ async def count_comments(video_id: str) -> int:
 
 
 async def delete_comments(video_id: str) -> None:
-    """Delete comments (async).
+    """Delete all comments for a video.
 
     Args:
-        video_id: (str) Tham số `video_id`.
-
-    Returns:
-        (None) Kết quả trả về."""
+        video_id: Video whose comments should be deleted.
+    """
     factory = await get_session_factory()
     async with factory() as session:
         await session.execute(delete(Comment).where(Comment.video_id == video_id))

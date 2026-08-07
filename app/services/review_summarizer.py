@@ -4,7 +4,7 @@ from app.ai.router import TASK_REVIEW_SUMMARY, max_tokens_for_task, resolve
 from app.services.agent.synthesis import _should_fallback_synth, models_with_fallback
 from app.utils.llm_errors import log_error
 from app.rag.movie_hint import extract_movie_name
-from app.config.logger import Logger
+from app.config.logger import Logger, log_event
 from app.utils.llm_responses import create_response, extract_response_text
 
 logger = Logger.get(__name__)
@@ -42,13 +42,20 @@ _MOVIE_STOPWORDS = frozenset(
 
 
 def _clean_summary(text: str) -> str:
-    """(Nội bộ) Clean summary.
+    """Strip LLM formatting artifacts from a generated review summary.
+
+    Drops blockquote lines (starting with ">"), drops long lines that are
+    entirely wrapped in quotes (likely stray verbatim review quotes), and
+    strips leading emoji markers (mobile/chart/chat bubble) along with any
+    trailing "(N lượt ...)" annotation on those lines. Collapses runs of 3+
+    blank lines down to a single blank line.
 
     Args:
-        text: (str) Tham số `text`.
+        text: Raw summary text returned by the LLM.
 
     Returns:
-        (str) Kết quả trả về."""
+        The cleaned summary text.
+    """
     lines: list[str] = []
     for line in text.splitlines():
         s = line.strip()
@@ -69,14 +76,23 @@ def _clean_summary(text: str) -> str:
 
 
 def _movie_hint(task: str, fallback: str) -> str:
-    """(Nội bộ) Product hint.
+    """Infer the movie/product name being asked about, for prompt-building.
+
+    Tries, in order: an explicit movie-name block extracted from `task`
+    (via `extract_movie_name`), a regex match on phrases like "về X",
+    "review X", "đánh giá X", "phân tích X" in the current question, then
+    the question itself with those leading verbs stripped, and finally
+    `fallback`.
 
     Args:
-        task: (str) Tham số `task`.
-        fallback: (str) Tham số `fallback`.
+        task: Full task/conversation text (may include prior turns
+            separated by the history marker).
+        fallback: Value to return if no name could be inferred.
 
     Returns:
-        (str) Kết quả trả về."""
+        The inferred movie/product name, or `fallback` (or "phim" if
+        `fallback` is also empty).
+    """
     from_block = extract_movie_name(task)
     if from_block:
         return from_block
@@ -101,25 +117,34 @@ def _movie_hint(task: str, fallback: str) -> str:
 
 
 def _movie_tokens(movie: str) -> list[str]:
-    """(Nội bộ) Movie tokens `_movie_tokens`.
+    """Extract lowercase alphanumeric tokens from a movie/product name.
+
+    Used to build a keyword set for matching reviews against the movie
+    being discussed. Common stopwords (`_MOVIE_STOPWORDS`) are filtered out.
 
     Args:
-        movie: (str) Tham số `movie`.
+        movie: Movie/product name string.
 
     Returns:
-        (list[str]) Kết quả trả về."""
+        List of tokens (2+ chars) with stopwords removed.
+    """
     tokens = re.findall("[a-z0-9]{2,}", movie.lower())
     return [t for t in tokens if t not in _MOVIE_STOPWORDS]
 
 
 def _is_viet_or_english(text: str) -> bool:
-    """(Nội bộ) Is viet or english.
+    """Heuristically check whether text looks like Vietnamese or English.
+
+    Returns True if the text contains a Vietnamese diacritic, or if Latin
+    letters make up at least 40% of its stripped length (min 4 letters).
+    Used to filter out reviews written in unrelated languages.
 
     Args:
-        text: (str) Tham số `text`.
+        text: Text to check.
 
     Returns:
-        (bool) Kết quả trả về."""
+        True if the text appears to be Vietnamese or English.
+    """
     if _VIET_RE.search(text):
         return True
     letters = re.findall("[a-zA-Z]", text)
@@ -127,13 +152,15 @@ def _is_viet_or_english(text: str) -> bool:
 
 
 def _is_noise(text: str) -> bool:
-    """(Nội bộ) Is noise.
+    """Check whether a review is too short or emoji-only to be useful.
 
     Args:
-        text: (str) Tham số `text`.
+        text: Review text to check.
 
     Returns:
-        (bool) Kết quả trả về."""
+        True if the stripped text is shorter than 6 characters, or matches
+        only emoji/punctuation/whitespace.
+    """
     stripped = text.strip()
     if len(stripped) < 6:
         return True
@@ -143,14 +170,23 @@ def _is_noise(text: str) -> bool:
 
 
 def filter_reviews(reviews: list[dict], movie: str) -> list[dict]:
-    """Lọc reviews.
+    """Filter raw reviews down to ones relevant to the given movie/product.
+
+    Drops empty/noisy reviews (see `_is_noise`), reviews that aren't
+    Vietnamese/English (see `_is_viet_or_english`), and reviews that look
+    foreign-language but contain no Vietnamese diacritics. If `movie`
+    yields keyword tokens, also drops reviews that mention neither the
+    movie's tokens nor a generic commerce-related keyword.
 
     Args:
-        reviews: (list[dict]) Tham số `reviews`.
-        movie: (str) Tham số `movie`.
+        reviews: Raw review dicts, each with a "content"/"comment"/"text"
+            field.
+        movie: Movie/product name used to derive matching keywords.
 
     Returns:
-        (list[dict]) Kết quả trả về."""
+        Filtered list of review dicts, each with its "content" field
+        normalized to the extracted text.
+    """
     tokens = _movie_tokens(movie)
     filtered: list[dict] = []
     for review in reviews:
@@ -171,13 +207,18 @@ def filter_reviews(reviews: list[dict], movie: str) -> list[dict]:
 
 
 def _format_reviews(reviews: list[dict]) -> str:
-    """(Nội bộ) Định dạng reviews.
+    """Render up to 120 reviews as a numbered list for the LLM prompt.
+
+    Each line includes an optional star-rating prefix and platform tag,
+    with review text truncated to 300 characters.
 
     Args:
-        reviews: (List[Dict]) Tham số `reviews`.
+        reviews: Review dicts, each with "content"/"comment"/"text",
+            optional "platform", and optional "rating"/"stars".
 
     Returns:
-        (str) Kết quả trả về."""
+        The formatted, newline-joined list as a single string.
+    """
     lines = []
     for i, review in enumerate(reviews[:120], 1):
         text = review.get("content") or review.get("comment") or review.get("text") or ""
@@ -192,16 +233,25 @@ def _format_reviews(reviews: list[dict]) -> str:
 
 
 async def summarize_reviews(reviews: list[dict], movie: str = "", source: str = "", task: str = "") -> str | None:
-    """Summarize reviews (async).
+    """Generate an LLM summary of collected reviews for a movie/product.
+
+    Filters the reviews for relevance (falling back to the first 40
+    non-empty reviews if filtering removes everything), builds the review
+    summary prompt, and calls the configured LLM (with model fallback) to
+    produce a cleaned summary. Returns None if the prompt templates aren't
+    configured, if there are no reviews, or if every candidate model fails.
 
     Args:
-        reviews: (list[dict]) Tham số `reviews`.
-        movie: (str, mặc định '') Tham số `movie`.
-        source: (str, mặc định '') Tham số `source`.
-        task: (str, mặc định '') Tham số `task`.
+        reviews: Raw review dicts to summarize.
+        movie: Movie/product name, used as a fallback hint if none can be
+            inferred from `task`.
+        source: Label describing where the reviews came from (e.g.
+            "YouTube"), inserted into the prompt.
+        task: Original task/question text, used to infer the movie name.
 
     Returns:
-        (str | None) Kết quả trả về."""
+        The cleaned summary text, or None if no summary could be produced.
+    """
     if not reviews:
         return None
     movie_hint = _movie_hint(task, movie)
@@ -235,8 +285,7 @@ async def summarize_reviews(reviews: list[dict], movie: str = "", source: str = 
             last_exc = exc
             if _should_fallback_synth(exc, model):
                 logger.warning(
-                    "[review_summary] fallback model=%s after upstream error",
-                    model,
+                    log_event("review_summary", "model fallback", model=model, reason="upstream_error")
                 )
                 continue
             log_error(logger, exc, where="review_summary")

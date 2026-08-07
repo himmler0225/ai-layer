@@ -1,25 +1,29 @@
-from app.services.agent.constants import _TIKTOK, _YOUTUBE
+from app.services.agent.constants import _TIKTOK, _WEB, _YOUTUBE
 
-# Nguồn duy nhất cho danh sách domain/worker của multi-agent.
-# Thêm/xoá domain (vd "instagram") chỉ cần sửa mảng này — build.py, nodes.py,
-# supervisor.py đều tự suy ra danh sách + logic route từ đây, không hard-code
-# tên domain ở đâu khác nữa.
+# Single source of truth for the multi-agent's domain/worker list.
+# Adding/removing a domain (e.g. "instagram") only requires editing this array —
+# build.py, nodes.py and supervisor.py all derive their domain list and routing
+# logic from it, so domain names are never hard-coded anywhere else.
 #
-# capabilities: loại ý định domain này phục vụ được — supervisor dùng để suy
-#   ra "ý định X thì route domain nào" thay vì viết tay tên domain:
-#   - "review": có thể tìm/tổng hợp review từ nguồn của domain
-#   - "catalog": có thể tra cứu metadata/catalog phim
-# mention_re: regex nhận diện domain được nhắc tên trong câu hỏi (None nếu
-#   domain không có cách nhận diện qua từ khoá, như "movies" — nó được chọn
-#   qua wants_catalog() ngữ nghĩa, không phải qua tên riêng).
+# capabilities: the kinds of intent this domain can serve — the supervisor uses
+#   this to infer "which domain(s) should intent X route to" instead of
+#   hard-coding domain names:
+#   - "review": can find/summarize reviews from this domain's source
+#   - "catalog": can look up movie metadata/catalog info
+#   - "search": external web search (never auto-selected by intent — only via
+#     mention_re or an explicit tools="<id>", to avoid calling Tavily (paid) for
+#     every vague question when the supervisor falls back to "select all domains")
+# mention_re: regex that detects the domain being named in the question (None if
+#   the domain has no keyword-based way to be detected, like "movies" — it is
+#   selected via the semantic wants_catalog() check instead of by name).
 #
-# Vẫn cần làm thêm khi thêm domain mới (không tránh được, domain mới = năng
-# lực mới):
-#   1. Định nghĩa tool cho domain đó trong app/tools/*_definitions.py
-#   2. Thêm key tương ứng vào TOOL_SETS trong app/tools/definitions.py
-#   3. (Tuỳ chọn) thêm regex riêng (như _YOUTUBE/_TIKTOK) vào constants.py rồi
-#      gán vào "mention_re" nếu muốn NLU tự phát hiện qua tên gọi — không có
-#      vẫn dùng được qua tools="<id>" tường minh.
+# Still required when adding a new domain (unavoidable, since a new domain means
+# new capability):
+#   1. Define the tools for that domain in app/tools/*_definitions.py
+#   2. Add the corresponding key to TOOL_SETS in app/tools/definitions.py
+#   3. (Optional) add a dedicated regex (like _YOUTUBE/_TIKTOK) to constants.py
+#      and assign it to "mention_re" if you want NLU to auto-detect it by name —
+#      otherwise it still works via an explicit tools="<id>".
 DOMAINS: list[dict] = [
     {
         "id": "youtube",
@@ -48,7 +52,24 @@ DOMAINS: list[dict] = [
         "capabilities": ["catalog"],
         "mention_re": None,
     },
+    {
+        "id": "web",
+        "tool_set": "web",
+        "role_prompt": "[Vai trò] Bạn là một chuyên gia tìm kiếm thông tin trên web (Google qua Tavily) - chỉ dùng tool web_*, không bàn Youtube/Tiktok/phim",
+        "search_tool": "web_search",
+        "search_arg": "query",
+        "capabilities": ["search"],
+        "mention_re": _WEB,
+    },
 ]
 
 DOMAIN_IDS: list[str] = [d["id"] for d in DOMAINS]
 DOMAIN_BY_ID: dict[str, dict] = {d["id"]: d for d in DOMAINS}
+
+# Domains used when the supervisor cannot determine any intent (the "select
+# all" fallback) — only includes domains with an intent-based capability
+# (review/catalog), NOT "search"-only domains like "web": this avoids calling
+# Tavily (paid, rate-limited) for every vague question unrelated to web search.
+DEFAULT_FALLBACK_DOMAIN_IDS: list[str] = [
+    d["id"] for d in DOMAINS if {"review", "catalog"} & set(d.get("capabilities", ()))
+]

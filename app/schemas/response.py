@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field
 
 
 class ApiResponse(BaseModel):
-    """Lớp `ApiResponse` (kế thừa BaseModel)."""
+    """Standard response envelope returned by all API endpoints."""
 
     success: bool
     data: Any = None
@@ -13,32 +13,29 @@ class ApiResponse(BaseModel):
 
     @classmethod
     def ok(cls, data: Any = None, **meta: Any) -> ApiResponse:
-        """Ok `ok`.
+        """Build a successful response envelope.
 
         Args:
-            data: (Any) Tham số `data`.
-            meta: (Any, mặc định None) Tham số `meta`.
+            data: Payload to return to the client.
+            meta: Extra metadata fields merged in alongside the timestamp.
 
         Returns:
-            (ApiResponse) Kết quả trả về."""
+            ApiResponse with success=True."""
         return cls(success=True, data=data, meta={"timestamp": _ts(), **meta})
 
     @classmethod
     def fail(cls, error: str, **meta: Any) -> ApiResponse:
-        """Fail `fail`.
+        """Build a failure response envelope.
 
         Args:
-            error: (str) Tham số `error`.
-            meta: (Any) Tham số `meta`.
+            error: Human-readable error message for the client.
+            meta: Extra metadata fields merged in alongside the timestamp.
 
         Returns:
-            (ApiResponse) Kết quả trả về."""
+            ApiResponse with success=False."""
         return cls(success=False, error=error, meta={"timestamp": _ts(), **meta})
 
 
 def _ts() -> str:
-    """(Nội bộ) Ts `_ts`.
-
-    Returns:
-        (str) Kết quả trả về."""
+    """Return the current UTC time as an ISO-8601 string, used for response timestamps."""
     return datetime.now(UTC).isoformat()

@@ -5,13 +5,18 @@ from app.repositories.videos import exists_video, update_transcript, upsert_vide
 
 
 async def handle_transcript_upsert(envelope: dict) -> None:
-    """Xử lý transcript upsert (async).
+    """Persist a video's transcript and publish its chunks for embedding.
+
+    Ensures the parent video row exists, stores the transcript text, splits it into
+    chunks, and publishes them onto the embed routing key.
 
     Args:
-        envelope: (dict) Tham số `envelope`.
+        envelope: Ingest envelope dict with "video_id"/"platform"/"movie_hint" and a
+            "payload" containing "text", "url", and "language".
 
     Returns:
-        (None) Kết quả trả về."""
+        None. Does nothing if there is no video id, no text, or no resulting chunks.
+    """
     payload = envelope.get("payload") or {}
     video_id = envelope.get("video_id") or payload.get("video_id")
     platform = envelope.get("platform") or payload.get("platform") or "youtube"

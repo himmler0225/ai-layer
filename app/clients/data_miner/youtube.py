@@ -2,52 +2,53 @@ from app.clients.data_miner._http import get as _get
 
 
 async def search_youtube(query: str, max_results: int = 10, sort: str = "relevance") -> dict:
-    """Search youtube (async).
+    """Search YouTube videos by keyword.
 
     Args:
-        query: (str) Tham số `query`.
-        max_results: (int, mặc định 10) Tham số `max_results`.
-        sort: (str, mặc định 'relevance') Tham số `sort`.
+        query: Search text.
+        max_results: Maximum number of results to return.
+        sort: Sort order (e.g. `"relevance"`, `"view_count"`).
 
     Returns:
-        (dict) Kết quả trả về."""
+        The data-miner video search response (dict)."""
     return await _get("/api/videos/search", {"q": query, "max_results": max_results, "sort": sort})
 
 
 async def get_video_detail(video_id: str) -> dict:
-    """Lấy video detail (async).
+    """Fetch metadata for a single YouTube video.
 
     Args:
-        video_id: (str) Tham số `video_id`.
+        video_id: The YouTube video id.
 
     Returns:
-        (dict) Kết quả trả về."""
+        The data-miner video detail response (dict)."""
     return await _get(f"/api/videos/{video_id}")
 
 
 async def get_video_comments(video_id: str, max_comments: int = 20, sort: str = "newest") -> dict:
-    """Lấy video comments (async).
+    """Fetch comments for a single YouTube video.
 
     Args:
-        video_id: (str) Tham số `video_id`.
-        max_comments: (int, mặc định 20) Tham số `max_comments`.
-        sort: (str, mặc định 'newest') Tham số `sort`.
+        video_id: The YouTube video id.
+        max_comments: Maximum number of comments to fetch (sent as `limit`).
+        sort: Sort order (e.g. `"newest"`, `"top"`).
 
     Returns:
-        (dict) Kết quả trả về."""
+        The data-miner comments response (dict)."""
     return await _get(f"/api/videos/{video_id}/comments", {"limit": max_comments, "sort": sort})
 
 
 async def get_video_comments_batch(video_ids: list, max_per_video: int = 20, sort: str = "top") -> dict:
-    """Lấy video comments batch (async).
+    """Fetch comments for multiple YouTube videos in one request.
 
     Args:
-        video_ids: (list) Tham số `video_ids`.
-        max_per_video: (int, mặc định 20) Tham số `max_per_video`.
-        sort: (str, mặc định 'top') Tham số `sort`.
+        video_ids: List of YouTube video ids (joined with commas for the
+            request).
+        max_per_video: Maximum number of comments to fetch per video.
+        sort: Sort order (e.g. `"top"`, `"newest"`).
 
     Returns:
-        (dict) Kết quả trả về."""
+        The data-miner batch comments response (dict)."""
     return await _get(
         "/api/videos/comments/batch",
         {"video_ids": ",".join(video_ids), "limit": max_per_video, "sort": sort},
@@ -55,122 +56,124 @@ async def get_video_comments_batch(video_ids: list, max_per_video: int = 20, sor
 
 
 async def get_video_transcript(video_id: str) -> dict:
-    """Lấy video transcript (async).
+    """Fetch the transcript/captions for a single YouTube video.
 
     Args:
-        video_id: (str) Tham số `video_id`.
+        video_id: The YouTube video id.
 
     Returns:
-        (dict) Kết quả trả về."""
+        The data-miner transcript response (dict)."""
     return await _get(f"/api/videos/{video_id}/transcript")
 
 
 async def get_video_transcript_batch(video_ids: list) -> dict:
-    """Lấy video transcript batch (async).
+    """Fetch transcripts for multiple YouTube videos in one request.
 
     Args:
-        video_ids: (list) Tham số `video_ids`.
+        video_ids: List of YouTube video ids (joined with commas for the
+            request).
 
     Returns:
-        (dict) Kết quả trả về."""
+        The data-miner batch transcript response (dict)."""
     return await _get("/api/videos/transcript/batch", {"video_ids": ",".join(video_ids)})
 
 
 async def get_trending(max_results: int = 20) -> dict:
-    """Top-viewed YouTube search — data-miner không có route `/api/videos/trending`."""
+    """Approximate a "trending" feed via a view-count-sorted search, since
+    data-miner has no dedicated `/api/videos/trending` route."""
     return await search_youtube("trending", max_results=max_results, sort="view_count")
 
 
 async def get_shorts(max_results: int = 20) -> dict:
-    """Lấy shorts (async).
+    """Fetch a list of YouTube Shorts.
 
     Args:
-        max_results: (int, mặc định 20) Tham số `max_results`.
+        max_results: Maximum number of results to return.
 
     Returns:
-        (dict) Kết quả trả về."""
+        The data-miner shorts response (dict)."""
     return await _get("/api/videos/shorts", {"limit": max_results})
 
 
 async def get_live(query: str = "", max_results: int = 20) -> dict:
-    """Lấy live (async).
+    """Fetch currently live YouTube streams, optionally filtered by keyword.
 
     Args:
-        query: (str, mặc định '') Tham số `query`.
-        max_results: (int, mặc định 20) Tham số `max_results`.
+        query: Optional search text; empty string returns unfiltered results.
+        max_results: Maximum number of results to return.
 
     Returns:
-        (dict) Kết quả trả về."""
+        The data-miner live streams response (dict)."""
     return await _get("/api/videos/live", {"q": query, "limit": max_results})
 
 
 async def get_by_region(gl: str, hl: str, query: str, max_results: int = 20) -> dict:
-    """Lấy by region (async).
+    """Search YouTube videos scoped to a geographic region/language.
 
     Args:
-        gl: (str) Tham số `gl`.
-        hl: (str) Tham số `hl`.
-        query: (str) Tham số `query`.
-        max_results: (int, mặc định 20) Tham số `max_results`.
+        gl: Google/YouTube region code (e.g. `"US"`, `"VN"`).
+        hl: Interface/host language code (e.g. `"en"`, `"vi"`).
+        query: Search text.
+        max_results: Maximum number of results to return.
 
     Returns:
-        (dict) Kết quả trả về."""
+        The data-miner region search response (dict)."""
     return await _get("/api/videos/location", {"gl": gl, "hl": hl, "query": query, "max_results": max_results})
 
 
 async def get_by_topic(topic: str, max_results: int = 20) -> dict:
-    """Lấy by topic (async).
+    """Fetch YouTube videos related to a given topic.
 
     Args:
-        topic: (str) Tham số `topic`.
-        max_results: (int, mặc định 20) Tham số `max_results`.
+        topic: The topic identifier/keyword to filter by.
+        max_results: Maximum number of results to return (sent as `limit`).
 
     Returns:
-        (dict) Kết quả trả về."""
+        The data-miner by-topic response (dict)."""
     return await _get("/api/videos/by-topic", {"topic": topic, "limit": max_results})
 
 
 async def get_channel_info(channel_id: str) -> dict:
-    """Lấy channel info (async).
+    """Fetch metadata for a single YouTube channel.
 
     Args:
-        channel_id: (str) Tham số `channel_id`.
+        channel_id: The YouTube channel id.
 
     Returns:
-        (dict) Kết quả trả về."""
+        The data-miner channel info response (dict)."""
     return await _get(f"/api/channels/{channel_id}")
 
 
 async def get_channel_videos(channel_id: str, max_results: int = 30) -> dict:
-    """Lấy channel videos (async).
+    """List videos published by a YouTube channel.
 
     Args:
-        channel_id: (str) Tham số `channel_id`.
-        max_results: (int, mặc định 30) Tham số `max_results`.
+        channel_id: The YouTube channel id.
+        max_results: Maximum number of results to return (sent as `limit`).
 
     Returns:
-        (dict) Kết quả trả về."""
+        The data-miner channel videos response (dict)."""
     return await _get(f"/api/channels/{channel_id}/videos", {"limit": max_results})
 
 
 async def get_channel_playlists(channel_id: str) -> dict:
-    """Lấy channel playlists (async).
+    """List playlists belonging to a YouTube channel.
 
     Args:
-        channel_id: (str) Tham số `channel_id`.
+        channel_id: The YouTube channel id.
 
     Returns:
-        (dict) Kết quả trả về."""
+        The data-miner channel playlists response (dict)."""
     return await _get(f"/api/channels/{channel_id}/playlists")
 
 
 async def get_playlist_videos(playlist_id: str, max_results: int = 30) -> dict:
-    """Lấy playlist videos (async).
+    """List videos contained in a YouTube playlist.
 
     Args:
-        playlist_id: (str) Tham số `playlist_id`.
-        max_results: (int, mặc định 30) Tham số `max_results`.
+        playlist_id: The YouTube playlist id.
+        max_results: Maximum number of results to return (sent as `limit`).
 
     Returns:
-        (dict) Kết quả trả về."""
+        The data-miner playlist videos response (dict)."""
     return await _get(f"/api/playlists/{playlist_id}/videos", {"limit": max_results})

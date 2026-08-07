@@ -11,13 +11,16 @@ from app.ai.types import (
 
 
 def responses_tools_to_chat(tools: list[dict] | None) -> list[dict]:
-    """Responses tools to chat.
+    """Convert Responses-API tool definitions into Chat Completions tool format.
 
     Args:
-        tools: (List[Dict] | None) Tham số `tools`.
+        tools: Tool specs in Responses-API shape (each with a `type` and, for
+            function tools, `name`/`description`/`parameters`). May be `None`.
 
     Returns:
-        (List[Dict]) Kết quả trả về."""
+        A list of Chat Completions `{"type": "function", "function": {...}}`
+        entries. Non-function tools are dropped; returns `[]` if `tools` is
+        falsy."""
     if not tools:
         return []
     out: list[dict] = []
@@ -38,14 +41,14 @@ def responses_tools_to_chat(tools: list[dict] | None) -> list[dict]:
 
 
 def _append_user_message(messages: list[dict], content: str) -> None:
-    """(Nội bộ) Append user message.
+    """Append a user message, merging into the previous one if it was also a user turn.
 
     Args:
-        messages: (List[Dict]) Tham số `messages`.
-        content: (str) Tham số `content`.
+        messages: Chat message list being built, mutated in place.
+        content: Text to add as a user message.
 
     Returns:
-        (None) Kết quả trả về."""
+        None."""
     if messages and messages[-1].get("role") == "user" and isinstance(messages[-1].get("content"), str):
         messages[-1]["content"] = f"{messages[-1]['content']}\n{content}"
     else:
@@ -53,14 +56,21 @@ def _append_user_message(messages: list[dict], content: str) -> None:
 
 
 def responses_input_to_chat_messages(input_items: Any, *, instructions: str | None = None) -> list[dict]:
-    """Responses input to chat messages.
+    """Convert Responses-API input items into Chat Completions messages.
+
+    Handles `instructions` (mapped to a system message), plain user turns,
+    `function_call`/`function_call_output` items (mapped to assistant
+    `tool_calls` and `tool` role messages respectively), and `message` items
+    containing `output_text` blocks. Both dict-shaped items and objects with
+    `role`/`content` attributes are accepted.
 
     Args:
-        input_items: (Any) Tham số `input_items`.
-        instructions: (str | None, mặc định None) Tham số `instructions`.
+        input_items: A single input item or list of items, in Responses-API
+            shape (dicts or objects).
+        instructions: Optional system prompt prepended as the first message.
 
     Returns:
-        (List[Dict]) Kết quả trả về."""
+        The resulting list of Chat Completions message dicts."""
     messages: list[dict] = []
     if instructions:
         messages.append({"role": "system", "content": instructions})
@@ -69,10 +79,10 @@ def responses_input_to_chat_messages(input_items: Any, *, instructions: str | No
     pending_call_ids: list[str] = []
 
     def flush_assistant_tool_calls() -> None:
-        """Flush assistant tool calls.
+        """Emit the accumulated `function_call` items as one assistant tool_calls message.
 
         Returns:
-            (None) Kết quả trả về."""
+            None. No-op if there are no pending tool calls."""
         nonlocal pending_tool_calls, pending_call_ids
         if not pending_tool_calls:
             return
@@ -124,13 +134,18 @@ def responses_input_to_chat_messages(input_items: Any, *, instructions: str | No
 
 
 def chat_completion_to_llm_response(completion: Any) -> LLMResponse:
-    """Chat completion to llm response.
+    """Convert an OpenAI ChatCompletion object into the internal LLMResponse shape.
+
+    Extracts tool calls (as `FunctionCallItem`s) if present, otherwise the
+    assistant's text content (as a `MessageOutputItem`). Maps a `length`
+    finish reason to an `incomplete` status with `max_output_tokens` reason.
 
     Args:
-        completion: (Any) Tham số `completion`.
+        completion: The `ChatCompletion` object returned by the OpenAI SDK.
 
     Returns:
-        (LLMResponse) Kết quả trả về."""
+        An `LLMResponse` with `status`, `output`, `output_text`, and
+        `incomplete_details` populated."""
     choice = completion.choices[0]
     message = choice.message
     output: list[Any] = []
@@ -152,13 +167,15 @@ def chat_completion_to_llm_response(completion: Any) -> LLMResponse:
 
 
 class ChatCompletionStreamAdapter:
-    """Lớp `ChatCompletionStreamAdapter` (kế thừa object)."""
+    """Wraps an OpenAI Chat Completions stream to expose it as an async context
+    manager that yields Responses-API-style stream events and can build a
+    final `LLMResponse` once the stream is exhausted."""
 
     def __init__(self, stream: Any):
-        """Khởi tạo instance.
+        """Store the underlying chunk stream and initialize accumulator state.
 
         Args:
-            stream: (Any) Tham số `stream`."""
+            stream: The async iterable of Chat Completions stream chunks."""
         self._stream = stream
         self._final: LLMResponse | None = None
         self._text = ""
@@ -166,30 +183,31 @@ class ChatCompletionStreamAdapter:
         self._finish_reason: str | None = None
 
     async def __aenter__(self) -> ChatCompletionStreamAdapter:
-        """Vào async context manager (async).
+        """Enter the async context manager.
 
         Returns:
-            (ChatCompletionStreamAdapter) Kết quả trả về."""
+            This adapter instance."""
         return self
 
     async def __aexit__(self, *args: Any) -> None:
-        """Thoát async context manager (async).
+        """Close the underlying stream, if it exposes a `close()` method.
 
         Args:
-            args: (Any) Tham số `args`.
+            args: Exception info passed by the `async with` protocol (unused).
 
         Returns:
-            (None) Kết quả trả về."""
+            None."""
         close = getattr(self._stream, "close", None)
         if close:
             await close()
 
     def __aiter__(self):
-        """Trả về async iterator."""
+        """Return the async iterator of stream events for this adapter."""
         return self._event_iter()
 
     async def _event_iter(self):
-        """(Nội bộ) Event iter (async)."""
+        """Iterate the underlying chunks, yielding text deltas and accumulating
+        tool-call fragments and the finish reason, then build the final response."""
         async for chunk in self._stream:
             if not chunk.choices:
                 continue
@@ -223,10 +241,13 @@ class ChatCompletionStreamAdapter:
         self._build_final()
 
     def _build_final(self) -> None:
-        """(Nội bộ) Xây dựng final.
+        """Build and cache the final `LLMResponse` from accumulated stream state.
+
+        Prefers accumulated tool calls over accumulated text; maps a `length`
+        finish reason to an incomplete status. Idempotent once `_final` is set.
 
         Returns:
-            (None) Kết quả trả về."""
+            None."""
         if self._final is not None:
             return
         output: list[Any] = []
@@ -250,10 +271,11 @@ class ChatCompletionStreamAdapter:
         self._final = LLMResponse(status=status, output=output, output_text=self._text, incomplete_details=incomplete)
 
     async def get_final_response(self) -> LLMResponse:
-        """Lấy final response (async).
+        """Return the final `LLMResponse`, building it first if the stream hasn't
+        been fully consumed yet.
 
         Returns:
-            (LLMResponse) Kết quả trả về."""
+            The accumulated `LLMResponse`."""
         if self._final is None:
             self._build_final()
         return self._final

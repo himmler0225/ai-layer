@@ -1,15 +1,15 @@
 from app.rag.movie_hint import context_for_filtering, current_question, has_movie_context, wants_catalog, wants_review
 from app.services.agent.domains import DOMAINS, DOMAIN_IDS
 
-# Suy ra từ DOMAINS thay vì viết tay tên domain — thêm/xoá domain chỉ cần
-# sửa domains.py, các danh sách dưới đây tự cập nhật theo.
+# Derived from DOMAINS instead of hard-coding domain names — adding/removing a
+# domain only requires editing domains.py, and the lists below update automatically.
 _REVIEW_DOMAIN_IDS = [d["id"] for d in DOMAINS if "review" in d.get("capabilities", ())]
 _CATALOG_DOMAIN_IDS = [d["id"] for d in DOMAINS if "catalog" in d.get("capabilities", ())]
 _MENTION_PATTERNS = [(d["id"], d["mention_re"]) for d in DOMAINS if d.get("mention_re")]
 
 
 def _mentioned_domains(text: str) -> list[str]:
-    """Domain nào được nhắc tên trực tiếp trong text (vd 'youtube', 'tiktok')."""
+    """Which domains are directly named in the text (e.g. 'youtube', 'tiktok')."""
     return [domain_id for domain_id, pattern in _MENTION_PATTERNS if pattern.search(text)]
 
 

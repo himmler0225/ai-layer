@@ -6,7 +6,7 @@ from app.config.db.models.base import Base
 
 
 class ChatSession(Base):
-    """Lớp `ChatSession` (kế thừa Base)."""
+    """A user's chat session: holds a title/timestamps and its related messages."""
 
     __tablename__ = "chat_sessions"
     __table_args__ = (Index("chat_sessions_user_updated", "user_id", "updated_at"),)
@@ -21,7 +21,7 @@ class ChatSession(Base):
 
 
 class ChatMessage(Base):
-    """Lớp `ChatMessage` (kế thừa Base)."""
+    """A single user or assistant message belonging to a chat session."""
 
     __tablename__ = "chat_messages"
     __table_args__ = (

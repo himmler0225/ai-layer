@@ -4,13 +4,14 @@ __all__ = ["slugify_movie_id", "resolve_movie_id"]
 
 
 async def resolve_movie_id(name: str) -> str | None:
-    """Giải quyết movie id (async).
+    """Resolve a movie name to its slug/ID, but only if that movie exists in the DB.
 
     Args:
-        name: (str) Tham số `name`.
+        name: Movie name (or free text) to slugify.
 
     Returns:
-        (str | None) Kết quả trả về."""
+        The slug if it is non-trivial and the movie exists, otherwise None.
+    """
     from app.repositories.movies import exists_movie
 
     slug = slugify_movie_id(name)

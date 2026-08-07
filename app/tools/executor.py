@@ -11,28 +11,33 @@ from app.tools.movie_definitions import MOVIE_TOOLS
 from app.tools.rag_definitions import RAG_TOOLS
 from app.tools.tiktok_definitions import TIKTOK_TOOLS
 from app.tools.util_definitions import UTIL_TOOLS
+from app.tools.web_definitions import WEB_TOOLS
 from app.tools.youtube_definitions import YOUTUBE_TOOLS
 
 _RAG_TOOL_NAMES = frozenset(t["name"] for t in RAG_TOOLS)
 _UTIL_TOOL_NAMES = frozenset(t["name"] for t in UTIL_TOOLS)
 _LEGACY_CRAWL_NAMES = frozenset(
-    t["name"] for t in (*YOUTUBE_TOOLS, *TIKTOK_TOOLS, *MOVIE_TOOLS)
+    t["name"] for t in (*YOUTUBE_TOOLS, *TIKTOK_TOOLS, *MOVIE_TOOLS, *WEB_TOOLS)
 )
 
 _STATIC_SCHEMAS: dict[str, dict] = {
     tool["name"]: tool["parameters"]
-    for tool in (*(RAG_TOOLS if RAG_ENABLED else []), *YOUTUBE_TOOLS, *TIKTOK_TOOLS, *MOVIE_TOOLS, *UTIL_TOOLS)
+    for tool in (*(RAG_TOOLS if RAG_ENABLED else []), *YOUTUBE_TOOLS, *TIKTOK_TOOLS, *MOVIE_TOOLS, *WEB_TOOLS, *UTIL_TOOLS)
 }
 
 
 async def _schema_for(name: str) -> dict | None:
-    """(Nội bộ) Schema for (async) `_schema_for`.
+    """Look up the JSON schema used to validate a tool's input parameters.
+
+    Prefers the MCP crawl catalog's schema (when the MCP backend is
+    active) and falls back to the static tool-definition schemas.
 
     Args:
-        name: (str) Tham số `name`.
+        name: Tool name to look up.
 
     Returns:
-        (dict | None) Kết quả trả về."""
+        The tool's parameter JSON schema, or None if the tool is unknown.
+    """
     if AGENT_CRAWL_BACKEND == "mcp":
         from app.mcp.catalog import crawl_catalog
 
@@ -43,13 +48,16 @@ async def _schema_for(name: str) -> dict | None:
 
 
 async def _is_crawl_tool(name: str) -> bool:
-    """(Nội bộ) Is crawl tool (async) `_is_crawl_tool`.
+    """Determine whether a tool name belongs to the crawl (data-miner) toolset.
 
     Args:
-        name: (str) Tham số `name`.
+        name: Tool name to check.
 
     Returns:
-        (bool) Kết quả trả về."""
+        False for util tools; otherwise True if the name is registered in
+        the MCP crawl catalog (when MCP backend is active) or in the
+        legacy static crawl tool sets.
+    """
     if name in _UTIL_TOOL_NAMES:
         return False
     if AGENT_CRAWL_BACKEND == "mcp":
@@ -60,14 +68,17 @@ async def _is_crawl_tool(name: str) -> bool:
 
 
 def _unwrap_data_miner_result(result: Any, name: str) -> dict:
-    """(Nội bộ) Unwrap data miner result `_unwrap_data_miner_result`.
+    """Unwrap a data-miner-style {"success": ..., "data": ...} envelope into a plain dict.
 
     Args:
-        result: (Any) Tham số `result`.
-        name: (str) Tham số `name`.
+        result: Raw result returned by a tool handler.
+        name: Tool name, used to annotate error results.
 
     Returns:
-        (dict) Kết quả trả về."""
+        The inner "data" payload on success; an {"error", "tool"} dict on
+        failure; or the result as-is (wrapped in {"data": ...} if not
+        already a dict) when it doesn't match the envelope shape.
+    """
     if isinstance(result, dict):
         if result.get("success") is True and isinstance(result.get("data"), (dict, list)):
             return result["data"]
@@ -77,14 +88,16 @@ def _unwrap_data_miner_result(result: Any, name: str) -> dict:
 
 
 async def _execute_http_tool(name: str, inputs: dict) -> dict:
-    """(Nội bộ) Thực thi http tool (async) `_execute_http_tool`.
+    """Run a legacy (non-MCP) tool handler over HTTP and normalize its result.
 
     Args:
-        name: (str) Tham số `name`.
-        inputs: (dict) Tham số `inputs`.
+        name: Tool name to look up in `TOOL_HANDLERS`.
+        inputs: Validated input arguments for the tool.
 
     Returns:
-        (dict) Kết quả trả về."""
+        The unwrapped tool result, or an {"error", "tool"} dict if the
+        tool is unknown or raises an exception.
+    """
     fn = TOOL_HANDLERS.get(name)
     if fn is None:
         return {"error": f"Unknown tool: {name}"}
@@ -95,14 +108,16 @@ async def _execute_http_tool(name: str, inputs: dict) -> dict:
 
 
 async def _execute_mcp_tool(name: str, inputs: dict) -> dict:
-    """(Nội bộ) Thực thi mcp tool (async) `_execute_mcp_tool`.
+    """Run a tool via the MCP crawl catalog client and normalize its result.
 
     Args:
-        name: (str) Tham số `name`.
-        inputs: (dict) Tham số `inputs`.
+        name: Tool name to call over MCP.
+        inputs: Validated input arguments for the tool.
 
     Returns:
-        (dict) Kết quả trả về."""
+        The "data" payload on success (wrapped in {"data": ...} if not a
+        dict), or an {"error", "tool"} dict on failure/exception.
+    """
     from app.mcp.client import call_tool
 
     try:
@@ -117,15 +132,22 @@ async def _execute_mcp_tool(name: str, inputs: dict) -> dict:
 
 
 async def execute_tool(name: str, inputs: dict, **kwargs) -> dict:
-    """Thực thi tool (async).
+    """Validate inputs against the tool's schema and dispatch it to the right backend.
+
+    Validates `inputs` against the tool's JSON schema (if found), then
+    routes to the RAG handler, the util handler, the MCP crawl backend, or
+    the legacy HTTP handler, depending on which set `name` belongs to and
+    the configured `AGENT_CRAWL_BACKEND`.
 
     Args:
-        name: (str) Tham số `name`.
-        inputs: (dict) Tham số `inputs`.
-        **kwargs: (Any) Tham số `**kwargs`.
+        name: Tool name to execute.
+        inputs: Raw input arguments supplied by the LLM.
+        **kwargs: Unused; accepted for call-signature compatibility.
 
     Returns:
-        (dict) Kết quả trả về."""
+        The tool's result dict, or an {"error": ...} dict on validation
+        failure, RAG being disabled, or execution failure.
+    """
     schema = await _schema_for(name)
     if schema:
         try:

@@ -6,14 +6,15 @@ from app.config.db.session import get_session_factory
 
 
 async def get_search_cache(query: str, platform: str) -> list[str] | None:
-    """Lấy search cache (async).
+    """Look up cached video ids for a search query on a platform.
 
     Args:
-        query: (str) Tham số `query`.
-        platform: (str) Tham số `platform`.
+        query: The search query string.
+        platform: Platform the search was run against (e.g. "youtube").
 
     Returns:
-        (Optional[list[str]]) Kết quả trả về."""
+        The cached list of video ids, or None if there's no cache entry.
+    """
     factory = await get_session_factory()
     async with factory() as session:
         return await session.scalar(
@@ -22,15 +23,13 @@ async def get_search_cache(query: str, platform: str) -> list[str] | None:
 
 
 async def upsert_search_cache(query: str, platform: str, video_ids: list[str]) -> None:
-    """Upsert search cache (async).
+    """Store (or refresh) the cached search results for a query+platform pair.
 
     Args:
-        query: (str) Tham số `query`.
-        platform: (str) Tham số `platform`.
-        video_ids: (list[str]) Tham số `video_ids`.
-
-    Returns:
-        (None) Kết quả trả về."""
+        query: The search query string.
+        platform: Platform the search was run against.
+        video_ids: Video ids returned by the search, to cache.
+    """
     factory = await get_session_factory()
     async with factory() as session:
         stmt = insert(SearchCache).values(query=query, platform=platform, video_ids=video_ids, updated_at=func.now())
@@ -43,14 +42,12 @@ async def upsert_search_cache(query: str, platform: str, video_ids: list[str]) -
 
 
 async def delete_search_cache(query: str, platform: str) -> None:
-    """Delete search cache (async).
+    """Delete the cached search results for a query+platform pair.
 
     Args:
-        query: (str) Tham số `query`.
-        platform: (str) Tham số `platform`.
-
-    Returns:
-        (None) Kết quả trả về."""
+        query: The search query string.
+        platform: Platform the search was run against.
+    """
     factory = await get_session_factory()
     async with factory() as session:
         await session.execute(delete(SearchCache).where(SearchCache.query == query, SearchCache.platform == platform))
@@ -58,13 +55,12 @@ async def delete_search_cache(query: str, platform: str) -> None:
 
 
 async def clear_expired_cache(days: int = 7) -> None:
-    """Clear expired cache (async).
+    """Delete search cache entries older than a given age.
 
     Args:
-        days: (int, mặc định 7) Tham số `days`.
-
-    Returns:
-        (None) Kết quả trả về."""
+        days: Age threshold in days; entries not updated within this many
+            days are deleted.
+    """
     cutoff = datetime.now(UTC) - timedelta(days=days)
     factory = await get_session_factory()
     async with factory() as session:

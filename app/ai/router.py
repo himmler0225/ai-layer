@@ -27,7 +27,8 @@ TASK_ROUTES: dict[str, tuple[str | None, str | None]] = {
 
 
 def _resolve_provider(task: str) -> str:
-    """Chọn provider theo AI_MODELS.is_active."""
+    """Resolve which provider to use for a task, based on AI_MODELS.is_active
+    (with an embedding-provider override for embedding tasks)."""
     if task == TASK_EMBEDDING:
         emb = (settings.LLM_EMBEDDING_PROVIDER or "").strip()
         if emb:
@@ -39,27 +40,29 @@ def _resolve_provider(task: str) -> str:
 
 
 def _setting(prefix: str, field: str, default: Any = None) -> Any:
-    """(Nội bộ) Setting `_setting`.
+    """Read a `{prefix}_{field}` setting, falling back to `default` when it's
+    unset, empty string, or `0`.
 
     Args:
-        prefix: (str) Tham số `prefix`.
-        field: (str) Tham số `field`.
-        default: (Any, mặc định None) Tham số `default`.
+        prefix: Provider settings key prefix.
+        field: Setting name suffix (e.g. `"MODEL"`, `"TOOL_MAX_TOKENS"`).
+        default: Value to return when the setting is missing/falsy.
 
     Returns:
-        (Any) Kết quả trả về."""
+        The setting's value, or `default`."""
     value = getattr(settings, f"{prefix}_{field}", None)
     return value if value not in (None, "", 0) else default
 
 
 def resolve(task: str) -> tuple[str, str]:
-    """Giải quyết `resolve`.
+    """Resolve which provider and model to use for a given task.
 
     Args:
-        task: (str) Tham số `task`.
+        task: One of the `TASK_*` constants (e.g. `TASK_AGENT_TOOL`).
 
     Returns:
-        (Tuple[str, str]) Kết quả trả về."""
+        A `(provider, model)` tuple. `model` comes from `TASK_ROUTES`'
+        override if set, otherwise from `_model_for_task`."""
     _, model_override = TASK_ROUTES.get(task, TASK_ROUTES[TASK_DEFAULT])
     provider = _resolve_provider(task)
     model = model_override or _model_for_task(task, provider)
@@ -67,14 +70,15 @@ def resolve(task: str) -> tuple[str, str]:
 
 
 def _model_for_task(task: str, provider: str) -> str:
-    """(Nội bộ) Model for task.
+    """Pick the model name for a task/provider combination.
 
     Args:
-        task: (str) Tham số `task`.
-        provider: (str) Tham số `provider`.
+        task: One of the `TASK_*` constants.
+        provider: Normalized provider key.
 
     Returns:
-        (str) Kết quả trả về."""
+        The tool model for tool-calling/aspect tasks (falling back to the
+        default model), or the plain default model for other tasks."""
     spec = get_provider_spec(provider)
     tool_model = _setting(spec.settings_prefix, "TOOL_MODEL")
     model = _setting(spec.settings_prefix, "MODEL") or ""
@@ -88,13 +92,15 @@ def _model_for_task(task: str, provider: str) -> str:
 
 
 def max_tokens_for_task(task: str) -> int:
-    """Max tokens for task.
+    """Resolve the max output tokens allowed for a task's resolved provider.
 
     Args:
-        task: (str) Tham số `task`.
+        task: One of the `TASK_*` constants.
 
     Returns:
-        (int) Kết quả trả về."""
+        The tool max-tokens setting for tool/aspect tasks (falling back to
+        the general max-tokens setting, then `4096`); otherwise the general
+        max-tokens setting (falling back to `4096`)."""
     provider, _ = resolve(task)
     spec = get_provider_spec(provider)
     tool_max = _setting(spec.settings_prefix, "TOOL_MAX_TOKENS")
@@ -105,16 +111,17 @@ def max_tokens_for_task(task: str) -> int:
 
 
 class LLMRouter:
-    """Lớp `LLMRouter` (kế thừa object)."""
+    """Routes AI task calls to the configured provider/model, resolving both
+    via `resolve()`/`max_tokens_for_task()` before delegating to `LLMFactory`."""
 
     def provider_for(self, task: str) -> BaseLLM:
-        """Provider for.
+        """Get the `BaseLLM` instance for the provider assigned to a task.
 
         Args:
-            task: (str) Tham số `task`.
+            task: One of the `TASK_*` constants.
 
         Returns:
-            (BaseLLM) Kết quả trả về."""
+            The (cached) `BaseLLM` instance for the resolved provider."""
         provider_name, _ = resolve(task)
         return LLMFactory.get(provider_name)
 
@@ -127,17 +134,17 @@ class LLMRouter:
         max_tokens: int | None = None,
         model: str | None = None,
     ) -> str:
-        """Hoàn tất `complete` (async).
+        """Run a text completion for `task`, resolving provider/model/limits.
 
         Args:
-            task: (str) Tham số `task`.
-            user_prompt: (str) Tham số `user_prompt`.
-            system_prompt: (str, mặc định '') Tham số `system_prompt`.
-            max_tokens: (Optional[int], mặc định None) Tham số `max_tokens`.
-            model: (Optional[str], mặc định None) Tham số `model`.
+            task: One of the `TASK_*` constants.
+            user_prompt: The user's message content.
+            system_prompt: Optional system instructions.
+            max_tokens: Override for the task's resolved max tokens.
+            model: Override for the task's resolved model.
 
         Returns:
-            (str) Kết quả trả về."""
+            The generated text."""
         _, resolved_model = resolve(task)
         provider = self.provider_for(task)
         return await provider.complete(
@@ -156,17 +163,17 @@ class LLMRouter:
         max_tokens: int | None = None,
         model: str | None = None,
     ) -> str:
-        """Hoàn tất json (async).
+        """Run a JSON-constrained completion for `task`, resolving provider/model/limits.
 
         Args:
-            task: (str) Tham số `task`.
-            user_prompt: (str) Tham số `user_prompt`.
-            system_prompt: (str, mặc định '') Tham số `system_prompt`.
-            max_tokens: (Optional[int], mặc định None) Tham số `max_tokens`.
-            model: (Optional[str], mặc định None) Tham số `model`.
+            task: One of the `TASK_*` constants.
+            user_prompt: The user's message content.
+            system_prompt: Optional system instructions.
+            max_tokens: Override for the task's resolved max tokens.
+            model: Override for the task's resolved model.
 
         Returns:
-            (str) Kết quả trả về."""
+            The generated text, expected to be a JSON string."""
         _, resolved_model = resolve(task)
         provider = self.provider_for(task)
         return await provider.complete_json(
@@ -177,11 +184,17 @@ class LLMRouter:
         )
 
     async def create_response(self, task: str, **kwargs):
-        """Tạo response (async).
+        """Run a Responses-API-style request for `task`, filling in the
+        resolved model and max output tokens as defaults.
 
         Args:
-            task: (str) Tham số `task`.
-            kwargs: (Any) Tham số `kwargs`."""
+            task: One of the `TASK_*` constants.
+            kwargs: Forwarded to `BaseLLM.create_response` (instructions,
+                input, tools, tool_choice, etc.); `model` and
+                `max_output_tokens` default from the task if not given.
+
+        Returns:
+            The provider's response object."""
         _, resolved_model = resolve(task)
         kwargs.setdefault("model", resolved_model)
         kwargs.setdefault("max_output_tokens", max_tokens_for_task(task))
@@ -189,11 +202,16 @@ class LLMRouter:
         return await provider.create_response(**kwargs)
 
     def response_stream(self, task: str, **kwargs):
-        """Response stream.
+        """Open a streaming Responses-API-style request for `task`, filling in
+        the resolved model and max output tokens as defaults.
 
         Args:
-            task: (str) Tham số `task`.
-            kwargs: (Any) Tham số `kwargs`."""
+            task: One of the `TASK_*` constants.
+            kwargs: Forwarded to `BaseLLM.response_stream`; `model` and
+                `max_output_tokens` default from the task if not given.
+
+        Returns:
+            The provider's async-context stream object."""
         _, resolved_model = resolve(task)
         kwargs.setdefault("model", resolved_model)
         kwargs.setdefault("max_output_tokens", max_tokens_for_task(task))
@@ -201,13 +219,13 @@ class LLMRouter:
         return provider.response_stream(**kwargs)
 
     async def embed_texts(self, texts: list[str]) -> list[list[float]]:
-        """Embed texts (async).
+        """Generate embedding vectors using the configured embedding provider.
 
         Args:
-            texts: (list[str]) Tham số `texts`.
+            texts: Texts to embed.
 
         Returns:
-            (list[list[float]]) Kết quả trả về."""
+            One embedding vector per input text, ordered to match `texts`."""
         provider = self.provider_for(TASK_EMBEDDING)
         return await provider.embed_texts(texts)
 
@@ -216,10 +234,10 @@ _router: LLMRouter | None = None
 
 
 def get_router() -> LLMRouter:
-    """Lấy router.
+    """Get the process-wide `LLMRouter` singleton, creating it on first use.
 
     Returns:
-        (LLMRouter) Kết quả trả về."""
+        The shared `LLMRouter` instance."""
     global _router
     if _router is None:
         _router = LLMRouter()

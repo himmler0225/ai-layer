@@ -13,10 +13,13 @@ _VALID_ROLES = {"user", "admin"}
 
 
 def _require_service_key() -> None:
-    """(Nội bộ) Require service key `_require_service_key`.
+    """Ensure Supabase URL and service key are configured before REST calls.
 
     Returns:
-        (None) Kết quả trả về."""
+        None.
+
+    Raises:
+        AiLayerError: If `SUPABASE_URL` or `SUPABASE_SERVICE_KEY` is unset."""
     if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
         raise AiLayerError("Supabase service key is not configured")
 
@@ -101,13 +104,13 @@ async def count_profiles() -> tuple[int, int]:
 
 
 def _parse_content_range(value: str | None) -> int:
-    """(Nội bộ) Phân tích content range `_parse_content_range`.
+    """Extract the total count from a PostgREST `Content-Range` header.
 
     Args:
-        value: (str | None) Tham số `value`.
+        value: Header value like `"0-9/42"`, or `None`.
 
     Returns:
-        (int) Kết quả trả về."""
+        The total count parsed from after the `/`, or `0` if missing/invalid."""
     if not value or "/" not in value:
         return 0
     try:

@@ -1,4 +1,4 @@
-"""Alembic env — async SQLAlchemy; URL từ DATABASE_URL."""
+"""Alembic environment for async SQLAlchemy migrations; resolves the database URL from DATABASE_URL."""
 
 import asyncio
 from logging.config import fileConfig

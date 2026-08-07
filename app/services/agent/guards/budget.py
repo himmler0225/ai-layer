@@ -1,23 +1,23 @@
 import json
 from typing import Any
 
-from app.config.logger import Logger
+from app.config.logger import Logger, log_event
 
 logger = Logger.get(__name__)
 
-# Cùng tool + input giống hệt (tool không phải search).
+# Same tool + identical input (applies to non-search tools).
 _MAX_SAME_SIGNATURE = 2
-# Cùng tên tool (keyword khác) — áp dụng tool không phải search.
+# Same tool name (different keyword) — applies to non-search tools.
 _MAX_SAME_TOOL_NAME = 2
-# Tổng số lần gọi tool bất kỳ trước khi ép synthesis (khi đã có dữ liệu).
+# Total number of tool calls (of any kind) before forcing synthesis (once there is data).
 _MAX_TOOL_ROUNDS_SOFT = 6
-# Vòng thêm khi chưa có comments/transcript/RAG.
+# Extra rounds allowed when there are no comments/transcript/RAG yet.
 _MAX_TOOL_ROUNDS_NO_EVIDENCE = 10
-# Model vẫn gọi search sau khi bị chặn budget.
+# Model keeps calling search even after being blocked by the budget.
 _MAX_STUBBORN_SEARCH = 4
 
 _SEARCH_TOOLS: set[str] = frozenset({"youtube_search", "tiktok_search"})
-# Mỗi nền tảng chỉ search tối đa 1 lần; lần sau gỡ khỏi menu tool.
+# Each platform may only be searched once; subsequent calls remove it from the tool menu.
 _MAX_SEARCH_PER_PLATFORM = 1
 
 _EVIDENCE_TOOLS: set[str] = frozenset(
@@ -35,14 +35,17 @@ _EVIDENCE_TOOLS: set[str] = frozenset(
 
 
 def tool_signature(name: str, inputs: dict[str, Any]) -> str:
-    """Tool signature.
+    """Build a stable signature identifying a tool call by name and its exact input.
+
+    Used to detect repeated identical tool calls (same tool, same arguments).
 
     Args:
-        name: (str) Tham số `name`.
-        inputs: (dict[str, Any]) Tham số `inputs`.
+        name: (str) Tool name.
+        inputs: (dict[str, Any]) Tool call input arguments.
 
     Returns:
-        (str) Kết quả trả về."""
+        (str) A "name:json_payload" string, with `inputs` serialized as
+        sorted-key JSON (or "{}" if it isn't JSON-serializable)."""
     try:
         payload = json.dumps(inputs or {}, sort_keys=True, ensure_ascii=False)
     except TypeError:
@@ -51,37 +54,38 @@ def tool_signature(name: str, inputs: dict[str, Any]) -> str:
 
 
 def count_tool_name(log: list[dict[str, Any]], name: str) -> int:
-    """Count tool name.
+    """Count how many entries in a tool call log used a given tool name.
 
     Args:
-        log: (list[dict[str, Any]]) Tham số `log`.
-        name: (str) Tham số `name`.
+        log: (list[dict[str, Any]]) Tool call log entries.
+        name: (str) Tool name to count occurrences of.
 
     Returns:
-        (int) Kết quả trả về."""
+        (int) Number of log entries whose "tool" matches `name`."""
     return sum(1 for entry in log if entry.get("tool") == name)
 
 
 def is_budget_block(entry: dict[str, Any]) -> bool:
-    """Is budget block.
+    """Check whether a tool call log entry represents a call blocked by the search budget.
 
     Args:
-        entry: (dict[str, Any]) Tham số `entry`.
+        entry: (dict[str, Any]) A single tool call log entry.
 
     Returns:
-        (bool) Kết quả trả về."""
+        (bool) True if the entry's result carries the "search_budget_exhausted" error."""
     result = entry.get("result") or {}
     return result.get("error") == "search_budget_exhausted"
 
 
 def _result_payload(result: Any) -> dict[str, Any]:
-    """(Nội bộ) Result payload `_result_payload`.
+    """(Internal) Unwrap a tool result to the dict actually holding its payload fields.
 
     Args:
-        result: (Any) Tham số `result`.
+        result: (Any) Raw tool call result, possibly wrapping data under a "data" key.
 
     Returns:
-        (dict[str, Any]) Kết quả trả về."""
+        (dict[str, Any]) The nested "data" dict if present, otherwise `result`
+        itself (or an empty dict if `result` is not a dict)."""
     if not isinstance(result, dict):
         return {}
     data = result.get("data")
@@ -91,13 +95,14 @@ def _result_payload(result: Any) -> dict[str, Any]:
 
 
 def extract_video_items(result: Any) -> list[dict[str, Any]]:
-    """Trích xuất video items.
+    """Extract the list of video/item dicts from a tool result's payload.
 
     Args:
-        result: (Any) Tham số `result`.
+        result: (Any) Raw tool call result to search for a video/item list.
 
     Returns:
-        (list[dict[str, Any]]) Kết quả trả về."""
+        (list[dict[str, Any]]) Items found under the first present "results",
+        "videos", or "items" key that holds a list; empty list otherwise."""
     payload = _result_payload(result)
     for key in ("results", "videos", "items"):
         items = payload.get(key)
@@ -107,14 +112,15 @@ def extract_video_items(result: Any) -> list[dict[str, Any]]:
 
 
 def video_ids_from_log(log: list[dict[str, Any]], *, tool_name: str = "youtube_search") -> list[str]:
-    """Video ids from log.
+    """Collect unique video ids returned by a given search tool across a tool call log.
 
     Args:
-        log: (list[dict[str, Any]]) Tham số `log`.
-        tool_name: (str, mặc định 'youtube_search') Tham số `tool_name`.
+        log: (list[dict[str, Any]]) Tool call log entries to scan.
+        tool_name: (str, default 'youtube_search') Tool name whose results to pull video ids from.
 
     Returns:
-        (list[str]) Kết quả trả về."""
+        (list[str]) Up to 8 deduplicated video ids (from "video_id" or "id"),
+        skipping entries that are budget-blocked or from a different tool."""
     ids: list[str] = []
     for entry in log:
         if entry.get("tool") != tool_name or is_budget_block(entry):
@@ -127,13 +133,15 @@ def video_ids_from_log(log: list[dict[str, Any]], *, tool_name: str = "youtube_s
 
 
 def has_evidence_data(log: list[dict[str, Any]]) -> bool:
-    """Has evidence data.
+    """Check whether the tool call log already contains real evidence (comments, transcripts, RAG hits, or search results).
 
     Args:
-        log: (list[dict[str, Any]]) Tham số `log`.
+        log: (list[dict[str, Any]]) Tool call log to inspect.
 
     Returns:
-        (bool) Kết quả trả về."""
+        (bool) True if any non-error, non-budget-blocked entry from an
+        evidence tool has comments/transcripts/hits, or a search tool
+        returned video items."""
     for entry in log:
         if is_budget_block(entry):
             continue
@@ -153,13 +161,14 @@ def has_evidence_data(log: list[dict[str, Any]]) -> bool:
 
 
 def count_last_signature(log: list[dict[str, Any]]) -> int:
-    """Count last signature.
+    """Count how many times the most recent tool call's exact signature has appeared in the log.
 
     Args:
-        log: (list[dict[str, Any]]) Tham số `log`.
+        log: (list[dict[str, Any]]) Tool call log to inspect.
 
     Returns:
-        (int) Kết quả trả về."""
+        (int) Number of (non-budget-blocked) entries sharing the last entry's
+        tool_signature; 0 if the log is empty."""
     if not log:
         return 0
     last = log[-1]
@@ -172,13 +181,14 @@ def count_last_signature(log: list[dict[str, Any]]) -> int:
 
 
 def count_last_tool_name(log: list[dict[str, Any]]) -> int:
-    """Count last tool name.
+    """Count how many times the most recent tool call's tool name has appeared in the log.
 
     Args:
-        log: (list[dict[str, Any]]) Tham số `log`.
+        log: (list[dict[str, Any]]) Tool call log to inspect.
 
     Returns:
-        (int) Kết quả trả về."""
+        (int) Number of entries using the same tool name as the last entry;
+        0 if the log is empty."""
     if not log:
         return 0
     name = str(log[-1].get("tool") or "")
@@ -186,7 +196,7 @@ def count_last_tool_name(log: list[dict[str, Any]]) -> int:
 
 
 def apply_tool_budget(ctx: dict[str, Any]) -> None:
-    """Sau mỗi vòng tool: bỏ search tool đã dùng đủ để model chuyển sang comments/RAG."""
+    """After each tool round, remove search tools that have hit their budget so the model switches to comments/RAG."""
     log: list[dict[str, Any]] = ctx.get("tool_call_log") or []
     tools: list[dict[str, Any]] = ctx.get("tools") or []
     remove: set[str] = set()
@@ -197,19 +207,22 @@ def apply_tool_budget(ctx: dict[str, Any]) -> None:
         return
     filtered = [t for t in tools if t.get("name") not in remove]
     if len(filtered) < len(tools):
-        logger.info("[agent] tool budget: removed %s (use comments/RAG next)", sorted(remove))
+        logger.info(
+            log_event("agent", "tool budget trimmed", removed=sorted(remove), hint="use_comments_or_rag")
+        )
         ctx["tools"] = filtered
 
 
 def is_search_budget_exhausted(tool_name: str, tool_call_log: list[dict[str, Any]]) -> bool:
-    """Is search budget exhausted.
+    """Check whether a search tool has already been called as many times as its per-session budget allows.
 
     Args:
-        tool_name: (str) Tham số `tool_name`.
-        tool_call_log: (list[dict[str, Any]]) Tham số `tool_call_log`.
+        tool_name: (str) Tool name to check.
+        tool_call_log: (list[dict[str, Any]]) Tool call log to count prior calls in.
 
     Returns:
-        (bool) Kết quả trả về."""
+        (bool) True if `tool_name` is a search tool and has reached
+        _MAX_SEARCH_PER_PLATFORM calls; False for non-search tools."""
     if tool_name not in _SEARCH_TOOLS:
         return False
     return count_tool_name(tool_call_log, tool_name) >= _MAX_SEARCH_PER_PLATFORM
@@ -219,14 +232,19 @@ def search_budget_message(
     tool_name: str,
     tool_call_log: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """Search budget message.
+    """Build the error payload returned to the model when a search tool's budget is exhausted.
+
+    Suggests a follow-up tool to call instead, and for youtube_search attaches
+    the video ids already discovered so the model can proceed without another search.
 
     Args:
-        tool_name: (str) Tham số `tool_name`.
-        tool_call_log: (list[dict[str, Any]] | None, mặc định None) Tham số `tool_call_log`.
+        tool_name: (str) The search tool that was blocked.
+        tool_call_log: (list[dict[str, Any]] | None, default None) Prior tool call log,
+            used to surface already-found video ids for youtube_search.
 
     Returns:
-        (dict[str, Any]) Kết quả trả về."""
+        (dict[str, Any]) Dict with "error", "message", "next_tool", and
+        (when applicable) "video_ids" fields."""
     follow = "youtube_get_comments_batch" if tool_name == "youtube_search" else "tiktok_comments"
     message = (
         f"Đã gọi {tool_name} đủ lần cho phiên này. "
@@ -250,15 +268,19 @@ def should_force_synthesis(
     iteration: int,
     max_iter: int,
 ) -> bool:
-    """True khi nên dừng gọi tool và chuyển sang synthesis."""
+    """True when the agent should stop calling tools and move on to synthesis."""
     if not tool_call_log:
         return False
     if iteration >= max_iter:
         logger.warning(
-            "[agent] force synthesis: max_iter iter=%d/%d tools=%d",
-            iteration,
-            max_iter,
-            len(tool_call_log),
+            log_event(
+                "agent",
+                "force synthesis",
+                reason="max_iterations",
+                iteration=iteration,
+                max_iterations=max_iter,
+                tools=len(tool_call_log),
+            )
         )
         return True
     last = tool_call_log[-1]
@@ -268,9 +290,13 @@ def should_force_synthesis(
 
     if last_tool in _SEARCH_TOOLS and name_repeats >= _MAX_STUBBORN_SEARCH:
         logger.warning(
-            "[agent] force synthesis: stubborn search tool=%s calls=%d",
-            last_tool,
-            name_repeats,
+            log_event(
+                "agent",
+                "force synthesis",
+                reason="stubborn_search",
+                tool=last_tool,
+                calls=name_repeats,
+            )
         )
         return True
 
@@ -280,9 +306,13 @@ def should_force_synthesis(
     sig_repeats = count_last_signature(tool_call_log)
     if sig_repeats >= _MAX_SAME_SIGNATURE and last_tool not in _SEARCH_TOOLS:
         logger.warning(
-            "[agent] force synthesis: identical call x%d tool=%s",
-            sig_repeats,
-            last_tool,
+            log_event(
+                "agent",
+                "force synthesis",
+                reason="identical_call",
+                tool=last_tool,
+                repeats=sig_repeats,
+            )
         )
         return True
 
@@ -291,25 +321,37 @@ def should_force_synthesis(
 
     if name_repeats >= _MAX_SAME_TOOL_NAME:
         logger.warning(
-            "[agent] force synthesis: tool name %s called %d times",
-            last_tool,
-            name_repeats,
+            log_event(
+                "agent",
+                "force synthesis",
+                reason="repeated_tool",
+                tool=last_tool,
+                calls=name_repeats,
+            )
         )
         return True
 
     rounds = len(tool_call_log)
     if has_evidence_data(tool_call_log) and rounds >= _MAX_TOOL_ROUNDS_SOFT:
         logger.warning(
-            "[agent] force synthesis: tool rounds=%d >= %d (has evidence)",
-            rounds,
-            _MAX_TOOL_ROUNDS_SOFT,
+            log_event(
+                "agent",
+                "force synthesis",
+                reason="tool_rounds_with_evidence",
+                rounds=rounds,
+                limit=_MAX_TOOL_ROUNDS_SOFT,
+            )
         )
         return True
     if rounds >= _MAX_TOOL_ROUNDS_NO_EVIDENCE:
         logger.warning(
-            "[agent] force synthesis: tool rounds=%d >= %d (no evidence)",
-            rounds,
-            _MAX_TOOL_ROUNDS_NO_EVIDENCE,
+            log_event(
+                "agent",
+                "force synthesis",
+                reason="tool_rounds_no_evidence",
+                rounds=rounds,
+                limit=_MAX_TOOL_ROUNDS_NO_EVIDENCE,
+            )
         )
         return True
     return False

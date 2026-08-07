@@ -2,13 +2,20 @@ from typing import Any
 
 
 def unwrap_result(result: Any) -> dict | None:
-    """Unwrap result.
+    """Unwrap a tool call's result envelope into a plain data dict.
+
+    Handles the standard {"success": bool, "data": ...} tool result shape: returns
+    None on explicit failure, wraps a list payload as {"_list": [...]}, and passes
+    a dict payload through unchanged. Non-dict results, results with an "error" key,
+    or results with neither "success" nor "data"/"error" markers are also handled.
 
     Args:
-        result: (Any) Tham số `result`.
+        result: Raw return value of a tool call.
 
     Returns:
-        (dict | None) Kết quả trả về."""
+        The unwrapped data dict, or None if the result indicates failure or has no
+        usable data.
+    """
     if not isinstance(result, dict):
         return None
     if result.get("success") is False:
@@ -26,24 +33,29 @@ def unwrap_result(result: Any) -> dict | None:
 
 
 def extract_search_query(inputs: dict) -> str:
-    """Trích xuất search query.
+    """Recover the search keyword/query a search tool was called with.
 
     Args:
-        inputs: (dict) Tham số `inputs`.
+        inputs: Original tool call arguments.
 
     Returns:
-        (str) Kết quả trả về."""
+        The value of the first present "keyword", "query", or "topic" key, stripped;
+        "" if none are present.
+    """
     return (inputs.get("keyword") or inputs.get("query") or inputs.get("topic") or "").strip()
 
 
 def video_list(data: dict) -> list[dict]:
-    """Video list.
+    """Extract the list of raw video dicts from an unwrapped tool result.
 
     Args:
-        data: (dict) Tham số `data`.
+        data: Unwrapped tool result data, expected to hold a list under one of
+            "_list", "results", "videos", or "items".
 
     Returns:
-        (list[dict]) Kết quả trả về."""
+        The list of dict items found under the first matching key, filtering out
+        non-dict entries; [] if none of the keys hold a list.
+    """
     for key in ("_list", "results", "videos", "items"):
         value = data.get(key)
         if isinstance(value, list):

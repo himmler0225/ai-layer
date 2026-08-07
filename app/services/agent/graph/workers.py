@@ -10,7 +10,7 @@ from app.services.agent.core.context import bootstrap_agent, begin_tool_round, c
 from app.services.agent.core.engine import resolve_empty_tool_round, tool_round_action
 from app.services.agent.guards.fallback import catalog_fallback_call
 from app.utils.llm_responses import create_response, extract_response_text, status_error
-from app.config.logger import Logger
+from app.config.logger import Logger, log_event
 
 logger = Logger.get(__name__)
 
@@ -72,11 +72,13 @@ async def run_worker_loop(
             )
             err = status_error(final)
             if err:
-                logger.warning("[worker:%s] llm error: %s", domain, err)
+                logger.warning(log_event("worker", "llm call failed", domain=domain, error=err))
                 return ctx["tool_call_log"]
 
             if is_max_tokens_incomplete(final):
-                logger.warning("[worker:%s] max_tokens incomplete iter=%d", domain, iteration)
+                logger.warning(
+                    log_event("worker", "max tokens incomplete", domain=domain, iteration=iteration)
+                )
                 return ctx["tool_call_log"]
 
             call_items = await begin_tool_round(ctx, final.output)
@@ -85,8 +87,15 @@ async def run_worker_loop(
 
             collected_text = extract_response_text(final)
             logger.debug(
-                "[worker:%s] iter=%d attempt=%d tool_choice=%s call_items=0 text=%r",
-                domain, iteration, attempt, tool_choice, collected_text[:200],
+                log_event(
+                    "worker",
+                    "empty tool round",
+                    domain=domain,
+                    iteration=iteration,
+                    attempt=attempt,
+                    tool_choice=tool_choice,
+                    text=collected_text[:200],
+                )
             )
             scratchpad_only = _is_scratchpad_only(collected_text)
             if scratchpad_only and scratchpad_movie_name is None:
@@ -117,16 +126,31 @@ async def run_worker_loop(
             )
             if fallback:
                 logger.warning(
-                    "[worker:%s] scratchpad fallback search tool=%s movie=%r",
-                    domain, search_tool, scratchpad_movie_name,
+                    log_event(
+                        "worker",
+                        "scratchpad fallback search",
+                        domain=domain,
+                        tool=search_tool,
+                        movie=scratchpad_movie_name,
+                    )
                 )
                 call_items = await begin_tool_round(ctx, [fallback])
                 used_fallback = True
 
         if not call_items:
             break
+        
+        from langgraph.config import get_stream_writer
+        from app.services.agent.events import _parse_args
+
+        writer = get_stream_writer()
+        for call in call_items:
+            writer({"kind": "tool_start", "worker": domain, "tool": call.name, "args": _parse_args(call.arguments)})
 
         await complete_tool_round(ctx, list(call_items), iteration)
+
+        for call in call_items:
+            writer({"kind": "tool_done", "worker": domain, "tool": call.name})
 
         if used_fallback or tool_round_action(ctx, iteration) == "force_synthesis":
             break

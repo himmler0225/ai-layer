@@ -9,7 +9,7 @@ from app.config.defaults import (
     build_prompt_defaults,
     load_schema as _load_schema,
 )
-from app.config.logger import Logger
+from app.config.logger import Logger, log_event
 from app.exceptions import AiLayerConfigError, AiLayerValidationError
 
 logger = Logger.get(__name__)
@@ -17,7 +17,7 @@ logger = Logger.get(__name__)
 
 @dataclass
 class AgentConfig:
-    """Lớp `AgentConfig` (kế thừa object)."""
+    """Runtime-tunable limits for the agent loop (iteration count, comment/result truncation)."""
 
     max_iter: int = 0
     max_comments: int = 0
@@ -28,7 +28,8 @@ class AgentConfig:
 
 @dataclass
 class RuntimeConfig:
-    """Lớp `RuntimeConfig` (kế thừa object)."""
+    """In-memory snapshot of remote-configurable runtime settings: agent limits,
+    the model list/active provider, prompts, services, and rate limits."""
 
     agent: AgentConfig = field(default_factory=AgentConfig)
     models: list[dict[str, Any]] = field(default_factory=list)
@@ -43,21 +44,26 @@ config_parse_errors: dict[str, str] = {}
 
 
 def load_schema() -> dict[str, Any]:
-    """Tải schema.
+    """Load the remote-config schema (re-exported from `app.config.defaults`).
 
     Returns:
-        (dict[str, Any]) Kết quả trả về."""
+        dict[str, Any]: The parsed remote-config schema.
+    """
     return _load_schema()
 
 
 def parse_remote(raw: dict[str, str]) -> dict[str, Any]:
-    """Phân tích remote.
+    """Parse raw remote-config values (JSON-encoded strings) into Python objects.
+
+    Invalid JSON is recorded in `config_parse_errors` (keyed by config key) and
+    the raw string is kept as a fallback value.
 
     Args:
-        raw: (dict[str, str]) Tham số `raw`.
+        raw: Mapping of config key to its raw JSON-encoded string value.
 
     Returns:
-        (dict[str, Any]) Kết quả trả về."""
+        dict[str, Any]: Mapping of config key to its parsed value.
+    """
     import json
 
     config_parse_errors.clear()
@@ -70,31 +76,33 @@ def parse_remote(raw: dict[str, str]) -> dict[str, Any]:
         except json.JSONDecodeError as exc:
             config_parse_errors[key] = str(exc)
             parsed[key] = value
-            logger.error("[remote_config] %s JSON invalid: %s", key, exc)
+            logger.error(log_event("remote_config", "json invalid", key=key, error=exc))
     return parsed
 
 
 def _screaming(value: str) -> str:
-    """(Nội bộ) Screaming `_screaming`.
+    """Convert a field name to SCREAMING_CASE for use as a settings/prompt attribute suffix.
 
     Args:
-        value: (str) Tham số `value`.
+        value: Lowercase (or mixed-case) field name.
 
     Returns:
-        (str) Kết quả trả về."""
+        str: The uppercased value.
+    """
     return value.upper()
 
 
 def _set_module_value(module: str, attr: str, value: Any) -> None:
-    """(Nội bộ) Set module value.
+    """Write a resolved config value into the target module (`settings` or `prompts`).
 
     Args:
-        module: (str) Tham số `module`.
-        attr: (str) Tham số `attr`.
-        value: (Any) Tham số `value`.
+        module: Target module name, either "settings" or "prompts".
+        attr: Attribute/key name to set on that module.
+        value: Value to store.
 
-    Returns:
-        (None) Kết quả trả về."""
+    Raises:
+        AiLayerValidationError: If `module` is neither "settings" nor "prompts".
+    """
     if module == "settings":
         settings.set_remote(attr, value)
     elif module == "prompts":
@@ -104,15 +112,14 @@ def _set_module_value(module: str, attr: str, value: Any) -> None:
 
 
 def _apply_flat_prefix(data: dict, bind: dict, key_schema: dict) -> None:
-    """(Nội bộ) Áp dụng flat prefix.
+    """Apply a "flat_prefix" bind: write each field of `data` to `settings` as
+    `{prefix}{FIELD_NAME}`, casting to bool/int as declared by the schema.
 
     Args:
-        data: (dict) Tham số `data`.
-        bind: (dict) Tham số `bind`.
-        key_schema: (dict) Tham số `key_schema`.
-
-    Returns:
-        (None) Kết quả trả về."""
+        data: Parsed config values for this key.
+        bind: The key's `bind` schema block (prefix, cast, module).
+        key_schema: The full schema entry for this key (used for `fields`/`bool_fields`).
+    """
     prefix = bind["prefix"]
     cast = bind.get("cast")
     bool_fields = set(key_schema.get("bool_fields") or [])
@@ -134,18 +141,17 @@ def _apply_flat_prefix(data: dict, bind: dict, key_schema: dict) -> None:
                 val = data[field_name]
             _set_module_value(bind["module"], f"{prefix}{_screaming(field_name)}", val)
         except TypeError, ValueError:
-            logger.warning("[remote_config] invalid value %s.%s", prefix, field_name)
+            logger.warning(log_event("remote_config", "invalid value", scope=f"{prefix}.{field_name}"))
 
 
 def _apply_group_field(data: dict, bind: dict) -> None:
-    """(Nội bộ) Áp dụng group field.
+    """Apply a "group_field" bind: for each group in `data`, write its fields to
+    the target module as `{GROUP}_{FIELD_NAME}`.
 
     Args:
-        data: (dict) Tham số `data`.
-        bind: (dict) Tham số `bind`.
-
-    Returns:
-        (None) Kết quả trả về."""
+        data: Mapping of group name to a dict of field values.
+        bind: The key's `bind` schema block (module).
+    """
     for group, group_data in data.items():
         if not isinstance(group_data, dict):
             continue
@@ -161,13 +167,15 @@ def _apply_group_field(data: dict, bind: dict) -> None:
 
 
 def _coerce_bool(value: Any) -> bool:
-    """(Nội bộ) Coerce bool `_coerce_bool`.
+    """Coerce a raw config value (bool, string, or other) to a boolean.
 
     Args:
-        value: (Any) Tham số `value`.
+        value: Value to coerce; strings are matched case-insensitively against
+            truthy tokens ("1", "true", "yes", "on").
 
     Returns:
-        (bool) Kết quả trả về."""
+        bool: The coerced boolean value.
+    """
     if isinstance(value, bool):
         return value
     if isinstance(value, str):
@@ -176,7 +184,15 @@ def _coerce_bool(value: Any) -> bool:
 
 
 def resolve_active_provider(data: dict | list) -> str | None:
-    """Provider có `is_active: true` trong AI_MODELS (chỉ lấy entry đầu tiên)."""
+    """Find the provider with `is_active: true` in AI_MODELS (returns the first match only).
+
+    Args:
+        data: AI_MODELS config, either a list of provider dicts or a legacy
+            `{provider_id: {...}}` mapping.
+
+    Returns:
+        str | None: The lowercased active provider id, or None if none is active.
+    """
     for provider_id, cfg in _normalize_provider_map(data).items():
         if isinstance(cfg, dict) and _coerce_bool(cfg.get("is_active")):
             return str(provider_id).strip().lower()
@@ -184,7 +200,15 @@ def resolve_active_provider(data: dict | list) -> str | None:
 
 
 def _normalize_provider_map(data: dict | list) -> dict[str, dict]:
-    """Chuyển AI_MODELS dạng mảng `[{id, ...}]` hoặc object legacy `{id: {...}}` thành map."""
+    """Normalize AI_MODELS from either the array form `[{id, ...}, ...]` or the
+    legacy object form `{id: {...}}` into a `{provider_id: fields}` map.
+
+    Args:
+        data: Raw AI_MODELS config, as a list or a dict.
+
+    Returns:
+        dict[str, dict]: Mapping of lowercased provider id to its field dict.
+    """
     if isinstance(data, list):
         out: dict[str, dict] = {}
         for item in data:
@@ -203,14 +227,14 @@ def _normalize_provider_map(data: dict | list) -> dict[str, dict]:
 
 
 def _apply_provider(data: dict | list, bind: dict) -> None:
-    """(Nội bộ) Áp dụng provider.
+    """Apply a "provider" bind: write each provider's fields to `settings` as
+    `{PREFIX}_{FIELD_NAME}`, casting declared int fields and skipping declared
+    skip fields.
 
     Args:
-        data: (dict | list) Tham số `data`.
-        bind: (dict) Tham số `bind`.
-
-    Returns:
-        (None) Kết quả trả về."""
+        data: AI_MODELS config (list or legacy dict form).
+        bind: The key's `bind` schema block (providers map, int_fields, skip_fields, module).
+    """
     providers = bind.get("providers") or {}
     int_fields = set(bind.get("int_fields") or [])
     skip_fields = set(bind.get("skip_fields") or [])
@@ -230,14 +254,13 @@ def _apply_provider(data: dict | list, bind: dict) -> None:
 
 
 def _apply_service(data: dict, bind: dict) -> None:
-    """(Nội bộ) Áp dụng service.
+    """Apply a "service" bind: write each service's fields to `settings` as
+    `{SERVICE}_{FIELD_NAME}`, casting to the type declared in the schema.
 
     Args:
-        data: (dict) Tham số `data`.
-        bind: (dict) Tham số `bind`.
-
-    Returns:
-        (None) Kết quả trả về."""
+        data: Mapping of service name to a dict of field values.
+        bind: The key's `bind` schema block (services type map, module).
+    """
     service_types = bind.get("services") or {}
     for service, service_data in data.items():
         if not isinstance(service_data, dict):
@@ -259,14 +282,13 @@ def _apply_service(data: dict, bind: dict) -> None:
 
 
 def _apply_rate_limit_apis(data: dict, bind: dict) -> None:
-    """(Nội bộ) Áp dụng rate limit apis.
+    """Apply a "rate_limit_apis" bind: write each API's rate-limit string to
+    `settings` as `{API}_RATE_LIMIT`.
 
     Args:
-        data: (dict) Tham số `data`.
-        bind: (dict) Tham số `bind`.
-
-    Returns:
-        (None) Kết quả trả về."""
+        data: Rate-limit config, either `{"apis": {name: limit}}` or `{name: limit}` directly.
+        bind: The key's `bind` schema block (apis list, module).
+    """
     apis = bind.get("apis") or list((data.get("apis") or {}).keys())
     source = data.get("apis") or data
     for name in apis:
@@ -276,14 +298,12 @@ def _apply_rate_limit_apis(data: dict, bind: dict) -> None:
 
 
 def _apply_mirror(data: dict, mirror: list[dict]) -> None:
-    """(Nội bộ) Áp dụng mirror.
+    """Apply mirror rules that copy a nested group/field value to a flat module attribute.
 
     Args:
-        data: (dict) Tham số `data`.
-        mirror: (list[dict]) Tham số `mirror`.
-
-    Returns:
-        (None) Kết quả trả về."""
+        data: Parsed config values for this key.
+        mirror: List of mirror rules, each with `group`, `field`, `module`, and `attr`.
+    """
     for rule in mirror:
         group_data = data.get(rule["group"]) or {}
         value = group_data.get(rule["field"]) if isinstance(group_data, dict) else None
@@ -293,15 +313,17 @@ def _apply_mirror(data: dict, mirror: list[dict]) -> None:
 
 
 def _store_runtime(key: str, data: Any, key_schema: dict) -> None:
-    """(Nội bộ) Lưu runtime.
+    """Cache a config key's parsed value onto the module-level `runtime` object.
+
+    Handles the special "agent" (builds an `AgentConfig`), "models" (normalizes
+    and resolves the active provider), and "prompts"/"services"/"rate_limit" stores.
 
     Args:
-        key: (str) Tham số `key`.
-        data: (Any) Tham số `data`.
-        key_schema: (dict) Tham số `key_schema`.
-
-    Returns:
-        (None) Kết quả trả về."""
+        key: The config key name (routing is driven by `key_schema`, not `key`).
+        data: The parsed value for this key.
+        key_schema: The schema entry for this key; `key_schema["store"]` selects
+            which `runtime` attribute (if any) to populate.
+    """
     store = key_schema.get("store")
     if not store or data is None:
         return
@@ -333,13 +355,14 @@ _BINDERS: dict[str, Callable[..., None]] = {
 
 
 def _prompt_keys(schema: dict[str, Any]) -> frozenset[str]:
-    """(Nội bộ) Prompt keys.
+    """Enumerate all settings-style keys (`{GROUP}_{FIELD}`) declared under PROMPTS.
 
     Args:
-        schema: (dict[str, Any]) Tham số `schema`.
+        schema: The parsed remote-config schema.
 
     Returns:
-        (frozenset[str]) Kết quả trả về."""
+        frozenset[str]: The set of prompt key names.
+    """
     prompt_cfg = schema.get("keys", {}).get("PROMPTS") or {}
     keys: set[str] = set()
     for group, field_list in (prompt_cfg.get("groups") or {}).items():
@@ -350,14 +373,15 @@ def _prompt_keys(schema: dict[str, Any]) -> frozenset[str]:
 
 
 def apply_schema(parsed: dict[str, Any], schema: dict[str, Any]) -> None:
-    """Áp dụng schema.
+    """Apply a full parsed remote config to `settings`/`prompts`/`runtime`.
+
+    Dispatches each schema key to its bind handler and mirror rules, then resets
+    the LLM factory so subsequent calls pick up the new provider config.
 
     Args:
-        parsed: (dict[str, Any]) Tham số `parsed`.
-        schema: (dict[str, Any]) Tham số `schema`.
-
-    Returns:
-        (None) Kết quả trả về."""
+        parsed: Parsed remote config values, keyed by config key (see `parse_remote`).
+        schema: The parsed remote-config schema.
+    """
     settings.ensure_remote_defaults()
     prompts.init_defaults(build_prompt_defaults(schema))
 
@@ -384,33 +408,47 @@ def apply_schema(parsed: dict[str, Any], schema: dict[str, Any]) -> None:
 
 
 def value_for_required(key: str, schema: dict[str, Any]) -> str | int:
-    """Value for required.
+    """Resolve the current value of a required config key.
+
+    Checks `prompts` first for prompt keys (other than AGENT_SYSTEM), and
+    `settings` otherwise.
 
     Args:
-        key: (str) Tham số `key`.
-        schema: (dict[str, Any]) Tham số `schema`.
+        key: The required config key name.
+        schema: The parsed remote-config schema.
 
     Returns:
-        (str | int) Kết quả trả về."""
+        str | int: The current value, or "" if unset.
+    """
     if key in _prompt_keys(schema) and key != "AGENT_SYSTEM":
         return getattr(prompts, key, "")
     return getattr(settings, key, "")
 
 
 def _provider_prefix_map(schema: dict[str, Any]) -> dict[str, str]:
-    """(Nội bộ) Provider prefix map `_provider_prefix_map`.
+    """Read the AI_MODELS provider-id to settings-prefix map from the schema.
 
     Args:
-        schema: (dict[str, Any]) Tham số `schema`.
+        schema: The parsed remote-config schema.
 
     Returns:
-        (dict[str, str]) Kết quả trả về."""
+        dict[str, str]: Mapping of provider id to its settings prefix.
+    """
     bind = (schema.get("keys", {}).get("AI_MODELS") or {}).get("bind") or {}
     return bind.get("providers") or {}
 
 
 def provider_settings_prefix(provider_id: str, schema: dict[str, Any] | None = None) -> str:
-    """Map provider id (vd. deepseek) → settings prefix (vd. DEEP_SEEK)."""
+    """Map a provider id (e.g. "deepseek") to its settings prefix (e.g. "DEEP_SEEK").
+
+    Args:
+        provider_id: Provider id as used in AI_MODELS.
+        schema: Remote-config schema to consult; loaded via `load_schema()` if omitted.
+
+    Returns:
+        str: The settings prefix for the provider, falling back to its
+        uppercased id if not explicitly mapped.
+    """
     if schema is None:
         schema = load_schema()
     key = (provider_id or "").strip().lower()
@@ -418,13 +456,15 @@ def provider_settings_prefix(provider_id: str, schema: dict[str, Any] | None = N
 
 
 def _provider_required_setting_keys(prefix: str) -> list[str]:
-    """(Nội bộ) Provider required setting keys `_provider_required_setting_keys`.
+    """List the settings keys required for a given LLM provider prefix.
 
     Args:
-        prefix: (str) Tham số `prefix`.
+        prefix: Settings prefix for the provider (e.g. "DEEP_SEEK").
 
     Returns:
-        (list[str]) Kết quả trả về."""
+        list[str]: The `{PREFIX}_API_KEY`, `_BASE_URL`, `_MODEL`, `_MAX_TOKENS`,
+        `_TOOL_MODEL`, and `_TOOL_MAX_TOKENS` key names.
+    """
     return [
         f"{prefix}_API_KEY",
         f"{prefix}_BASE_URL",
@@ -436,13 +476,15 @@ def _provider_required_setting_keys(prefix: str) -> list[str]:
 
 
 def _all_provider_setting_keys(schema: dict[str, Any]) -> set[str]:
-    """(Nội bộ) All provider setting keys `_all_provider_setting_keys`.
+    """Collect the required settings keys for every provider known to the schema
+    or currently present in `runtime.models`.
 
     Args:
-        schema: (dict[str, Any]) Tham số `schema`.
+        schema: The parsed remote-config schema.
 
     Returns:
-        (set[str]) Kết quả trả về."""
+        set[str]: Union of required settings keys across all known providers.
+    """
     keys: set[str] = set()
     seen_prefixes: set[str] = set()
     for provider_id in _provider_prefix_map(schema):
@@ -466,13 +508,14 @@ def _all_provider_setting_keys(schema: dict[str, Any]) -> set[str]:
 
 
 def _configured_provider_prefixes(schema: dict[str, Any]) -> list[str]:
-    """(Nội bộ) Configured provider prefixes `_configured_provider_prefixes`.
+    """List provider settings prefixes that currently have a non-empty API key configured.
 
     Args:
-        schema: (dict[str, Any]) Tham số `schema`.
+        schema: The parsed remote-config schema.
 
     Returns:
-        (list[str]) Kết quả trả về."""
+        list[str]: Settings prefixes (e.g. "OPENAI") that have an API key set.
+    """
     configured: list[str] = []
     seen: set[str] = set()
     candidates = list(_provider_prefix_map(schema)) + [
@@ -490,7 +533,16 @@ def _configured_provider_prefixes(schema: dict[str, Any]) -> list[str]:
 
 
 def _resolve_validation_prefix(schema: dict[str, Any]) -> str | None:
-    """Prefix settings của provider cần validate (theo is_active hoặc provider duy nhất có key)."""
+    """Determine which provider's settings prefix should be validated: the active
+    provider if one is set, otherwise the single configured provider if there's
+    exactly one.
+
+    Args:
+        schema: The parsed remote-config schema.
+
+    Returns:
+        str | None: The settings prefix to validate, or None if ambiguous/unset.
+    """
     active = (runtime.active_provider or "").strip().lower()
     if active:
         return provider_settings_prefix(active, schema)
@@ -501,7 +553,15 @@ def _resolve_validation_prefix(schema: dict[str, Any]) -> str | None:
 
 
 def collect_required_keys(schema: dict[str, Any]) -> list[str]:
-    """Danh sách key bắt buộc: base schema + provider đang active."""
+    """Compute the full list of required config keys: base schema requirements
+    plus the currently-active (or uniquely-configured) provider's settings keys.
+
+    Args:
+        schema: The parsed remote-config schema.
+
+    Returns:
+        list[str]: Required config key names.
+    """
     skip = _all_provider_setting_keys(schema)
     keys = [k for k in (schema.get("required") or []) if k not in skip]
     prefix = _resolve_validation_prefix(schema)
@@ -520,7 +580,16 @@ _LEGACY_REQUIRED_ALIASES = {
 
 
 def _friendly_config_gaps(schema: dict[str, Any]) -> list[str]:
-    """Thiếu config theo đường dẫn admin (dễ sửa hơn tên env)."""
+    """Find missing/invalid config, reported using admin-panel paths (e.g.
+    "PROMPTS.agent.system") rather than raw env var names, so operators can find
+    them in the admin UI.
+
+    Args:
+        schema: The parsed remote-config schema.
+
+    Returns:
+        list[str]: Human-readable descriptions of each config gap found.
+    """
     gaps: list[str] = []
     for key, message in config_parse_errors.items():
         gaps.append(f"{key} (JSON lỗi: {message})")
@@ -548,13 +617,15 @@ def _friendly_config_gaps(schema: dict[str, Any]) -> list[str]:
 
 
 def validate_required(schema: dict[str, Any]) -> None:
-    """Kiểm tra required.
+    """Validate that all required config keys are present and well-formed.
 
     Args:
-        schema: (dict[str, Any]) Tham số `schema`.
+        schema: The parsed remote-config schema.
 
-    Returns:
-        (None) Kết quả trả về."""
+    Raises:
+        AiLayerConfigError: If any required config keys are missing or invalid,
+        listing the offending keys/paths.
+    """
     missing: list[str] = list(_friendly_config_gaps(schema))
     skip_keys = {
         "AGENT_SYSTEM",

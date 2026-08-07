@@ -58,13 +58,14 @@ class ConfigPatchBody(BaseModel):
 
 
 def _public_user(user: dict[str, Any]) -> dict[str, Any]:
-    """(Nội bộ) Public user `_public_user`.
+    """Extract the publicly safe fields from a raw GoTrue user record.
 
     Args:
-        user: (dict[str, Any]) Tham số `user`.
+        user: Raw user object as returned by Supabase GoTrue.
 
     Returns:
-        (dict[str, Any]) Kết quả trả về."""
+        dict with id, email, full_name, and avatar_url, pulling display name
+        and avatar from user_metadata."""
     meta = user.get("user_metadata") or {}
     return {
         "id": user.get("id"),
@@ -75,13 +76,18 @@ def _public_user(user: dict[str, Any]) -> dict[str, Any]:
 
 
 async def _session_with_profile(payload: dict[str, Any]) -> dict[str, Any]:
-    """(Nội bộ) Session with profile (async) `_session_with_profile`.
+    """Build the client-facing session response by attaching the user's profile.
+
+    Fetches the user record from GoTrue if it isn't already embedded in the
+    payload (e.g. when only an access token is available).
 
     Args:
-        payload: (dict[str, Any]) Tham số `payload`.
+        payload: Auth response from sign-in/sign-up/OAuth/refresh, containing
+            access_token, refresh_token, expires_in, and optionally user.
 
     Returns:
-        (dict[str, Any]) Kết quả trả về."""
+        dict with access_token, refresh_token, expires_in, and the merged
+        user/profile object."""
     user = payload.get("user") or {}
     if not user.get("id") and payload.get("access_token"):
         user = await get_user(payload["access_token"])
@@ -95,13 +101,15 @@ async def _session_with_profile(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def _profile_response(ctx: dict[str, Any]) -> dict[str, Any]:
-    """(Nội bộ) Profile response `_profile_response`.
+    """Merge a GoTrue user with its app profile row into the client-facing shape.
 
     Args:
-        ctx: (dict[str, Any]) Tham số `ctx`.
+        ctx: dict with "user" (raw GoTrue user) and optional "profile"
+            (row from the profiles table).
 
     Returns:
-        (dict[str, Any]) Kết quả trả về."""
+        dict with id, email, full_name, role (defaults to "user" if the
+        profile has none), and avatar_url."""
     user = ctx["user"]
     profile = ctx.get("profile") or {}
     pub = _public_user(user)
@@ -116,20 +124,24 @@ def _profile_response(ctx: dict[str, Any]) -> dict[str, Any]:
 
 @router.post("/signin")
 async def signin(body: SignInBody):
-    """Signin (async).
+    """Sign in with email and password and return a session with profile.
 
     Args:
-        body: (SignInBody) Tham số `body`."""
+        body: Email and password credentials."""
     payload = await sign_in_email(body.email, body.password)
     return ApiResponse.ok(await _session_with_profile(payload))
 
 
 @router.post("/signup")
 async def signup(body: SignUpBody):
-    """Signup (async).
+    """Register a new account with email and password.
+
+    Returns an active session with profile if a session was issued
+    immediately (no email confirmation required), otherwise just the
+    newly created user with no session.
 
     Args:
-        body: (SignUpBody) Tham số `body`."""
+        body: Email, password, and optional display name."""
     payload = await sign_up_email(body.email, body.password, body.full_name or "")
     if payload.get("access_token"):
         return ApiResponse.ok(await _session_with_profile(payload))
@@ -139,69 +151,75 @@ async def signup(body: SignUpBody):
 
 @router.post("/oauth/start")
 async def oauth_start(body: OAuthStartBody):
-    """Oauth start (async).
+    """Build the provider's OAuth authorization URL to begin a PKCE sign-in flow.
 
     Args:
-        body: (OAuthStartBody) Tham số `body`."""
+        body: OAuth provider, redirect target, and PKCE code challenge."""
     url = oauth_authorize_url(body.provider, body.redirect_to, body.code_challenge)
     return ApiResponse.ok({"url": url})
 
 
 @router.post("/oauth/callback")
 async def oauth_callback(body: OAuthCallbackBody):
-    """Oauth callback (async).
+    """Exchange an OAuth authorization code for a session with profile.
 
     Args:
-        body: (OAuthCallbackBody) Tham số `body`."""
+        body: Authorization code, PKCE code verifier, and optional redirect URI."""
     payload = await exchange_oauth_code(body.code, body.code_verifier, body.redirect_uri)
     return ApiResponse.ok(await _session_with_profile(payload))
 
 
 @router.post("/refresh")
 async def refresh(body: RefreshBody):
-    """Refresh (async).
+    """Exchange a refresh token for a new session with profile.
 
     Args:
-        body: (RefreshBody) Tham số `body`."""
+        body: The refresh token to redeem."""
     payload = await refresh_token(body.refresh_token)
     return ApiResponse.ok(await _session_with_profile(payload))
 
 
 @router.get("/me")
 async def me(ctx: dict = Depends(get_current_user)):
-    """Me (async).
+    """Return the current authenticated user's profile.
 
     Args:
-        ctx: (dict, mặc định Depends(get_current_user)) Tham số `ctx`."""
+        ctx: Auth context injected by the get_current_user dependency."""
     return ApiResponse.ok(_profile_response(ctx))
 
 
 @router.get("/admin/me")
 async def admin_me(ctx: dict = Depends(require_admin)):
-    """Admin me (async).
+    """Return the current admin user's own profile.
 
     Args:
-        ctx: (dict, mặc định Depends(require_admin)) Tham số `ctx`."""
+        ctx: Auth context injected by the require_admin dependency."""
     return ApiResponse.ok(_profile_response(ctx))
 
 
 @router.get("/admin/users")
 async def admin_users(_ctx: dict = Depends(require_admin)):
-    """Admin users (async).
+    """List all user profiles (admin-only).
 
     Args:
-        _ctx: (dict, mặc định Depends(require_admin)) Tham số `_ctx`."""
+        _ctx: Auth context injected by the require_admin dependency; only
+            used to enforce authorization."""
     return ApiResponse.ok(await list_profiles())
 
 
 @router.patch("/admin/users/{user_id}")
 async def admin_patch_user(user_id: str, body: RolePatchBody, ctx: dict = Depends(require_admin)):
-    """Admin patch user (async).
+    """Update a user's role (admin-only).
 
     Args:
-        user_id: (str) Tham số `user_id`.
-        body: (RolePatchBody) Tham số `body`.
-        ctx: (dict, mặc định Depends(require_admin)) Tham số `ctx`."""
+        user_id: id of the user whose role is being changed.
+        body: The new role to assign.
+        ctx: Auth context of the calling admin, used to prevent an admin
+            from demoting their own account.
+
+    Raises:
+        AiLayerValidationError: if the caller targets their own account
+            with a role other than "admin"."""
     if user_id == ctx["user"]["id"] and body.role != "admin":
         raise AiLayerValidationError(
             "Không thể hạ quyền tài khoản của chính bạn",
@@ -213,10 +231,16 @@ async def admin_patch_user(user_id: str, body: RolePatchBody, ctx: dict = Depend
 
 @router.get("/admin/config")
 async def admin_get_config(_ctx: dict = Depends(require_admin)):
-    """Admin get config (async).
+    """Return the current remote config bundle and its metadata (admin-only).
 
     Args:
-        _ctx: (dict, mặc định Depends(require_admin)) Tham số `_ctx`."""
+        _ctx: Auth context injected by the require_admin dependency; only
+            used to enforce authorization.
+
+    Returns:
+        dict with "config" (current values) and "meta" describing which
+        keys are JSON-typed, long text, or secret, plus per-key update
+        timestamps."""
     bundle = await load_config_bundle()
     admin_cfg = load_schema().get("admin") or {}
     return ApiResponse.ok(
@@ -235,11 +259,15 @@ async def admin_get_config(_ctx: dict = Depends(require_admin)):
 
 @router.patch("/admin/config")
 async def admin_patch_config(body: ConfigPatchBody, _ctx: dict = Depends(require_admin)):
-    """Admin patch config (async).
+    """Patch one or more remote config keys (admin-only).
 
     Args:
-        body: (ConfigPatchBody) Tham số `body`.
-        _ctx: (dict, mặc định Depends(require_admin)) Tham số `_ctx`."""
+        body: Mapping of config keys to their new values.
+        _ctx: Auth context injected by the require_admin dependency; only
+            used to enforce authorization.
+
+    Raises:
+        AiLayerValidationError: if body.updates is empty."""
     if not body.updates:
         raise AiLayerValidationError("Không có trường nào để cập nhật", message_key="errors.no_updates")
     saved = await patch_config(body.updates)
@@ -248,9 +276,13 @@ async def admin_patch_config(body: ConfigPatchBody, _ctx: dict = Depends(require
 
 @router.get("/admin/stats")
 async def admin_stats(_ctx: dict = Depends(require_admin)):
-    """Admin stats (async).
+    """Return aggregate user counts for the admin dashboard (admin-only).
 
     Args:
-        _ctx: (dict, mặc định Depends(require_admin)) Tham số `_ctx`."""
+        _ctx: Auth context injected by the require_admin dependency; only
+            used to enforce authorization.
+
+    Returns:
+        dict with totalUsers and adminUsers counts."""
     total, admins = await count_profiles()
     return ApiResponse.ok({"totalUsers": total, "adminUsers": admins})

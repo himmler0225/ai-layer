@@ -7,7 +7,9 @@ from app.services.agent.guards import (
 
 
 def test_no_force_after_search_budget_block():
-    """Sau khi search lần 2 bị chặn budget, phải cho model gọi comments."""
+    """After a second search call is blocked by the search budget, the model
+    should still be allowed to call other tools (e.g. comments) instead of
+    being forced into synthesis."""
     log = [
         {
             "tool": "youtube_search",

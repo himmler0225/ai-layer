@@ -7,7 +7,7 @@ from app.config.db.models.vector_dim import embedding_vector
 
 
 class Video(Base):
-    """Lớp `Video` (kế thừa Base)."""
+    """A scraped video (YouTube or TikTok) with engagement stats, transcript, and metadata."""
 
     __tablename__ = "videos"
     __table_args__ = (
@@ -29,7 +29,7 @@ class Video(Base):
 
 
 class Comment(Base):
-    """Lớp `Comment` (kế thừa Base)."""
+    """A comment on a video, with author, content, like count, and metadata."""
 
     __tablename__ = "comments"
     __table_args__ = (Index("comments_video_id", "video_id"),)
@@ -43,7 +43,7 @@ class Comment(Base):
 
 
 class VideoChunk(Base):
-    """Lớp `VideoChunk` (kế thừa Base)."""
+    """A chunk of a video's transcript/content with its embedding, used for RAG similarity search."""
 
     __tablename__ = "video_chunks"
     __table_args__ = (

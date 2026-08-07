@@ -8,13 +8,21 @@ from app.config.settings import SUPABASE_ANON_KEY, SUPABASE_TOKEN_TTL, SUPABASE_
 
 
 async def get_user_id(token: str) -> str:
-    """Lấy user id (async).
+    """Resolve a Supabase JWT to a user id, using a Redis cache when available.
+
+    Looks up a cached id keyed by a SHA-256 hash of the token; on a miss,
+    validates the token against Supabase's `/auth/v1/user` endpoint and
+    caches the result for `SUPABASE_TOKEN_TTL` seconds.
 
     Args:
-        token: (str) Tham số `token`.
+        token: The bearer token to validate.
 
     Returns:
-        (str) Kết quả trả về."""
+        The authenticated user's id.
+
+    Raises:
+        AiLayerAuthError: If the token is invalid/expired or the user id
+            can't be extracted from the response."""
     cache_key = f"auth:{hashlib.sha256(token.encode()).hexdigest()[:32]}"
     redis = await get_redis()
     if redis:

@@ -6,13 +6,18 @@ from app.config.db.utils import model_to_dict
 
 
 async def upsert_raw_reviews(rows: list[dict]) -> int:
-    """Upsert raw reviews (async).
+    """Bulk insert or update raw reviews, keyed by id.
+
+    On conflict, refreshes content, rating, likes, author, and metadata.
 
     Args:
-        rows: (list[dict]) Tham số `rows`.
+        rows: Raw review dicts with "id", "movie_id", "source", "content"
+            and optional "source_video_id", "author", "rating", "likes",
+            "metadata".
 
     Returns:
-        (int) Kết quả trả về."""
+        The number of rows submitted (0 if `rows` is empty).
+    """
     if not rows:
         return 0
     factory = await get_session_factory()
@@ -50,15 +55,17 @@ async def upsert_raw_reviews(rows: list[dict]) -> int:
 
 
 async def get_raw_reviews(movie_id: str, *, limit: int = 100, sort_by_likes: bool = True) -> list[dict]:
-    """Lấy raw reviews (async).
+    """Fetch a movie's raw reviews.
 
     Args:
-        movie_id: (str) Tham số `movie_id`.
-        limit: (int, mặc định 100) Tham số `limit`.
-        sort_by_likes: (bool, mặc định True) Tham số `sort_by_likes`.
+        movie_id: Movie id to filter by.
+        limit: Maximum number of reviews to return.
+        sort_by_likes: If True, order by likes descending; otherwise order
+            by creation time descending.
 
     Returns:
-        (list[dict]) Kết quả trả về."""
+        Raw review rows as dicts.
+    """
     factory = await get_session_factory()
     async with factory() as session:
         q = select(RawReview).where(RawReview.movie_id == movie_id)
@@ -72,13 +79,14 @@ async def get_raw_reviews(movie_id: str, *, limit: int = 100, sort_by_likes: boo
 
 
 async def count_raw_reviews(movie_id: str) -> int:
-    """Count raw reviews (async).
+    """Count how many raw reviews a movie has.
 
     Args:
-        movie_id: (str) Tham số `movie_id`.
+        movie_id: Movie id to count reviews for.
 
     Returns:
-        (int) Kết quả trả về."""
+        The number of raw reviews stored for the movie.
+    """
     factory = await get_session_factory()
     async with factory() as session:
         return int(

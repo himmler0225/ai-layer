@@ -5,17 +5,23 @@ from app.ingest.schemas import ROUTING_VIDEO
 
 
 async def route_tool(tool_name: str, inputs: dict, data: dict, *, movie_hint: str, platform: str) -> None:
-    """Route tool (async).
+    """Dispatch an unwrapped tool result to the right publish_* helper based on tool name.
+
+    Recognizes search tools (publishes discovered videos), detail/video-info tools,
+    comment tools (single and batch), and transcript tools (single and batch) for
+    both YouTube and TikTok, and routes each to the matching ingest publisher.
 
     Args:
-        tool_name: (str) Tham số `tool_name`.
-        inputs: (dict) Tham số `inputs`.
-        data: (dict) Tham số `data`.
-        movie_hint: (str) Tham số `movie_hint`.
-        platform: (str) Tham số `platform`.
+        tool_name: Name of the agent tool that produced `data` (e.g. "youtube_search",
+            "tiktok_comments", "youtube_get_transcript_batch").
+        inputs: Original arguments the tool was called with.
+        data: Unwrapped tool result payload.
+        movie_hint: Free-text movie/product hint to attach to published envelopes.
+        platform: Either "youtube" or "tiktok".
 
     Returns:
-        (None) Kết quả trả về."""
+        None. Unrecognized tool names are silently ignored.
+    """
     if tool_name in SEARCH_TOOLS:
         await publish_search(inputs, data, platform, movie_hint)
         return

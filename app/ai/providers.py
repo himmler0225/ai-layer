@@ -15,7 +15,7 @@ from app.ai.adapters import (
     responses_tools_to_chat,
 )
 from app.ai.base import BaseLLM
-from app.config.logger import Logger
+from app.config.logger import Logger, log_event
 from app.exceptions import AiLayerConfigError, AiLayerValidationError
 from app.utils.llm_errors import log_error, should_retry
 from app.utils.retry import retry_delay
@@ -27,7 +27,8 @@ _clients: dict[str, AsyncOpenAI] = {}
 
 @dataclass(frozen=True)
 class ProviderSpec:
-    """Lớp `ProviderSpec` (kế thừa object)."""
+    """Static description of an LLM provider: its settings key prefix, base
+    URL, fallback model, and whether it supports embeddings."""
 
     name: str
     settings_prefix: str
@@ -42,19 +43,19 @@ _ALIASES = {"deep_seek": "deepseek"}
 
 
 def normalize_provider(name: str) -> str:
-    """Chuẩn hóa provider.
+    """Normalize a provider name: trim, lowercase, and resolve known aliases.
 
     Args:
-        name: (str) Tham số `name`.
+        name: Raw provider name (e.g. from settings or user input).
 
     Returns:
-        (str) Kết quả trả về."""
+        The canonical lowercase provider key (e.g. `"deep_seek"` -> `"deepseek"`)."""
     key = (name or "").strip().lower()
     return _ALIASES.get(key, key)
 
 
 def get_provider_spec(name: str) -> ProviderSpec:
-    """Lấy provider spec từ settings (Supabase AI_MODELS)."""
+    """Build a `ProviderSpec` for a provider from settings (backed by Supabase AI_MODELS)."""
     key = normalize_provider(name)
     prefix = provider_settings_prefix(key)
     embedding_provider = normalize_provider(getattr(settings, "LLM_EMBEDDING_PROVIDER", "") or "")
@@ -66,27 +67,32 @@ def get_provider_spec(name: str) -> ProviderSpec:
 
 
 def _setting(spec: ProviderSpec, field: str, default: Any = None) -> Any:
-    """(Nội bộ) Setting `_setting`.
+    """Read a `{settings_prefix}_{field}` setting, falling back to `default`
+    when it's unset, empty string, or `0`.
 
     Args:
-        spec: (ProviderSpec) Tham số `spec`.
-        field: (str) Tham số `field`.
-        default: (Any, mặc định None) Tham số `default`.
+        spec: Provider spec supplying the settings key prefix.
+        field: Setting name suffix (e.g. `"API_KEY"`, `"MODEL"`).
+        default: Value to return when the setting is missing/falsy.
 
     Returns:
-        (Any) Kết quả trả về."""
+        The setting's value, or `default`."""
     value = getattr(settings, f"{spec.settings_prefix}_{field}", None)
     return value if value not in (None, "", 0) else default
 
 
 def get_sdk_client(spec: ProviderSpec) -> AsyncOpenAI:
-    """Lấy sdk client.
+    """Get or lazily create the cached `AsyncOpenAI` client for a provider.
 
     Args:
-        spec: (ProviderSpec) Tham số `spec`.
+        spec: Provider spec identifying which client/config to use.
 
     Returns:
-        (AsyncOpenAI) Kết quả trả về."""
+        The cached `AsyncOpenAI` client instance for this provider.
+
+    Raises:
+        AiLayerConfigError: If the provider's API key or base URL is not
+            configured."""
     if spec.name not in _clients:
         api_key = _setting(spec, "API_KEY")
         if not api_key:
@@ -100,22 +106,26 @@ def get_sdk_client(spec: ProviderSpec) -> AsyncOpenAI:
 
 
 def reset_clients() -> None:
-    """Reset clients.
+    """Clear the cached SDK clients, forcing them to be recreated on next use.
 
     Returns:
-        (None) Kết quả trả về."""
+        None."""
     _clients.clear()
 
 
 async def _with_retry(fn: Callable[[], Any], *, where: str) -> Any:
-    """(Nội bộ) With retry (async).
+    """Call `fn`, retrying on retryable exceptions with backoff delay.
 
     Args:
-        fn: (Callable[[], Any]) Tham số `fn`.
-        where: (str) Tham số `where`.
+        fn: Zero-argument async callable to invoke.
+        where: Label used in retry/error log messages (e.g. provider/method).
 
     Returns:
-        (Any) Kết quả trả về."""
+        The result of `fn()`.
+
+    Raises:
+        Exception: The last exception encountered, once retries (up to
+            `HTTP_MAX_ATTEMPTS`) are exhausted or the error isn't retryable."""
     last_exc: Exception | None = None
     for attempt in range(1, HTTP_MAX_ATTEMPTS + 1):
         try:
@@ -131,42 +141,45 @@ async def _with_retry(fn: Callable[[], Any], *, where: str) -> Any:
 
 
 class ConfiguredLLM(BaseLLM):
-    """Lớp `ConfiguredLLM` (kế thừa BaseLLM)."""
+    """`BaseLLM` implementation backed by any OpenAI-compatible Chat
+    Completions API, configured per-provider via `ProviderSpec`/settings."""
 
     def __init__(self, spec: ProviderSpec):
-        """Khởi tạo instance.
+        """Store the provider spec and set the instance's provider name.
 
         Args:
-            spec: (ProviderSpec) Tham số `spec`."""
+            spec: Provider configuration this instance will use."""
         self._spec = spec
         self.name = spec.name
 
     def default_model(self) -> str:
-        """Default model.
+        """Return this provider's configured default model name, or `""` if unset.
 
         Returns:
-            (str) Kết quả trả về."""
+            The `{prefix}_MODEL` setting value, or an empty string."""
         return _setting(self._spec, "MODEL") or ""
 
     def tool_model(self) -> str:
-        """Tool model.
+        """Return the model to use for tool/function-calling requests.
 
         Returns:
-            (str) Kết quả trả về."""
+            The `{prefix}_TOOL_MODEL` setting if configured, otherwise
+            `default_model()`."""
         return _setting(self._spec, "TOOL_MODEL") or self.default_model()
 
     def default_max_tokens(self) -> int:
-        """Default max tokens.
+        """Return the default max output tokens for this provider.
 
         Returns:
-            (int) Kết quả trả về."""
+            `{prefix}_TOOL_MAX_TOKENS`, then `{prefix}_MAX_TOKENS`, then `4096`
+            as a final fallback."""
         return _setting(self._spec, "TOOL_MAX_TOKENS") or _setting(self._spec, "MAX_TOKENS") or 4096
 
     def _client(self) -> AsyncOpenAI:
-        """(Nội bộ) Client `_client`.
+        """Get the cached `AsyncOpenAI` client for this provider.
 
         Returns:
-            (AsyncOpenAI) Kết quả trả về."""
+            The provider's `AsyncOpenAI` client instance."""
         return get_sdk_client(self._spec)
 
     async def complete(
@@ -177,16 +190,16 @@ class ConfiguredLLM(BaseLLM):
         model: str | None = None,
         max_tokens: int | None = None,
     ) -> str:
-        """Hoàn tất `complete` (async).
+        """Run a single-turn chat completion via the provider's SDK client.
 
         Args:
-            user_prompt: (str) Tham số `user_prompt`.
-            system_prompt: (str, mặc định '') Tham số `system_prompt`.
-            model: (Optional[str], mặc định None) Tham số `model`.
-            max_tokens: (Optional[int], mặc định None) Tham số `max_tokens`.
+            user_prompt: The user's message content.
+            system_prompt: Optional system instructions; omitted if empty.
+            model: Model override; falls back to `default_model()`.
+            max_tokens: Max output tokens; falls back to `default_max_tokens()`.
 
         Returns:
-            (str) Kết quả trả về."""
+            The assistant's reply text, stripped of surrounding whitespace."""
         messages: list[dict[str, str]] = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
@@ -206,16 +219,17 @@ class ConfiguredLLM(BaseLLM):
         model: str | None = None,
         max_tokens: int | None = None,
     ) -> str:
-        """Hoàn tất json (async).
+        """Run `complete()` with an appended instruction to respond with JSON only.
 
         Args:
-            user_prompt: (str) Tham số `user_prompt`.
-            system_prompt: (str, mặc định '') Tham số `system_prompt`.
-            model: (Optional[str], mặc định None) Tham số `model`.
-            max_tokens: (Optional[int], mặc định None) Tham số `max_tokens`.
+            user_prompt: The user's message content.
+            system_prompt: Optional system instructions; the JSON-only
+                instruction is appended to it (or used alone if empty).
+            model: Model override; falls back to `default_model()`.
+            max_tokens: Max output tokens; falls back to `default_max_tokens()`.
 
         Returns:
-            (str) Kết quả trả về."""
+            The generated text, expected to be a JSON string."""
         json_system = (
             f"{system_prompt}\n\nRespond with valid JSON only. No markdown, no explanation."
             if system_prompt
@@ -238,18 +252,20 @@ class ConfiguredLLM(BaseLLM):
         tools: list[dict] | None = None,
         tool_choice: str | dict[str, Any] | None = None,
     ) -> Any:
-        """Tạo response (async).
+        """Run a Responses-API-style request, translated to Chat Completions.
 
         Args:
-            model: (Optional[str], mặc định None) Tham số `model`.
-            instructions: (Optional[str], mặc định None) Tham số `instructions`.
-            input: (Any, mặc định None) Tham số `input`.
-            max_output_tokens: (Optional[int], mặc định None) Tham số `max_output_tokens`.
-            tools: (Optional[List[Dict]], mặc định None) Tham số `tools`.
-            tool_choice: (Optional[str], mặc định None) Tham số `tool_choice`.
+            model: Model override; falls back to `tool_model()`.
+            instructions: Optional system-level instructions.
+            input: Responses-API-shaped input items (or plain content).
+            max_output_tokens: Max output tokens; falls back to
+                `default_max_tokens()`.
+            tools: Optional Responses-API-shaped tool definitions.
+            tool_choice: Optional tool-choice directive; defaults to `"auto"`
+                when tools are present.
 
         Returns:
-            (Any) Kết quả trả về."""
+            An `LLMResponse` built from the Chat Completions result."""
         return await self._create_response_chat(
             model=model,
             instructions=instructions,
@@ -269,18 +285,20 @@ class ConfiguredLLM(BaseLLM):
         tools: list[dict] | None,
         tool_choice: str | dict[str, Any] | None,
     ) -> Any:
-        """(Nội bộ) Tạo response chat (async).
+        """Build and send the Chat Completions request for `create_response`,
+        with retry on transient errors.
 
         Args:
-            model: (Optional[str]) Tham số `model`.
-            instructions: (Optional[str]) Tham số `instructions`.
-            input: (Any) Tham số `input`.
-            max_output_tokens: (Optional[int]) Tham số `max_output_tokens`.
-            tools: (Optional[List[Dict]]) Tham số `tools`.
-            tool_choice: (Optional[str]) Tham số `tool_choice`.
+            model: Model override; falls back to `tool_model()`.
+            instructions: Optional system-level instructions.
+            input: Responses-API-shaped input items.
+            max_output_tokens: Max output tokens; falls back to
+                `default_max_tokens()`.
+            tools: Optional Responses-API-shaped tool definitions.
+            tool_choice: Optional tool-choice directive.
 
         Returns:
-            (Any) Kết quả trả về."""
+            An `LLMResponse` built from the completion result."""
         resolved_model = model or self.tool_model()
         messages = responses_input_to_chat_messages(input, instructions=instructions)
         chat_tools = responses_tools_to_chat(tools)
@@ -293,17 +311,20 @@ class ConfiguredLLM(BaseLLM):
             kwargs["tools"] = chat_tools
             kwargs["tool_choice"] = tool_choice or "auto"
         logger.info(
-            "[llm:%s] chat.completions model=%s tools=%s",
-            self.name,
-            resolved_model,
-            len(chat_tools),
+            log_event(
+                "llm",
+                "chat completion request",
+                provider=self.name,
+                model=resolved_model,
+                tools=len(chat_tools),
+            )
         )
 
         async def _call() -> Any:
-            """(Nội bộ) Call `_call` (async).
+            """Issue the chat completion request and adapt it to an `LLMResponse`.
 
             Returns:
-                (Any) Kết quả trả về."""
+                The adapted `LLMResponse`."""
             completion = await self._client().chat.completions.create(**kwargs)
             return chat_completion_to_llm_response(completion)
 
@@ -311,25 +332,29 @@ class ConfiguredLLM(BaseLLM):
 
     @asynccontextmanager
     async def response_stream(self, **kwargs: Any) -> AsyncIterator[Any]:
-        """Response stream (async).
+        """Async context manager yielding a `ChatCompletionStreamAdapter` for a
+        streaming Responses-API-style request.
 
         Args:
-            kwargs: (Any) Tham số `kwargs`.
+            kwargs: Same parameters as `create_response` (model, instructions,
+                input, max_output_tokens, tools, tool_choice).
 
         Returns:
-            (AsyncIterator[Any]) Kết quả trả về."""
+            An async context yielding the stream adapter."""
         async with self._response_stream_chat(**kwargs) as stream:
             yield stream
 
     @asynccontextmanager
     async def _response_stream_chat(self, **kwargs: Any) -> AsyncIterator[Any]:
-        """(Nội bộ) Response stream chat (async).
+        """Open a streaming Chat Completions request and wrap it in a
+        `ChatCompletionStreamAdapter`, retrying on transient errors.
 
         Args:
-            kwargs: (Any) Tham số `kwargs`.
+            kwargs: model, instructions, input, max_output_tokens, tools,
+                tool_choice — same as `create_response`.
 
         Returns:
-            (AsyncIterator[Any]) Kết quả trả về."""
+            An async context yielding the `ChatCompletionStreamAdapter`."""
         model = kwargs.pop("model", None) or self.tool_model()
         instructions = kwargs.pop("instructions", None)
         input_items = kwargs.pop("input", None)
@@ -349,10 +374,10 @@ class ConfiguredLLM(BaseLLM):
             req["tool_choice"] = tool_choice or "auto"
 
         async def _open() -> Any:
-            """(Nội bộ) Open `_open` (async).
+            """Issue the streaming chat completion request.
 
             Returns:
-                (Any) Kết quả trả về."""
+                The raw async stream returned by the OpenAI SDK."""
             return await self._client().chat.completions.create(**req)
 
         last_exc: Exception | None = None
@@ -379,15 +404,20 @@ class ConfiguredLLM(BaseLLM):
         model: str | None = None,
         dimensions: int | None = None,
     ) -> list[list[float]]:
-        """Embed texts (async).
+        """Generate embedding vectors for a batch of texts via this provider.
 
         Args:
-            texts: (List[str]) Tham số `texts`.
-            model: (Optional[str], mặc định None) Tham số `model`.
-            dimensions: (Optional[int], mặc định None) Tham số `dimensions`.
+            texts: Texts to embed; returns `[]` immediately if empty.
+            model: Embedding model override; defaults to `settings.EMBEDDING_MODEL`.
+            dimensions: Embedding dimensionality override; defaults to
+                `settings.EMBEDDING_DIM`.
 
         Returns:
-            (List[List[float]]) Kết quả trả về."""
+            One embedding vector per input text, ordered to match `texts`.
+
+        Raises:
+            AiLayerValidationError: If this provider is not configured as the
+                embedding provider (`supports_embeddings` is `False`)."""
         if not self._spec.supports_embeddings:
             raise AiLayerValidationError(
                 f"{self.name} provider does not support embeddings — use task=embedding (openai)"

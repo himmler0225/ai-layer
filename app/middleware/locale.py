@@ -6,10 +6,11 @@ from app.i18n.locale import resolve_locale, set_locale
 
 class LocaleMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
-        """Điều phối (async).
+        """Resolve and set the request locale, then continue the request.
 
         Args:
-            request: (Request) Tham số `request`.
-            call_next: (Any) Tham số `call_next`."""
+            request: The incoming request, used to resolve the locale (e.g.
+                from headers/query params).
+            call_next: The next handler in the middleware chain."""
         set_locale(resolve_locale(request))
         return await call_next(request)

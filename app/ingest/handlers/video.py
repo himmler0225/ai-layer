@@ -3,13 +3,16 @@ from app.repositories.videos import upsert_video
 
 
 async def handle_video_upsert(envelope: dict) -> None:
-    """Xử lý video upsert (async).
+    """Upsert a video row and, if present, its associated search-cache entry.
 
     Args:
-        envelope: (dict) Tham số `envelope`.
+        envelope: Ingest envelope dict whose "payload" contains "video" (the
+            normalized video dict) and optionally "search_cache" (query/platform/
+            video_ids to cache for a search tool call).
 
     Returns:
-        (None) Kết quả trả về."""
+        None. Does nothing if the payload has no "video".
+    """
     payload = envelope.get("payload") or {}
     video = payload.get("video")
     if not video:

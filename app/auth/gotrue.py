@@ -15,10 +15,13 @@ _AUTH_HEADERS = {
 
 
 def _require_supabase() -> None:
-    """(Nội bộ) Require supabase `_require_supabase`.
+    """Ensure Supabase URL and anon key are configured before making auth calls.
 
     Returns:
-        (None) Kết quả trả về."""
+        None.
+
+    Raises:
+        AiLayerAuthError: If `SUPABASE_URL` or `SUPABASE_ANON_KEY` is unset."""
     if not SUPABASE_URL or not SUPABASE_ANON_KEY:
         raise AiLayerAuthError("Supabase auth chưa cấu hình", message_key="errors.supabase_auth_not_configured")
 
@@ -118,7 +121,7 @@ async def exchange_oauth_code(
 
 
 async def refresh_token(refresh_token_value: str) -> dict[str, Any]:
-    """Đổi refresh token lấy access token mới (Supabase GoTrue)."""
+    """Exchange a refresh token for a new access token via Supabase GoTrue."""
     _require_supabase()
     async with httpx.AsyncClient(timeout=SUPABASE_AUTH_TIMEOUT) as client:
         r = await client.post(

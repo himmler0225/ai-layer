@@ -6,14 +6,19 @@ from app.config.db.utils import model_to_dict
 
 
 async def replace_curated_reviews(movie_id: str, rows: list[dict]) -> int:
-    """Replace curated reviews (async).
+    """Replace a movie's curated reviews with a new ranked set.
+
+    Deletes all existing curated reviews for the movie, then bulk-inserts
+    `rows` (both steps in the same transaction).
 
     Args:
-        movie_id: (str) Tham số `movie_id`.
-        rows: (list[dict]) Tham số `rows`.
+        movie_id: Movie whose curated reviews should be replaced.
+        rows: New curated review dicts with "id", "raw_review_id", "rank",
+            "content", and optional "likes".
 
     Returns:
-        (int) Kết quả trả về."""
+        The number of rows inserted.
+    """
     factory = await get_session_factory()
     async with factory() as session:
         await session.execute(delete(CuratedReview).where(CuratedReview.movie_id == movie_id))
@@ -37,14 +42,15 @@ async def replace_curated_reviews(movie_id: str, rows: list[dict]) -> int:
 
 
 async def get_curated_reviews(movie_id: str, *, limit: int = 300) -> list[dict]:
-    """Lấy curated reviews (async).
+    """Fetch a movie's curated reviews, ordered by rank.
 
     Args:
-        movie_id: (str) Tham số `movie_id`.
-        limit: (int, mặc định 300) Tham số `limit`.
+        movie_id: Movie id to filter by.
+        limit: Maximum number of reviews to return.
 
     Returns:
-        (list[dict]) Kết quả trả về."""
+        Curated review rows as dicts.
+    """
     factory = await get_session_factory()
     async with factory() as session:
         rows = (
@@ -63,13 +69,14 @@ async def get_curated_reviews(movie_id: str, *, limit: int = 300) -> list[dict]:
 
 
 async def count_curated_reviews(movie_id: str) -> int:
-    """Count curated reviews (async).
+    """Count how many curated reviews a movie has.
 
     Args:
-        movie_id: (str) Tham số `movie_id`.
+        movie_id: Movie id to count reviews for.
 
     Returns:
-        (int) Kết quả trả về."""
+        The number of curated reviews stored for the movie.
+    """
     factory = await get_session_factory()
     async with factory() as session:
         return len((await session.execute(select(CuratedReview.id).where(CuratedReview.movie_id == movie_id))).all())

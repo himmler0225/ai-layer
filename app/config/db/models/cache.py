@@ -6,7 +6,7 @@ from app.config.db.models.base import Base
 
 
 class SearchCache(Base):
-    """Lớp `SearchCache` (kế thừa Base)."""
+    """Cached search results for a (query, platform) pair, storing matched video IDs."""
 
     __tablename__ = "search_cache"
     query: Mapped[str] = mapped_column(Text, primary_key=True)

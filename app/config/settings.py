@@ -7,20 +7,21 @@ load_dotenv()
 
 
 def _env_list(key: str, default: str = "") -> list[str]:
-    """(Nội bộ) Env list.
+    """Read a comma-separated environment variable as a list of trimmed strings.
 
     Args:
-        key: (str) Tham số `key`.
-        default: (str, mặc định '') Tham số `default`.
+        key: Environment variable name.
+        default: Raw comma-separated fallback used if the variable is unset.
 
     Returns:
-        (list[str]) Kết quả trả về."""
+        list[str]: Non-empty, trimmed items from the comma-separated value.
+    """
     return [item.strip() for item in os.getenv(key, default).split(",") if item.strip()]
 
 
 APP_ENV: str = os.getenv("APP_ENV", "development")
 LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
-# Embedding: LLM_EMBEDDING_PROVIDER hoặc cùng provider đang active trong AI_MODELS.
+# Embedding: uses LLM_EMBEDDING_PROVIDER, or falls back to whichever provider is active in AI_MODELS.
 LLM_EMBEDDING_PROVIDER: str = os.getenv("LLM_EMBEDDING_PROVIDER", "").strip().lower()
 API_KEYS: list[str] = _env_list("API_KEYS")
 CORS_ORIGINS: list[str] = _env_list("CORS_ORIGINS", "http://localhost:3000")
@@ -46,6 +47,9 @@ GEOIP_CACHE_MAX: int = int(os.getenv("GEOIP_CACHE_MAX", "500"))
 
 MOVIE_DEFAULT_PROVIDER: str = os.getenv("MOVIE_DEFAULT_PROVIDER", "kkphim").strip().lower()
 
+# i18n — catalogs in app/i18n/locales/<code>.py; add codes here as you translate.
+I18N_SUPPORTED_LOCALES: list[str] = _env_list("I18N_SUPPORTED_LOCALES", "vi,en")
+I18N_DEFAULT_LOCALE: str = os.getenv("I18N_DEFAULT_LOCALE", "en").strip().lower() or "en"
 
 from app.ingest.config import INGEST_ENABLED
 from app.rag.config import (
@@ -62,10 +66,10 @@ _remote_ready = False
 
 
 def ensure_remote_defaults() -> None:
-    """Ensure remote defaults.
+    """Lazily populate `_REMOTE` with schema-derived defaults and env fallbacks (once).
 
-    Returns:
-        (None) Kết quả trả về."""
+    Safe to call repeatedly; subsequent calls are no-ops once initialized.
+    """
     global _remote_ready
     if _remote_ready:
         return
@@ -78,51 +82,53 @@ def ensure_remote_defaults() -> None:
 
 
 def set_remote(name: str, value: Any) -> None:
-    """Set remote.
+    """Set a single remote-config-backed setting value.
 
     Args:
-        name: (str) Tham số `name`.
-        value: (Any) Tham số `value`.
-
-    Returns:
-        (None) Kết quả trả về."""
+        name: Settings attribute name.
+        value: Value to store.
+    """
     ensure_remote_defaults()
     _REMOTE[name] = value
 
 
 def update_remote(values: dict[str, Any]) -> None:
-    """Update remote.
+    """Bulk-update remote-config-backed setting values.
 
     Args:
-        values: (dict[str, Any]) Tham số `values`.
-
-    Returns:
-        (None) Kết quả trả về."""
+        values: Mapping of settings attribute name to new value.
+    """
     ensure_remote_defaults()
     _REMOTE.update(values)
 
 
 def get_remote(name: str, default: Any = None) -> Any:
-    """Lấy remote.
+    """Read a remote-config-backed setting value.
 
     Args:
-        name: (str) Tham số `name`.
-        default: (Any, mặc định None) Tham số `default`.
+        name: Settings attribute name.
+        default: Value to return if the setting isn't present.
 
     Returns:
-        (Any) Kết quả trả về."""
+        Any: The stored value, or `default` if not set.
+    """
     ensure_remote_defaults()
     return _REMOTE.get(name, default)
 
 
 def __getattr__(name: str) -> Any:
-    """Ủy quyền đọc attribute khi không tìm thấy trên module.
+    """Module-level attribute fallback: resolve names not defined at import time
+    from the remote-config store (`_REMOTE`).
 
     Args:
-        name: (str) Tham số `name`.
+        name: Attribute name being accessed on this module.
 
     Returns:
-        (Any) Kết quả trả về."""
+        Any: The value from `_REMOTE`.
+
+    Raises:
+        AttributeError: If `name` starts with "_" or isn't present in `_REMOTE`.
+    """
     if name.startswith("_"):
         raise AttributeError(name)
     ensure_remote_defaults()

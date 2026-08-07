@@ -10,40 +10,40 @@ from app.config.constants import (
 
 
 def base_url() -> str:
-    """Base url.
+    """Return the configured data-miner service base URL.
 
     Returns:
-        (str) Kết quả trả về."""
+        The `DATA_MINER_URL` setting value."""
     return settings.DATA_MINER_URL
 
 
 def api_key() -> str:
-    """Api key.
+    """Return the API key used to authenticate with the data-miner service.
 
     Returns:
-        (str) Kết quả trả về."""
+        The `DATA_MINER_KEY` setting value."""
     return settings.DATA_MINER_KEY
 
 
 def service_token() -> str:
-    """Service token.
+    """Return the service token used to authenticate with the data-miner service.
 
     Returns:
-        (str) Kết quả trả về."""
+        The `DATA_MINER_SERVICE_TOKEN` setting value."""
     return settings.DATA_MINER_SERVICE_TOKEN
 
 
 def timeout() -> float:
-    """Timeout.
+    """Return the HTTP timeout (seconds) for data-miner requests.
 
     Returns:
-        (float) Kết quả trả về."""
+        The `DATA_MINER_TIMEOUT` setting value."""
     return settings.DATA_MINER_TIMEOUT
 
 
 def movie_default_provider() -> str:
-    """Movie default provider.
+    """Return the default movie data provider to use when none is specified.
 
     Returns:
-        (str) Kết quả trả về."""
+        The `MOVIE_DEFAULT_PROVIDER` setting value."""
     return settings.MOVIE_DEFAULT_PROVIDER

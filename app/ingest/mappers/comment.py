@@ -2,14 +2,16 @@ import hashlib
 
 
 def _comment_id(video_id: str, raw: dict) -> str:
-    """(Nội bộ) Comment id.
+    """Derive a stable id for a raw comment, hashing content if no id is provided.
 
     Args:
-        video_id: (str) Tham số `video_id`.
-        raw: (dict) Tham số `raw`.
+        video_id: Id of the video the comment belongs to, used to salt the hash.
+        raw: Raw comment payload from the source API.
 
     Returns:
-        (str) Kết quả trả về."""
+        The source-provided comment id as a string, or a "{video_id}:{hash}" id
+        derived from the comment content if none is provided.
+    """
     cid = raw.get("comment_id") or raw.get("id")
     if cid:
         return str(cid)
@@ -19,14 +21,16 @@ def _comment_id(video_id: str, raw: dict) -> str:
 
 
 def map_comment(video_id: str, raw: dict) -> dict | None:
-    """Map comment.
+    """Normalize a raw comment payload into the internal comment dict shape.
 
     Args:
-        video_id: (str) Tham số `video_id`.
-        raw: (dict) Tham số `raw`.
+        video_id: Id of the video the comment belongs to.
+        raw: Raw comment payload from the source API.
 
     Returns:
-        (Optional[dict]) Kết quả trả về."""
+        A dict with "id", "content", "author", "likes", "published_at", and
+        "metadata", or None if the comment has no usable content.
+    """
     content = (raw.get("content") or raw.get("text") or "").strip()
     if not content:
         return None

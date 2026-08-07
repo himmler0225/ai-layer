@@ -5,7 +5,9 @@ from collections.abc import AsyncIterator
 
 
 class BaseLLM(ABC):
-    """Lớp `BaseLLM` (kế thừa ABC)."""
+    """Abstract interface that every LLM provider adapter must implement:
+    plain text completion, JSON completion, Responses-API-style
+    request/response and streaming, and text embedding."""
 
     name: str = "base"
 
@@ -13,32 +15,32 @@ class BaseLLM(ABC):
     async def complete(
         self, *, user_prompt: str, system_prompt: str = "", model: str | None = None, max_tokens: int | None = None
     ) -> str:
-        """Hoàn tất `complete` (async).
+        """Run a single-turn text completion.
 
         Args:
-            user_prompt: (str) Tham số `user_prompt`.
-            system_prompt: (str, mặc định '') Tham số `system_prompt`.
-            model: (Optional[str], mặc định None) Tham số `model`.
-            max_tokens: (Optional[int], mặc định None) Tham số `max_tokens`.
+            user_prompt: The user's message content.
+            system_prompt: Optional system instructions; omitted if empty.
+            model: Model name override; provider's default model if `None`.
+            max_tokens: Max output tokens; provider's default if `None`.
 
         Returns:
-            (str) Kết quả trả về."""
+            The generated text, stripped of leading/trailing whitespace."""
         pass
 
     @abstractmethod
     async def complete_json(
         self, *, user_prompt: str, system_prompt: str = "", model: str | None = None, max_tokens: int | None = None
     ) -> str:
-        """Hoàn tất json (async).
+        """Run a completion constrained to return valid JSON.
 
         Args:
-            user_prompt: (str) Tham số `user_prompt`.
-            system_prompt: (str, mặc định '') Tham số `system_prompt`.
-            model: (Optional[str], mặc định None) Tham số `model`.
-            max_tokens: (Optional[int], mặc định None) Tham số `max_tokens`.
+            user_prompt: The user's message content.
+            system_prompt: Optional system instructions; omitted if empty.
+            model: Model name override; provider's default model if `None`.
+            max_tokens: Max output tokens; provider's default if `None`.
 
         Returns:
-            (str) Kết quả trả về."""
+            The generated text as a JSON string (not yet parsed)."""
         pass
 
     @abstractmethod
@@ -52,43 +54,49 @@ class BaseLLM(ABC):
         tools: list[dict] | None = None,
         tool_choice: str | dict[str, Any] | None = None,
     ) -> Any:
-        """Tạo response (async).
+        """Run a Responses-API-style completion, optionally with tool calling.
 
         Args:
-            model: (Optional[str], mặc định None) Tham số `model`.
-            instructions: (Optional[str], mặc định None) Tham số `instructions`.
-            input: (Any, mặc định None) Tham số `input`.
-            max_output_tokens: (Optional[int], mặc định None) Tham số `max_output_tokens`.
-            tools: (Optional[List[Dict]], mặc định None) Tham số `tools`.
-            tool_choice: (Optional[str], mặc định None) Tham số `tool_choice`.
+            model: Model name override; provider's default model if `None`.
+            instructions: Optional system-level instructions.
+            input: Conversation input (Responses-API items or plain string).
+            max_output_tokens: Max output tokens; provider's default if `None`.
+            tools: Optional list of tool/function definitions to expose.
+            tool_choice: Optional tool-choice directive (e.g. `"auto"` or a
+                specific tool spec).
 
         Returns:
-            (Any) Kết quả trả về."""
+            A provider-specific response object (e.g. `LLMResponse`)."""
         pass
 
     @abstractmethod
     @asynccontextmanager
     async def response_stream(self, **kwargs: Any) -> AsyncIterator[Any]:
-        """Response stream (async).
+        """Run a streaming completion as an async context manager.
 
         Args:
-            kwargs: (Any) Tham số `kwargs`.
+            kwargs: Same parameters as `create_response` (model, instructions,
+                input, max_output_tokens, tools, tool_choice), passed through
+                by the concrete implementation.
 
         Returns:
-            (AsyncIterator[Any]) Kết quả trả về."""
+            An async iterator/context yielding stream events, ending with a
+            way to obtain the final aggregated response."""
         yield
 
     @abstractmethod
     async def embed_texts(
         self, texts: list[str], *, model: str | None = None, dimensions: int | None = None
     ) -> list[list[float]]:
-        """Embed texts (async).
+        """Generate embedding vectors for a batch of texts.
 
         Args:
-            texts: (List[str]) Tham số `texts`.
-            model: (Optional[str], mặc định None) Tham số `model`.
-            dimensions: (Optional[int], mặc định None) Tham số `dimensions`.
+            texts: Texts to embed; an empty list yields an empty result.
+            model: Embedding model override; provider's default if `None`.
+            dimensions: Optional requested embedding dimensionality.
 
         Returns:
-            (List[List[float]]) Kết quả trả về."""
+            One embedding vector (list of floats) per input text, in order.
+            Implementations may raise if the provider doesn't support
+            embeddings."""
         pass

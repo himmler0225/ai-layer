@@ -4,13 +4,14 @@ from slowapi.errors import RateLimitExceeded
 
 
 def _key_by_api_key(request: Request) -> str:
-    """(Nội bộ) Key by api key.
+    """Derive the rate-limiter bucket key for a request.
 
     Args:
-        request: (Request) Tham số `request`.
+        request: The incoming request.
 
     Returns:
-        (str) Kết quả trả về."""
+        The `X-API-Key` header value if present, otherwise the client's host,
+        otherwise `"unknown"`."""
     return request.headers.get("X-API-Key") or request.client.host or "unknown"
 
 

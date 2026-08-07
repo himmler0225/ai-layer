@@ -7,13 +7,19 @@ from app.repositories.videos import exists_video, upsert_video
 
 
 async def handle_comments_upsert(envelope: dict) -> None:
-    """Xử lý comments upsert (async).
+    """Persist a batch of comments for a video and fan out to RAG sync and embedding.
+
+    Ensures the parent video row exists, stores the raw comments, syncs them into
+    the movie RAG pipeline (if a movie hint is present), and publishes indexable
+    comment chunks onto the embed routing key.
 
     Args:
-        envelope: (dict) Tham số `envelope`.
+        envelope: Ingest envelope dict with "video_id"/"platform"/"movie_hint" and a
+            "payload" containing "comments" (list of raw comment dicts) and "url".
 
     Returns:
-        (None) Kết quả trả về."""
+        None. Does nothing if the envelope has no video id or no comments.
+    """
     payload = envelope.get("payload") or {}
     video_id = envelope.get("video_id") or payload.get("video_id")
     platform = envelope.get("platform") or payload.get("platform") or "youtube"

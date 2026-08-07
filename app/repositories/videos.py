@@ -6,13 +6,14 @@ from app.config.db.utils import model_to_dict
 
 
 async def get_video(video_id: str) -> dict | None:
-    """Lấy video (async).
+    """Fetch a single video by id.
 
     Args:
-        video_id: (str) Tham số `video_id`.
+        video_id: The video's id.
 
     Returns:
-        (Optional[dict]) Kết quả trả về."""
+        The video as a dict, or None if not found.
+    """
     factory = await get_session_factory()
     async with factory() as session:
         row = await session.scalar(select(Video).where(Video.id == video_id))
@@ -20,13 +21,14 @@ async def get_video(video_id: str) -> dict | None:
 
 
 async def exists_video(video_id: str) -> bool:
-    """Exists video (async).
+    """Check whether a video with the given id exists.
 
     Args:
-        video_id: (str) Tham số `video_id`.
+        video_id: The video id to check.
 
     Returns:
-        (bool) Kết quả trả về."""
+        True if a video with that id exists.
+    """
     factory = await get_session_factory()
     async with factory() as session:
         return bool(await session.scalar(select(exists().where(Video.id == video_id))))
@@ -45,22 +47,25 @@ async def upsert_video(
     transcript: str = "",
     metadata: dict | None = None,
 ) -> None:
-    """Upsert video (async).
+    """Insert a video, or update its stats/metadata if it already exists.
+
+    On conflict, refreshes title, author, views, likes, comments_count,
+    url, and metadata. The transcript is only overwritten if the new value
+    is non-empty (`COALESCE(NULLIF(new, ''), old)`), so a blank transcript
+    passed on a later upsert won't erase a previously stored one.
 
     Args:
-        id: (str) Tham số `id`.
-        platform: (str) Tham số `platform`.
-        title: (str, mặc định '') Tham số `title`.
-        author: (str, mặc định '') Tham số `author`.
-        views: (int, mặc định 0) Tham số `views`.
-        likes: (int, mặc định 0) Tham số `likes`.
-        comments_count: (int, mặc định 0) Tham số `comments_count`.
-        url: (str, mặc định '') Tham số `url`.
-        transcript: (str, mặc định '') Tham số `transcript`.
-        metadata: (dict | None, mặc định None) Tham số `metadata`.
-
-    Returns:
-        (None) Kết quả trả về."""
+        id: The video's id.
+        platform: Source platform (e.g. "youtube", "tiktok").
+        title: Video title.
+        author: Video author/channel name.
+        views: View count.
+        likes: Like count.
+        comments_count: Number of comments.
+        url: Video URL.
+        transcript: Video transcript text, if available.
+        metadata: Extra metadata to store as JSON.
+    """
     factory = await get_session_factory()
     async with factory() as session:
         stmt = insert(Video).values(
@@ -95,14 +100,12 @@ async def upsert_video(
 
 
 async def update_transcript(video_id: str, transcript: str) -> None:
-    """Update transcript (async).
+    """Overwrite a video's stored transcript.
 
     Args:
-        video_id: (str) Tham số `video_id`.
-        transcript: (str) Tham số `transcript`.
-
-    Returns:
-        (None) Kết quả trả về."""
+        video_id: Video to update.
+        transcript: New transcript text.
+    """
     factory = await get_session_factory()
     async with factory() as session:
         await session.execute(

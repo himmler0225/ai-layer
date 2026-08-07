@@ -5,13 +5,14 @@ from app.config.db.session import get_session_factory
 
 
 async def upsert_chunks(rows: list[dict]) -> None:
-    """Upsert chunks (async).
+    """Bulk insert or update video transcript/comment chunks, keyed by id.
+
+    On conflict, refreshes content, embedding, metadata, and created_at.
 
     Args:
-        rows: (list[dict]) Tham số `rows`.
-
-    Returns:
-        (None) Kết quả trả về."""
+        rows: Chunk dicts with "id", "video_id", "platform", "content" and
+            optional "embedding", "metadata".
+    """
     if not rows:
         return
     factory = await get_session_factory()
