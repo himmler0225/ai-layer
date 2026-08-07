@@ -51,15 +51,7 @@ MOVIE_DEFAULT_PROVIDER: str = os.getenv("MOVIE_DEFAULT_PROVIDER", "kkphim").stri
 I18N_SUPPORTED_LOCALES: list[str] = _env_list("I18N_SUPPORTED_LOCALES", "vi,en")
 I18N_DEFAULT_LOCALE: str = os.getenv("I18N_DEFAULT_LOCALE", "en").strip().lower() or "en"
 
-from app.ingest.config import INGEST_ENABLED
-from app.rag.config import (
-    CACHE_TTL_DAYS,
-    EMBEDDING_DIM,
-    EMBEDDING_MODEL,
-    RAG_ENABLED,
-    RAG_MIN_SCORE,
-    RAG_TOP_K,
-)
+from app.rag.config import CACHE_TTL_DAYS, EMBEDDING_DIM, EMBEDDING_MODEL
 
 _REMOTE: dict[str, Any] = {}
 _remote_ready = False

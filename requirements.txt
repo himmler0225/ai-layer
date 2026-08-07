@@ -21,9 +21,6 @@ pgvector>=0.3.6
 # Redis — history cache + rate-limit storage (optional)
 redis>=5.3.0
 
-# Utilities — QR (StyledPilImage pulls Pillow via qrcode[pil])
-qrcode[pil]>=8.0
-
 # GeoIP — optional local DB when GEOIP_DB_PATH is set
 geoip2>=4.8.0
 

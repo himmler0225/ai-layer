@@ -8,7 +8,6 @@ from app.rag.movie_hint import (
     current_question,
     extract_movie_name,
     has_movie_context,
-    is_short_followup,
     wants_catalog,
     wants_raw_comments,
     wants_review,
