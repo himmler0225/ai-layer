@@ -1,6 +1,12 @@
+# Exact-pinned versions — see requirements.txt for the upgrade policy.
+
 # Alembic migrations — SQLAlchemy schema
-alembic>=1.14.0
+alembic==1.18.5
 
 # Testing
-pytest>=8.0.0
-pytest-asyncio>=0.24.0
+pytest==9.1.1
+pytest-asyncio==1.4.0
+pytest-cov==7.0.0
+
+# Linting (matches CI)
+ruff==0.15.20

@@ -1,32 +1,36 @@
+# Exact-pinned versions — last resolved & tested together on 2026-08-09.
+# To upgrade: bump the version(s) deliberately, reinstall in a clean venv,
+# run the full test suite, then commit the new pins.
+
 # Web framework & server (uvicorn, httpx, pydantic-settings via extras)
-fastapi[standard]>=0.128.0
+fastapi[standard]==0.138.2
 
 # Validation & config
-pydantic>=2.11.0
-python-dotenv>=1.1.0
-jsonschema>=4.0.0
+pydantic==2.13.4
+python-dotenv==1.2.2
+jsonschema==4.26.0
 
 # HTTP & OpenAI
-httpx>=0.28.0
-openai>=1.40.0
+httpx==0.28.1
+openai==2.44.0
 
 # Rate limiting
-slowapi>=0.1.10
+slowapi==0.1.10
 
 # PostgreSQL — SQLAlchemy async + asyncpg + pgvector
-sqlalchemy[asyncio]>=2.0.36
-asyncpg>=0.30.0
-pgvector>=0.3.6
+sqlalchemy[asyncio]==2.0.51
+asyncpg==0.31.0
+pgvector==0.4.2
 
 # Redis — history cache + rate-limit storage (optional)
-redis>=5.3.0
+redis==8.0.1
 
 # GeoIP — optional local DB when GEOIP_DB_PATH is set
-geoip2>=4.8.0
+geoip2==5.2.0
 
 # MCP client (data-miner crawl tools)
-mcp[cli]>=1.0
+mcp[cli]==1.28.1
 
 # Langgraph
-langgraph>=0.2.0
-langchain-core>=0.3.0
+langgraph==1.2.7
+langchain-core==1.4.8

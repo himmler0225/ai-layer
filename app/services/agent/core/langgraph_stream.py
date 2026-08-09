@@ -8,7 +8,7 @@ from app.services.agent.events import data_preview, done, status, text_delta, to
 from app.services.agent.graph.build import get_graph
 
 
-async def run_agent_multi_stream(task: str, requested_tool_set: str, max_iter: int, system: str | None = None) -> AsyncGenerator[str, None]:
+async def run_agent_multi_stream(task: str, requested_tool_set: str, max_iter: int, system: str | None = None) -> AsyncGenerator[str]:
     """Run the multi-agent graph, mapping its events to SSE strings (same contract as the old run_agent_stream)."""
     graph = get_graph()
     initial_state = {
