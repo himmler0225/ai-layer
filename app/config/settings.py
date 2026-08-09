@@ -45,7 +45,10 @@ GEOIP_DB_PATH: str = os.getenv("GEOIP_DB_PATH", "")
 GEOIP_CACHE_TTL: int = int(os.getenv("GEOIP_CACHE_TTL", "3600"))
 GEOIP_CACHE_MAX: int = int(os.getenv("GEOIP_CACHE_MAX", "500"))
 
-MOVIE_DEFAULT_PROVIDER: str = os.getenv("MOVIE_DEFAULT_PROVIDER", "kkphim").strip().lower()
+# Empty = let movie-aggregator-api auto-fallback across kkphim -> ophim -> vsmov.
+MOVIE_DEFAULT_PROVIDER: str = os.getenv("MOVIE_DEFAULT_PROVIDER", "").strip().lower()
+MOVIE_AGGREGATOR_URL: str = os.getenv("MOVIE_AGGREGATOR_URL", "http://localhost:3001").strip()
+MOVIE_AGGREGATOR_TIMEOUT: float = float(os.getenv("MOVIE_AGGREGATOR_TIMEOUT", "20"))
 
 # i18n — catalogs in app/i18n/locales/<code>.py; add codes here as you translate.
 I18N_SUPPORTED_LOCALES: list[str] = _env_list("I18N_SUPPORTED_LOCALES", "vi,en")

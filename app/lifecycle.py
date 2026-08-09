@@ -99,12 +99,15 @@ async def startup() -> None:
 
 async def shutdown() -> None:
     """Run application shutdown: stop the config refresher and close the
-    data-miner client, database engine, and Redis connections."""
+    data-miner client, movie-aggregator client, database engine, and Redis
+    connections."""
     await _stop_config_refresher()
     from app.cache.client import close_redis
     from app.clients.data_miner import close_client as close_dm
+    from app.clients.movie_aggregator import close_client as close_movie_aggregator
     from app.config.db.session import close_engine
 
     await close_dm()
+    await close_movie_aggregator()
     await close_engine()
     await close_redis()

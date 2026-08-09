@@ -21,7 +21,6 @@ TOOL_SETS = {
 _SET_PLATFORM = {
     "youtube": "youtube",
     "tiktok": "tiktok",
-    "movies": "movies",
 }
 
 
@@ -30,10 +29,10 @@ async def resolve_tool_set(name: str) -> list[dict]:
     from app.mcp.config import AGENT_CRAWL_BACKEND
 
     key = name if name in TOOL_SETS else "all"
-    # "web" does not go through the data-miner MCP crawl catalog (that catalog
-    # covers youtube/tiktok/movies) — web_search is always a static tool that
-    # calls the REST endpoint directly.
-    if key == "web" or AGENT_CRAWL_BACKEND != "mcp":
+    # "web" and "movies" never go through the data-miner MCP crawl catalog
+    # (that catalog covers youtube/tiktok only) — web_search and the movie_*
+    # tools are always static, calling their REST clients directly.
+    if key in ("web", "movies") or AGENT_CRAWL_BACKEND != "mcp":
         return TOOL_SETS[key]
 
     from app.mcp.catalog import crawl_catalog
@@ -43,6 +42,8 @@ async def resolve_tool_set(name: str) -> list[dict]:
     if platform:
         crawl = crawl_catalog.filter_by_platform(crawl, platform)
 
-    if key == "movies":
-        return list(crawl) + UTIL_TOOLS
-    return _RAG + list(crawl) + UTIL_TOOLS
+    # MOVIE_TOOLS are static (not part of the MCP crawl catalog), so "all"
+    # must add them back explicitly — they'd otherwise be dropped when MCP
+    # backend is active, since crawl_catalog only covers youtube/tiktok.
+    movies = MOVIE_TOOLS if key == "all" else []
+    return _RAG + list(crawl) + movies + UTIL_TOOLS

@@ -1,7 +1,7 @@
 from typing import Any
 
 import app.config.settings as settings
-from app.clients import data_miner
+from app.clients import data_miner, movie_aggregator
 from app.services.url_extractor import extract_id_from_url as _url_extract
 
 
@@ -301,9 +301,9 @@ async def movie_search(inp: dict) -> Any:
         inp: Tool input with "keyword" and optional "provider", "page", "limit".
 
     Returns:
-        The result of `data_miner.movie_search`.
+        The result of `movie_aggregator.movie_search`.
     """
-    return await data_miner.movie_search(
+    return await movie_aggregator.movie_search(
         inp["keyword"], provider=inp.get("provider"), page=inp.get("page", 1), limit=inp.get("limit", 10)
     )
 
@@ -315,9 +315,9 @@ async def movie_get_detail(inp: dict) -> Any:
         inp: Tool input with "slug" and optional "provider".
 
     Returns:
-        The result of `data_miner.movie_get_detail`.
+        The result of `movie_aggregator.movie_get_detail`.
     """
-    return await data_miner.movie_get_detail(inp["slug"], provider=inp.get("provider"))
+    return await movie_aggregator.movie_get_detail(inp["slug"], provider=inp.get("provider"))
 
 
 async def movie_list_new(inp: dict) -> Any:
@@ -327,9 +327,9 @@ async def movie_list_new(inp: dict) -> Any:
         inp: Tool input with optional "provider", "page".
 
     Returns:
-        The result of `data_miner.movie_list_new`.
+        The result of `movie_aggregator.movie_list_new`.
     """
-    return await data_miner.movie_list_new(provider=inp.get("provider"), page=inp.get("page", 1))
+    return await movie_aggregator.movie_list_new(provider=inp.get("provider"), page=inp.get("page", 1))
 
 
 async def movie_list_by_type(inp: dict) -> Any:
@@ -340,9 +340,9 @@ async def movie_list_by_type(inp: dict) -> Any:
             "category", "country", "year", "sort_lang", "sort_field", "sort_type".
 
     Returns:
-        The result of `data_miner.movie_list_by_type`.
+        The result of `movie_aggregator.movie_list_by_type`.
     """
-    return await data_miner.movie_list_by_type(
+    return await movie_aggregator.movie_list_by_type(
         inp["type"],
         provider=inp.get("provider"),
         page=inp.get("page", 1),
@@ -364,9 +364,9 @@ async def movie_list_by_genre(inp: dict) -> Any:
             "category", "country", "year", "sort_lang", "sort_field", "sort_type".
 
     Returns:
-        The result of `data_miner.movie_list_by_genre`.
+        The result of `movie_aggregator.movie_list_by_genre`.
     """
-    return await data_miner.movie_list_by_genre(
+    return await movie_aggregator.movie_list_by_genre(
         inp["slug"],
         provider=inp.get("provider"),
         page=inp.get("page", 1),
@@ -388,9 +388,9 @@ async def movie_list_by_country(inp: dict) -> Any:
             "category", "country", "year", "sort_lang", "sort_field", "sort_type".
 
     Returns:
-        The result of `data_miner.movie_list_by_country`.
+        The result of `movie_aggregator.movie_list_by_country`.
     """
-    return await data_miner.movie_list_by_country(
+    return await movie_aggregator.movie_list_by_country(
         inp["slug"],
         provider=inp.get("provider"),
         page=inp.get("page", 1),
@@ -412,9 +412,9 @@ async def movie_list_by_year(inp: dict) -> Any:
             "category", "country", "sort_lang", "sort_field", "sort_type".
 
     Returns:
-        The result of `data_miner.movie_list_by_year`.
+        The result of `movie_aggregator.movie_list_by_year`.
     """
-    return await data_miner.movie_list_by_year(
+    return await movie_aggregator.movie_list_by_year(
         inp["year"],
         provider=inp.get("provider"),
         page=inp.get("page", 1),
@@ -434,13 +434,13 @@ async def movie_get_metadata(inp: dict) -> Any:
         inp: Tool input with "kind" ("genres" or "countries") and optional "provider".
 
     Returns:
-        The result of `data_miner.movie_get_genres` when kind is "genres",
-        otherwise `data_miner.movie_get_countries`.
+        The result of `movie_aggregator.movie_get_genres` when kind is "genres",
+        otherwise `movie_aggregator.movie_get_countries`.
     """
     provider = inp.get("provider")
     if inp["kind"] == "genres":
-        return await data_miner.movie_get_genres(provider=provider)
-    return await data_miner.movie_get_countries(provider=provider)
+        return await movie_aggregator.movie_get_genres(provider=provider)
+    return await movie_aggregator.movie_get_countries(provider=provider)
 
 
 CRAWL_HANDLERS = {
