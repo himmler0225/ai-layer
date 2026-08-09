@@ -1,17 +1,7 @@
-"""Data-miner HTTP client — split by domain (youtube / tiktok / movies)."""
+"""Data-miner HTTP client — split by domain (youtube / tiktok). Movie catalog
+lives in app.clients.movie_aggregator (calls movie-aggregator-api directly)."""
 
 from app.clients.data_miner._http import close_client
-from app.clients.data_miner.movies import (
-    movie_get_countries,
-    movie_get_detail,
-    movie_get_genres,
-    movie_list_by_country,
-    movie_list_by_genre,
-    movie_list_by_type,
-    movie_list_by_year,
-    movie_list_new,
-    movie_search,
-)
 from app.clients.data_miner.tiktok import (
     tiktok_comments,
     tiktok_profile,
@@ -54,15 +44,6 @@ __all__ = [
     "get_video_detail",
     "get_video_transcript",
     "get_video_transcript_batch",
-    "movie_get_countries",
-    "movie_get_detail",
-    "movie_get_genres",
-    "movie_list_by_country",
-    "movie_list_by_genre",
-    "movie_list_by_type",
-    "movie_list_by_year",
-    "movie_list_new",
-    "movie_search",
     "search_web",
     "search_youtube",
     "tiktok_comments",

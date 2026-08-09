@@ -13,7 +13,6 @@ CATALOG_TTL_SEC = 300
 _PLATFORM_PREFIX = {
     "youtube": "youtube_",
     "tiktok": "tiktok_",
-    "movies": "movie_",
 }
 
 
@@ -100,8 +99,8 @@ class CrawlToolCatalog:
 
         Args:
             tools: Tool specs to filter, as OpenAI-format dicts with a `name`.
-            platform: One of the known platform keys (`"youtube"`, `"tiktok"`,
-                `"movies"`); unrecognized platforms return `tools` unchanged.
+            platform: One of the known platform keys (`"youtube"`, `"tiktok"`);
+                unrecognized platforms return `tools` unchanged.
 
         Returns:
             The tools whose name starts with the platform's prefix."""

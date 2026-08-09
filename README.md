@@ -75,8 +75,9 @@ app/
 │   ├── settings.py        # env / infra
 │   ├── loader.py          # binds Supabase `config` values onto plain modules at startup
 │   └── remote.py          # Supabase config fetch + validate
-├── clients/data_miner/    # movies.py, youtube.py, tiktok.py, web.py — data-miner HTTP client
-├── mcp/                   # MCP client (consumes data-miner's MCP tool server)
+├── clients/data_miner/    # youtube.py, tiktok.py, web.py — data-miner HTTP client
+├── clients/movie_aggregator/ # movies.py — calls movie-aggregator-api directly (kkphim/ophim/vsmov)
+├── mcp/                   # MCP client (consumes data-miner's MCP tool server; youtube/tiktok only)
 ├── i18n/                  # message-key → localized string (locales/en.py, vi.py)
 ├── ai/
 │   ├── base.py            # BaseLLM interface

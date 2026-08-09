@@ -12,9 +12,11 @@ MOVIE_LIST_TYPES = frozenset(
 
 _PROVIDER_PARAM = {
     "type": "string",
-    "enum": ["kkphim", "ophim"],
-    "default": "kkphim",
-    "description": "Nguồn phim: kkphim (phimapi.com) hoặc ophim (ophim1.com). Mặc định kkphim.",
+    "enum": ["kkphim", "ophim", "vsmov"],
+    "description": (
+        "Ghim nguồn phim cụ thể (kkphim, ophim, hoặc vsmov). "
+        "Bỏ trống để tự động fallback kkphim -> ophim -> vsmov."
+    ),
 }
 
 _PAGE_PARAM = {"type": "integer", "default": 1, "minimum": 1}

@@ -205,7 +205,7 @@ async def handle_movie_summarize(envelope: dict) -> None:
         )
     await delete_aspect_chunks_for_movie(movie_id, keep_aspects=aspects)
     vectors = await embed_texts([r["content"] for r in chunk_rows])
-    for row, vec in zip(chunk_rows, vectors):
+    for row, vec in zip(chunk_rows, vectors, strict=True):
         row["embedding"] = vec
     await upsert_aspect_chunks(chunk_rows)
     for row in chunk_rows:
