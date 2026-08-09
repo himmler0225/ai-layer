@@ -1,12 +1,12 @@
 """MCP client configuration."""
 
 import os
-from enum import Enum
+from enum import StrEnum
 
 import app.config.settings as settings
 
 
-class MCPTransport(str, Enum):
+class MCPTransport(StrEnum):
     STDIO = "stdio"
     SSE = "sse"
 

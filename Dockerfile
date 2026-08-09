@@ -12,8 +12,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 ENV PYTHONUNBUFFERED=1 \
-    INGEST_ENABLED=true \
-    INGEST_WORKER_INLINE=true
+    INGEST_ENABLED=true
 
 EXPOSE 8001
 
