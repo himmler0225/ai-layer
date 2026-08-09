@@ -24,7 +24,7 @@ async def handle_chunks_embed(envelope: dict) -> None:
     if not video_id or not raw_chunks:
         return
     texts = [(item.get("content") or "").strip() for item in raw_chunks]
-    valid = [(item, text) for item, text in zip(raw_chunks, texts) if text]
+    valid = [(item, text) for item, text in zip(raw_chunks, texts, strict=True) if text]
     if not valid:
         return
     vectors = await embed_texts([text for _, text in valid])
