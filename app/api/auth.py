@@ -230,12 +230,14 @@ async def admin_patch_user(user_id: str, body: RolePatchBody, ctx: dict = Depend
 
 
 @router.get("/admin/config")
-async def admin_get_config(_ctx: dict = Depends(require_admin)):
-    """Return the current remote config bundle and its metadata (admin-only).
+async def admin_get_config():
+    """Return the current remote config bundle and its metadata.
 
-    Args:
-        _ctx: Auth context injected by the require_admin dependency; only
-            used to enforce authorization.
+    Protected only by the router-level X-API-Key (service auth) — not
+    per-user require_admin. This endpoint is only reachable from trusted
+    backends holding that key (e.g. cine-flow's server-side admin proxy,
+    itself gated by its own admin panel), so per-user Supabase auth was
+    dropped as an intentional simplification.
 
     Returns:
         dict with "config" (current values) and "meta" describing which
@@ -258,13 +260,13 @@ async def admin_get_config(_ctx: dict = Depends(require_admin)):
 
 
 @router.patch("/admin/config")
-async def admin_patch_config(body: ConfigPatchBody, _ctx: dict = Depends(require_admin)):
-    """Patch one or more remote config keys (admin-only).
+async def admin_patch_config(body: ConfigPatchBody):
+    """Patch one or more remote config keys.
+
+    Protected only by the router-level X-API-Key — see admin_get_config.
 
     Args:
         body: Mapping of config keys to their new values.
-        _ctx: Auth context injected by the require_admin dependency; only
-            used to enforce authorization.
 
     Raises:
         AiLayerValidationError: if body.updates is empty."""
