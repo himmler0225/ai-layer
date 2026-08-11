@@ -33,8 +33,35 @@ def _ids(raw: Any) -> list[str]:
     return []
 
 
+_NULLISH_STRINGS = {"null", "undefined", "none"}
+
+
+def _drop_nullish_strings(value: Any) -> Any:
+    """(Internal) Recursively blank out string values some models emit in place of
+    an actual JSON null/missing field (e.g. a literal `"null"` string).
+
+    Args:
+        value: (Any) A parsed JSON value (dict/list/scalar).
+
+    Returns:
+        (Any) `value` with any `"null"`/`"undefined"`/`"none"`-like string leaves
+        replaced by `None`, so downstream `.get(...) or default` fallbacks treat
+        them as absent instead of rendering the literal word."""
+    if isinstance(value, str):
+        return None if value.strip().lower() in _NULLISH_STRINGS else value
+    if isinstance(value, dict):
+        return {k: _drop_nullish_strings(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_drop_nullish_strings(v) for v in value]
+    return value
+
+
 def _parse_args(arguments: str | None) -> dict:
     """(Internal) Parse a JSON-encoded tool call arguments string into a dict.
+
+    Some models emit a literal `"null"` string instead of omitting an optional
+    field or using real JSON null — those are sanitized to `None` here so they
+    don't leak into status text (e.g. "Đang tìm video YouTube: «null»...").
 
     Args:
         arguments: (str | None) Raw JSON string of tool call arguments, or None.
@@ -46,7 +73,7 @@ def _parse_args(arguments: str | None) -> dict:
         return {}
     try:
         parsed = json.loads(arguments)
-        return parsed if isinstance(parsed, dict) else {}
+        return _drop_nullish_strings(parsed) if isinstance(parsed, dict) else {}
     except json.JSONDecodeError:
         return {}
 
