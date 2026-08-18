@@ -60,22 +60,3 @@ async def upsert_movie(*, id: str, name: str, platform: str = "mixed", metadata:
         )
         await session.execute(stmt)
         await session.commit()
-
-
-async def list_movies(*, platform: str | None = None, limit: int = 50) -> list[dict]:
-    """List movies, most recently updated first.
-
-    Args:
-        platform: If given, restrict results to this platform only.
-        limit: Maximum number of movies to return.
-
-    Returns:
-        Movie rows as dicts.
-    """
-    factory = await get_session_factory()
-    async with factory() as session:
-        q = select(Movie).order_by(Movie.updated_at.desc()).limit(limit)
-        if platform:
-            q = q.where(Movie.platform == platform)
-        rows = (await session.execute(q)).scalars().all()
-        return [model_to_dict(row) for row in rows]

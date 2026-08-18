@@ -39,11 +39,3 @@ def timeout() -> float:
     Returns:
         The `DATA_MINER_TIMEOUT` setting value."""
     return settings.DATA_MINER_TIMEOUT
-
-
-def movie_default_provider() -> str:
-    """Return the default movie data provider to use when none is specified.
-
-    Returns:
-        The `MOVIE_DEFAULT_PROVIDER` setting value."""
-    return settings.MOVIE_DEFAULT_PROVIDER

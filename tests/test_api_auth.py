@@ -34,6 +34,7 @@ async def client():
         # /ai/auth/me is deliberately excluded: it stacks a second dependency
         # (get_current_user) whose own "missing Authorization" check fires
         # first and returns 401 — see test_missing_api_key_on_stacked_auth_route.
+        "/ai/auth/admin/config",
     ],
 )
 async def test_missing_api_key_is_rejected(client: httpx.AsyncClient, path: str):
@@ -58,6 +59,7 @@ async def test_missing_api_key_on_stacked_auth_route(client: httpx.AsyncClient):
         "/ai/admin/health/detail",
         "/ai/auth/me",
         "/ai/runtime/chat-config",
+        "/ai/auth/admin/config",
     ],
 )
 async def test_invalid_api_key_is_rejected_with_error_envelope(client: httpx.AsyncClient, path: str):

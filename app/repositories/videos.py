@@ -2,22 +2,6 @@ from sqlalchemy import exists, func, select, update
 from sqlalchemy.dialects.postgresql import insert
 from app.config.db.models import Video
 from app.config.db.session import get_session_factory
-from app.config.db.utils import model_to_dict
-
-
-async def get_video(video_id: str) -> dict | None:
-    """Fetch a single video by id.
-
-    Args:
-        video_id: The video's id.
-
-    Returns:
-        The video as a dict, or None if not found.
-    """
-    factory = await get_session_factory()
-    async with factory() as session:
-        row = await session.scalar(select(Video).where(Video.id == video_id))
-        return model_to_dict(row) if row else None
 
 
 async def exists_video(video_id: str) -> bool:

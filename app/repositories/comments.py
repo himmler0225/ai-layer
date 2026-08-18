@@ -1,8 +1,6 @@
-from sqlalchemy import delete, func, select
 from sqlalchemy.dialects.postgresql import insert
 from app.config.db.models import Comment
 from app.config.db.session import get_session_factory
-from app.config.db.utils import model_to_dict
 
 
 async def insert_comments(video_id: str, comments: list[dict]) -> None:
@@ -33,50 +31,4 @@ async def insert_comments(video_id: str, comments: list[dict]) -> None:
                 for item in comments
             ],
         )
-        await session.commit()
-
-
-async def get_comments(video_id: str, limit: int = 100) -> list[dict]:
-    """Fetch a video's comments, most-liked first.
-
-    Args:
-        video_id: Video to fetch comments for.
-        limit: Maximum number of comments to return.
-
-    Returns:
-        Comment rows as dicts.
-    """
-    factory = await get_session_factory()
-    async with factory() as session:
-        result = await session.execute(
-            select(Comment).where(Comment.video_id == video_id).order_by(Comment.likes.desc()).limit(limit)
-        )
-        return [model_to_dict(row) for row in result.scalars().all()]
-
-
-async def count_comments(video_id: str) -> int:
-    """Count how many comments a video has.
-
-    Args:
-        video_id: Video to count comments for.
-
-    Returns:
-        The number of comments stored for the video.
-    """
-    factory = await get_session_factory()
-    async with factory() as session:
-        return int(
-            await session.scalar(select(func.count()).select_from(Comment).where(Comment.video_id == video_id)) or 0
-        )
-
-
-async def delete_comments(video_id: str) -> None:
-    """Delete all comments for a video.
-
-    Args:
-        video_id: Video whose comments should be deleted.
-    """
-    factory = await get_session_factory()
-    async with factory() as session:
-        await session.execute(delete(Comment).where(Comment.video_id == video_id))
         await session.commit()
