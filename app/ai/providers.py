@@ -1,10 +1,14 @@
 import asyncio
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, TypeVar
 from collections.abc import AsyncIterator, Callable
 
+import instructor
 from openai import AsyncOpenAI
+from pydantic import BaseModel
+
+T = TypeVar("T", bound=BaseModel)
 
 import app.config.settings as settings
 from app.config.constants import HTTP_MAX_ATTEMPTS
@@ -23,6 +27,7 @@ from app.utils.retry import retry_delay
 logger = Logger.get(__name__)
 
 _clients: dict[str, AsyncOpenAI] = {}
+_instructor_clients: dict[str, instructor.AsyncInstructor] = {}
 
 
 @dataclass(frozen=True)
@@ -105,12 +110,29 @@ def get_sdk_client(spec: ProviderSpec) -> AsyncOpenAI:
     return _clients[spec.name]
 
 
+def get_instructor_client(spec: ProviderSpec) -> instructor.AsyncInstructor:
+    """Get or lazily create the cached `instructor`-wrapped client for a provider.
+
+    Wraps the same cached `AsyncOpenAI` instance `get_sdk_client()` returns, so
+    it shares that client's connection pool/auth/base_url.
+
+    Args:
+        spec: Provider spec identifying which client/config to use.
+
+    Returns:
+        The cached `instructor.AsyncInstructor` client for this provider."""
+    if spec.name not in _instructor_clients:
+        _instructor_clients[spec.name] = instructor.from_openai(get_sdk_client(spec))
+    return _instructor_clients[spec.name]
+
+
 def reset_clients() -> None:
     """Clear the cached SDK clients, forcing them to be recreated on next use.
 
     Returns:
         None."""
     _clients.clear()
+    _instructor_clients.clear()
 
 
 async def _with_retry(fn: Callable[[], Any], *, where: str) -> Any:
@@ -240,6 +262,41 @@ class ConfiguredLLM(BaseLLM):
             system_prompt=json_system,
             model=model,
             max_tokens=max_tokens,
+        )
+
+    async def complete_structured(
+        self,
+        *,
+        response_model: type[T],
+        user_prompt: str,
+        system_prompt: str = "",
+        model: str | None = None,
+        max_tokens: int | None = None,
+        max_retries: int = 2,
+    ) -> T:
+        """Run a chat completion validated against `response_model` via `instructor`.
+
+        Args:
+            response_model: Pydantic model the response must validate against.
+            user_prompt: The user's message content.
+            system_prompt: Optional system instructions; omitted if empty.
+            model: Model override; falls back to `default_model()`.
+            max_tokens: Max output tokens; falls back to `default_max_tokens()`.
+            max_retries: How many times `instructor` re-prompts on validation
+                failure before raising.
+
+        Returns:
+            A validated `response_model` instance."""
+        messages: list[dict[str, str]] = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        messages.append({"role": "user", "content": user_prompt})
+        return await get_instructor_client(self._spec).chat.completions.create(
+            response_model=response_model,
+            model=model or self.default_model(),
+            messages=messages,
+            max_tokens=max_tokens or self.default_max_tokens(),
+            max_retries=max_retries,
         )
 
     async def create_response(

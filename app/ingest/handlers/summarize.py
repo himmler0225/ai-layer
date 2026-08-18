@@ -1,37 +1,18 @@
-import json
 import app.config.settings as settings
 from app.ai.router import TASK_ASPECT_GROUP, TASK_ASPECT_SUMMARY, max_tokens_for_task
 from app.config.logger import Logger, log_event
 from app.ingest.processing.embeddings import embed_texts
+from app.ingest.schemas import ASPECTS, AspectGroupsResult, AspectSummaryResult
 from app.repositories.aspect_chunks import delete_aspect_chunks_for_movie, upsert_aspect_chunks
 from app.repositories.aspect_summaries import upsert_aspect_summary
 from app.repositories.curated_reviews import get_curated_reviews
 from app.repositories.movies import get_movie, upsert_movie
 from app.repositories.raw_reviews import count_raw_reviews
 from app.services import prompts as rag_prompts
-from app.utils.llm_responses import complete_json
+from app.utils.llm_responses import complete_structured
 
 logger = Logger.get(__name__)
-ASPECTS = ["battery", "camera", "screen", "performance", "design", "price", "software", "durability", "other"]
 _MAX_CURATED_FOR_LLM = 200
-
-
-def _parse_json(raw: str) -> dict | list | None:
-    """Parse an LLM response as JSON, stripping a leading/trailing markdown code fence.
-
-    Args:
-        raw: Raw text returned by the LLM, possibly wrapped in a ```...``` fence.
-
-    Returns:
-        The parsed JSON value (dict or list), or None if it isn't valid JSON.
-    """
-    text = (raw or "").strip()
-    if text.startswith("```"):
-        text = text.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError:
-        return None
 
 
 def _fallback_group(curated: list[dict]) -> list[dict]:
@@ -85,37 +66,26 @@ async def _llm_group_aspects(curated: list[dict], *, movie_name: str) -> list[di
         movie=movie_name, product=movie_name, aspects=", ".join(ASPECTS), reviews="\n".join(lines)
     )
     try:
-        raw = await complete_json(
+        parsed = await complete_structured(
             prompt,
             rag_prompts.ASPECT_GROUP_SYSTEM,
+            AspectGroupsResult,
             max_tokens=max_tokens_for_task(TASK_ASPECT_GROUP),
             task=TASK_ASPECT_GROUP,
         )
-        parsed = _parse_json(raw)
-        groups = None
-        if isinstance(parsed, dict):
-            groups = parsed.get("groups") or parsed.get("items")
-        elif isinstance(parsed, list):
-            groups = parsed
-        if groups:
-            valid = []
-            for g in groups:
-                if not isinstance(g, dict) or not g.get("aspect") or (not g.get("content")):
-                    continue
-                aspect = str(g["aspect"]).lower().strip()
-                if aspect not in ASPECTS:
-                    aspect = "other"
-                valid.append(
-                    {
-                        "aspect": aspect,
-                        "review_ids": g.get("review_ids") or [],
-                        "content": str(g["content"])[:8000],
-                        "positive_percent": g.get("positive_percent"),
-                        "negative_percent": g.get("negative_percent"),
-                    }
-                )
-            if valid:
-                return valid
+        valid = [
+            {
+                "aspect": g.aspect,
+                "review_ids": g.review_ids,
+                "content": g.content[:8000],
+                "positive_percent": g.positive_percent,
+                "negative_percent": g.negative_percent,
+            }
+            for g in parsed.groups
+            if g.content
+        ]
+        if valid:
+            return valid
     except Exception as exc:
         logger.warning(log_event("summarize", "group aspects llm failed", error=exc))
     return _fallback_group(curated)
@@ -138,19 +108,19 @@ async def _llm_summarize_aspect(aspect: str, chunk_content: str, *, movie_name: 
         movie=movie_name, product=movie_name, aspect=aspect, content=chunk_content[:6000]
     )
     try:
-        raw = await complete_json(
+        parsed = await complete_structured(
             prompt,
             rag_prompts.ASPECT_SUMMARY_SYSTEM,
+            AspectSummaryResult,
             max_tokens=max_tokens_for_task(TASK_ASPECT_SUMMARY),
             task=TASK_ASPECT_SUMMARY,
         )
-        parsed = _parse_json(raw)
-        if isinstance(parsed, dict) and parsed.get("summary"):
+        if parsed.summary:
             return {
-                "summary": str(parsed["summary"])[:2000],
-                "pros": parsed.get("pros") or [],
-                "cons": parsed.get("cons") or [],
-                "positive_percent": parsed.get("positive_percent"),
+                "summary": parsed.summary[:2000],
+                "pros": parsed.pros,
+                "cons": parsed.cons,
+                "positive_percent": parsed.positive_percent,
             }
     except Exception as exc:
         logger.warning(log_event("summarize", "summarize aspect llm failed", aspect=aspect, error=exc))

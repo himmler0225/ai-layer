@@ -1,34 +1,39 @@
-import json
+from pydantic import BaseModel, Field
+
 from app.clients import data_miner
 from app.config.logger import Logger, log_event
 from app.exceptions import AiLayerUpstreamError
-from app.utils.llm_responses import complete_json
+from app.utils.llm_responses import complete_structured
 
 logger = Logger.get(__name__)
 _SYSTEM = "You are an AI assistant analyzing YouTube content.\nBe concise. Always respond in the same language as the video content when possible."
 
 
-def _parse_json(raw: str, context: str) -> dict:
-    """Parse an LLM's raw text response as JSON, raising a domain error on failure.
+class VideoSummaryResult(BaseModel):
+    """LLM response shape for `summarize_video`."""
 
-    Args:
-        raw: Raw text returned by the LLM, expected to be a JSON object.
-        context: Short label identifying the calling operation, used in
-            logging and the raised error message.
+    summary: str
+    key_points: list[str] = Field(default_factory=list)
+    tags: list[str] = Field(default_factory=list)
+    sentiment: str = ""
 
-    Returns:
-        The parsed JSON object.
 
-    Raises:
-        AiLayerUpstreamError: If `raw` is not valid JSON.
-    """
-    try:
-        return json.loads(raw)
-    except (json.JSONDecodeError, TypeError) as e:
-        logger.error(
-            log_event("youtube", "json parse failed", context=context, error=e, raw=raw[:200])
-        )
-        raise AiLayerUpstreamError(f"ChatGPT returned invalid JSON in {context}: {e}", cause=e) from e
+class CommentAnalysisResult(BaseModel):
+    """LLM response shape for `analyze_comments`."""
+
+    overall_sentiment: str = ""
+    top_topics: list[str] = Field(default_factory=list)
+    common_questions: list[str] = Field(default_factory=list)
+    audience_insight: str = ""
+
+
+class TrendAnalysisResult(BaseModel):
+    """LLM response shape for `analyze_trends`."""
+
+    dominant_themes: list[str] = Field(default_factory=list)
+    trending_formats: list[str] = Field(default_factory=list)
+    top_channels: list[str] = Field(default_factory=list)
+    insights: str = ""
 
 
 async def summarize_video(video_id: str) -> dict:
@@ -42,9 +47,13 @@ async def summarize_video(video_id: str) -> dict:
         LLM), plus "video_id" and "title".
     """
     detail = (await data_miner.get_video_detail(video_id)).get("detail", {})
-    prompt = f"""Summarize this YouTube video:\nTitle: {detail.get("title")}\nChannel: {detail.get("author")}\nDescription: {(detail.get("description") or "")[:1000]}\nDuration: {detail.get("length_seconds")}s\nViews: {detail.get("views")}\n\nReturn JSON: {{"summary": "...", "key_points": ["..."], "tags": ["..."], "sentiment": "positive|neutral|negative"}}"""
-    raw = await complete_json(prompt, _SYSTEM)
-    result = _parse_json(raw, "summarize_video")
+    prompt = f"""Summarize this YouTube video:\nTitle: {detail.get("title")}\nChannel: {detail.get("author")}\nDescription: {(detail.get("description") or "")[:1000]}\nDuration: {detail.get("length_seconds")}s\nViews: {detail.get("views")}"""
+    try:
+        parsed = await complete_structured(prompt, _SYSTEM, VideoSummaryResult)
+    except Exception as e:
+        logger.error(log_event("youtube", "llm structured output failed", context="summarize_video", error=e))
+        raise AiLayerUpstreamError(f"ChatGPT returned invalid output in summarize_video: {e}", cause=e) from e
+    result = parsed.model_dump()
     result["video_id"] = video_id
     result["title"] = detail.get("title")
     return result
@@ -67,9 +76,13 @@ async def analyze_comments(video_id: str) -> dict:
     if not comments:
         return {"video_id": video_id, "total": 0, "insights": None}
     sample = "\n".join(f"- {c.get('content', '')[:200]}" for c in comments[:50])
-    prompt = f'Analyze these YouTube comments for video_id={video_id}:\n{sample}\n\nReturn JSON: {{\n  "overall_sentiment": "positive|neutral|negative|mixed",\n  "top_topics": ["..."],\n  "common_questions": ["..."],\n  "audience_insight": "..."\n}}'
-    raw = await complete_json(prompt, _SYSTEM)
-    result = _parse_json(raw, "analyze_comments")
+    prompt = f"Analyze these YouTube comments for video_id={video_id}:\n{sample}"
+    try:
+        parsed = await complete_structured(prompt, _SYSTEM, CommentAnalysisResult)
+    except Exception as e:
+        logger.error(log_event("youtube", "llm structured output failed", context="analyze_comments", error=e))
+        raise AiLayerUpstreamError(f"ChatGPT returned invalid output in analyze_comments: {e}", cause=e) from e
+    result = parsed.model_dump()
     result["video_id"] = video_id
     result["total_analyzed"] = len(comments)
     return result
@@ -90,8 +103,12 @@ async def analyze_trends(limit: int = 20) -> dict:
     titles = "\n".join(
         (f"{i + 1}. [{v.get('channel', '')}] {v.get('title', '')}" for i, v in enumerate(videos[:limit]))
     )
-    prompt = f'Analyze these trending YouTube videos and identify patterns:\n{titles}\n\nReturn JSON: {{\n  "dominant_themes": ["..."],\n  "trending_formats": ["..."],\n  "top_channels": ["..."],\n  "insights": "..."\n}}'
-    raw = await complete_json(prompt, _SYSTEM)
-    result = _parse_json(raw, "analyze_trends")
+    prompt = f"Analyze these trending YouTube videos and identify patterns:\n{titles}"
+    try:
+        parsed = await complete_structured(prompt, _SYSTEM, TrendAnalysisResult)
+    except Exception as e:
+        logger.error(log_event("youtube", "llm structured output failed", context="analyze_trends", error=e))
+        raise AiLayerUpstreamError(f"ChatGPT returned invalid output in analyze_trends: {e}", cause=e) from e
+    result = parsed.model_dump()
     result["analyzed_count"] = len(videos)
     return result

@@ -1,4 +1,6 @@
-from typing import Any
+from typing import Any, TypeVar
+
+from pydantic import BaseModel
 
 import app.config.settings as settings
 from app.ai.base import BaseLLM
@@ -6,6 +8,8 @@ from app.ai.factory import LLMFactory
 from app.ai.providers import get_provider_spec, normalize_provider
 from app.config.loader import runtime
 from app.exceptions import AiLayerConfigError
+
+T = TypeVar("T", bound=BaseModel)
 
 TASK_AGENT_TOOL = "agent_tool"
 TASK_AGENT_SYNTH = "agent_synth"
@@ -181,6 +185,42 @@ class LLMRouter:
             system_prompt=system_prompt,
             model=model or resolved_model,
             max_tokens=max_tokens or max_tokens_for_task(task),
+        )
+
+    async def complete_structured(
+        self,
+        task: str,
+        *,
+        response_model: type[T],
+        user_prompt: str,
+        system_prompt: str = "",
+        max_tokens: int | None = None,
+        model: str | None = None,
+        max_retries: int = 2,
+    ) -> T:
+        """Run a `response_model`-validated completion for `task`, resolving
+        provider/model/limits.
+
+        Args:
+            task: One of the `TASK_*` constants.
+            response_model: Pydantic model the response must validate against.
+            user_prompt: The user's message content.
+            system_prompt: Optional system instructions.
+            max_tokens: Override for the task's resolved max tokens.
+            model: Override for the task's resolved model.
+            max_retries: How many times to re-prompt on validation failure.
+
+        Returns:
+            A validated `response_model` instance."""
+        _, resolved_model = resolve(task)
+        provider = self.provider_for(task)
+        return await provider.complete_structured(
+            response_model=response_model,
+            user_prompt=user_prompt,
+            system_prompt=system_prompt,
+            model=model or resolved_model,
+            max_tokens=max_tokens or max_tokens_for_task(task),
+            max_retries=max_retries,
         )
 
     async def create_response(self, task: str, **kwargs):
