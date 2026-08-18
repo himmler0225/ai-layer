@@ -4,7 +4,7 @@ import pytest
 
 from app.services.agent.core.langgraph_stream import run_agent_multi_stream
 
-async def _fake_astream(initial_state, stream_mode):
+async def _fake_astream(initial_state, config=None, stream_mode=None):
     # worker.py now reports tool_start/tool_done LIVE via "custom" (get_stream_writer),
     # before the tool actually finishes running — no longer via "updates".
     yield ("custom", {"kind": "tool_start", "worker": "youtube", "tool": "youtube_search", "args": {"keyword": "abc"}})

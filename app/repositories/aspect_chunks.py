@@ -1,8 +1,7 @@
-from sqlalchemy import delete, func, select, text
+from sqlalchemy import delete, func, text
 from sqlalchemy.dialects.postgresql import insert
 from app.config.db.models import AspectChunk
 from app.config.db.session import get_session_factory
-from app.config.db.utils import model_to_dict
 from app.repositories.pgvector import vector_literal
 
 
@@ -56,42 +55,6 @@ async def upsert_aspect_chunks(rows: list[dict]) -> int:
         await session.execute(stmt)
         await session.commit()
     return len(rows)
-
-
-async def get_aspect_chunks(movie_id: str, *, aspect: str | None = None, limit: int = 50) -> list[dict]:
-    """Fetch a movie's aspect chunks, newest first.
-
-    Args:
-        movie_id: Movie id to filter by.
-        aspect: If given, restrict results to this aspect only.
-        limit: Maximum number of rows to return.
-
-    Returns:
-        Aspect chunk rows as dicts.
-    """
-    factory = await get_session_factory()
-    async with factory() as session:
-        q = select(AspectChunk).where(AspectChunk.movie_id == movie_id)
-        if aspect:
-            q = q.where(AspectChunk.aspect == aspect)
-        q = q.order_by(AspectChunk.created_at.desc()).limit(limit)
-        rows = (await session.execute(q)).scalars().all()
-        return [model_to_dict(row) for row in rows]
-
-
-async def get_aspect_chunk(chunk_id: str) -> dict | None:
-    """Fetch a single aspect chunk by its id.
-
-    Args:
-        chunk_id: The chunk's primary key.
-
-    Returns:
-        The chunk as a dict, or None if not found.
-    """
-    factory = await get_session_factory()
-    async with factory() as session:
-        row = await session.scalar(select(AspectChunk).where(AspectChunk.id == chunk_id))
-        return model_to_dict(row) if row else None
 
 
 async def delete_aspect_chunks_for_movie(movie_id: str, *, keep_aspects: list[str]) -> int:

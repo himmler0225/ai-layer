@@ -1,10 +1,14 @@
 from contextlib import asynccontextmanager
-from typing import Any
+from typing import Any, TypeVar
 from collections.abc import AsyncIterator
+
+from pydantic import BaseModel
 
 from app.ai.router import TASK_DEFAULT, get_router
 from app.ai.types import LLMResponse
 from app.config.logger import Logger
+
+T = TypeVar("T", bound=BaseModel)
 
 logger = Logger.get(__name__)
 
@@ -238,4 +242,40 @@ async def complete_json(
         system_prompt=system_prompt,
         max_tokens=max_tokens,
         model=model,
+    )
+
+
+async def complete_structured(
+    user_prompt: str,
+    system_prompt: str,
+    response_model: type[T],
+    max_tokens: int | None = None,
+    model: str | None = None,
+    *,
+    task: str = TASK_DEFAULT,
+    max_retries: int = 2,
+) -> T:
+    """Run a prompt-completion call through the task-routed model, validated
+    against `response_model`.
+
+    Args:
+        user_prompt: The user-facing prompt text.
+        system_prompt: The system/instruction prompt text.
+        response_model: Pydantic model the response must validate against.
+        max_tokens: Optional cap on output tokens.
+        model: Optional model override.
+        task: Task key used to select the model/config from the router.
+        max_retries: How many times to re-prompt on validation failure.
+
+    Returns:
+        A validated `response_model` instance.
+    """
+    return await get_router().complete_structured(
+        task,
+        response_model=response_model,
+        user_prompt=user_prompt,
+        system_prompt=system_prompt,
+        max_tokens=max_tokens,
+        model=model,
+        max_retries=max_retries,
     )

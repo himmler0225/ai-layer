@@ -1,7 +1,11 @@
 from abc import ABC, abstractmethod
 from contextlib import asynccontextmanager
-from typing import Any
+from typing import Any, TypeVar
 from collections.abc import AsyncIterator
+
+from pydantic import BaseModel
+
+T = TypeVar("T", bound=BaseModel)
 
 
 class BaseLLM(ABC):
@@ -41,6 +45,32 @@ class BaseLLM(ABC):
 
         Returns:
             The generated text as a JSON string (not yet parsed)."""
+        pass
+
+    @abstractmethod
+    async def complete_structured(
+        self,
+        *,
+        response_model: type[T],
+        user_prompt: str,
+        system_prompt: str = "",
+        model: str | None = None,
+        max_tokens: int | None = None,
+        max_retries: int = 2,
+    ) -> T:
+        """Run a completion constrained to and validated against a Pydantic model.
+
+        Args:
+            response_model: Pydantic model the response must validate against.
+            user_prompt: The user's message content.
+            system_prompt: Optional system instructions; omitted if empty.
+            model: Model name override; provider's default model if `None`.
+            max_tokens: Max output tokens; provider's default if `None`.
+            max_retries: How many times to re-prompt the model on validation
+                failure before giving up.
+
+        Returns:
+            A validated `response_model` instance."""
         pass
 
     @abstractmethod

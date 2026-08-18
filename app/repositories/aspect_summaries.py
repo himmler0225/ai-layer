@@ -86,24 +86,6 @@ async def get_aspect_summaries(movie_id: str, *, aspect: str | None = None) -> l
         return [model_to_dict(row) for row in rows]
 
 
-async def get_aspect_summary(movie_id: str, aspect: str) -> dict | None:
-    """Fetch a single aspect summary for a movie+aspect pair.
-
-    Args:
-        movie_id: Movie id to look up.
-        aspect: Aspect name to look up.
-
-    Returns:
-        The summary as a dict, or None if not found.
-    """
-    factory = await get_session_factory()
-    async with factory() as session:
-        row = await session.scalar(
-            select(AspectSummary).where(AspectSummary.movie_id == movie_id, AspectSummary.aspect == aspect)
-        )
-        return model_to_dict(row) if row else None
-
-
 async def search_similar_summaries(
     movie_id: str, query_vector: list[float], *, aspect: str | None = None, limit: int = 8
 ) -> list[dict]:
